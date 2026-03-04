@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PriceOS — Agent Orchestration Flow</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            themeVariables: {
+                primaryColor: '#f39c12',
+                primaryTextColor: '#fff',
+                primaryBorderColor: '#e67e22',
+                lineColor: '#666',
+                secondaryColor: '#1a1a2e',
+                tertiaryColor: '#16213e',
+                fontSize: '14px',
+                fontFamily: 'Inter, sans-serif'
+            },
+            flowchart: {
+                htmlLabels: true,
+                curve: 'basis',
+                padding: 20,
+                nodeSpacing: 50,
+                rankSpacing: 60
+            }
+        });
+    </script>
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --surface: #141414;
+            --surface2: #1c1c1c;
+            --border: #2a2a2a;
+            --text: #e5e5e5;
+            --text-muted: #888;
+            --accent: #f39c12;
+            --green: #10b981;
+            --red: #ef4444;
+            --blue: #3b82f6;
+            --purple: #8b5cf6;
+            --cyan: #06b6d4;
+            --amber: #f59e0b;
+            --pink: #ec4899;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            padding: 60px 40px;
+            border-bottom: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(243, 156, 18, 0.08) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+
+        .hero h1 {
+            font-size: 2.8rem;
+            font-weight: 900;
+            letter-spacing: -1px;
+            background: linear-gradient(135deg, var(--accent), #fff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .hero .subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+
+        .hero .tag {
+            display: inline-block;
+            margin-top: 16px;
+            padding: 6px 16px;
+            background: rgba(243, 156, 18, 0.15);
+            border: 1px solid rgba(243, 156, 18, 0.3);
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+
+        .section {
+            margin-bottom: 56px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .section-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            flex-shrink: 0;
+        }
+
+        .section-header h2 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        .mermaid-container {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            overflow-x: auto;
+            margin-bottom: 24px;
+        }
+
+        .mermaid {
+            display: flex;
+            justify-content: center;
+        }
+
+        /* Agent cards */
+        .agents-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+        }
+
+        .agent-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 24px;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s, border-color 0.2s;
+        }
+
+        .agent-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--accent);
+        }
+
+        .agent-card .badge {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-size: 0.6rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .badge-chat {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--green);
+        }
+
+        .badge-setup {
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--blue);
+        }
+
+        .badge-guest {
+            background: rgba(236, 72, 153, 0.15);
+            color: var(--pink);
+        }
+
+        .badge-safety {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--red);
+        }
+
+        .agent-card h3 {
+            font-size: 1.1rem;
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+
+        .agent-card .model {
+            font-size: 0.7rem;
+            font-family: 'SF Mono', monospace;
+            color: var(--accent);
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+        .agent-card .role {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            margin-bottom: 16px;
+        }
+
+        .agent-card .tasks-label {
+            font-size: 0.65rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .agent-card ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .agent-card li {
+            padding: 4px 0;
+            font-size: 0.82rem;
+            color: var(--text);
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .agent-card li::before {
+            content: '→';
+            color: var(--accent);
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .data-section {
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+        }
+
+        .data-label {
+            font-size: 0.6rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            margin-bottom: 6px;
+        }
+
+        .data-in {
+            color: var(--green);
+        }
+
+        .data-out {
+            color: var(--blue);
+        }
+
+        .data-item {
+            display: inline-block;
+            padding: 2px 8px;
+            margin: 2px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-family: monospace;
+            color: var(--text-muted);
+        }
+
+        /* Routing table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+            margin: 16px 0;
+        }
+
+        th {
+            background: var(--surface2);
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 700;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-muted);
+        }
+
+        td:first-child {
+            color: var(--text);
+            font-weight: 500;
+        }
+
+        tr:hover td {
+            background: rgba(243, 156, 18, 0.03);
+        }
+
+        .check {
+            color: var(--green);
+            font-weight: 700;
+        }
+
+        .info-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+
+        .info-card h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+        }
+
+        @media (max-width: 768px) {
+            .hero {
+                padding: 40px 20px;
+            }
+
+            .hero h1 {
+                font-size: 1.8rem;
+            }
+
+            .agents-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="hero">
+        <h1>PriceOS Agent Orchestration</h1>
+        <p class="subtitle">Complete architecture diagram — how 9 agents work together to power Dubai STR pricing</p>
+        <span class="tag">Architecture v2.0 · March 2026</span>
+    </div>
+
+    <div class="container">
+
+        <!-- ───────────────────────────────────── -->
+        <!-- MAIN ORCHESTRATION FLOW              -->
+        <!-- ───────────────────────────────────── -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(243,156,18,0.15);">🏗️</div>
+                <h2>Main Orchestration Flow</h2>
+            </div>
+            <p style="color: var(--text-muted); margin-bottom: 24px;">PriceOS has <strong>two phases</strong>: a Setup
+                phase (internet research) and a Chat phase (analysis & pricing). They use different agents.</p>
+
+            <div class="mermaid-container">
+                <div class="mermaid">
+                    flowchart TB
+                    subgraph USER["👤 Revenue Manager"]
+                    U1["Selects Property + Date Range"]
+                    U2["Clicks 'Run Aria'"]
+                    U3["Asks Questions in Chat"]
+                    end
+
+                    subgraph SETUP["⚡ SETUP PHASE (Run Aria Click)"]
+                    direction LR
+                    MA["🌐 Agent 6\nMarketing Agent\n(Perplexity Sonar)\nSearches: Events, Holidays\nDemand Outlook"]
+                    BA["🌐 Agent 7\nBenchmark Agent\n(Perplexity Sonar)\nSearches: Competitor\nPricing on OTAs"]
+                    end
+
+                    subgraph DB["🗄️ PostgreSQL (Neon)"]
+                    ME[("market_events\ntable")]
+                    BD[("benchmark_data\ntable")]
+                    LI[("listings\ntable")]
+                    RES[("reservations\ntable")]
+                    INV[("inventory_master\ntable")]
+                    end
+
+                    subgraph INJECT["📦 Data Injection (route.ts)"]
+                    PAYLOAD["Build JSON Payload\nanalysis_window + property\n+ metrics + benchmark\n+ events +
+                    reservations"]
+                    end
+
+                    subgraph CHAT["💬 CHAT PHASE (User Messages)"]
+                    ARIA["🤖 Agent 1: ARIA\n(CRO Router)\nGemini 3.0 Flash\nOrchestrator"]
+
+                    PA["📊 Agent 2\nProperty Analyst\n(GPT-4o-mini)"]
+                    BI["📈 Agent 3\nBooking Intelligence\n(GPT-4o-mini)"]
+                    MR["🏆 Agent 4\nMarket Research\n(GPT-4o-mini)"]
+                    PG["🛡️ Agent 5\nPriceGuard\n(GPT-4o-mini)"]
+                    end
+
+                    subgraph SAFETY["🔒 SERVER-SIDE SAFETY (TypeScript)"]
+                    GR["enforceGuardrails()\n• Floor/Ceiling Clamp\n• ±50% Swing Check\n• Risk Level Compute"]
+                    end
+
+                    U1 --> U2
+                    U2 --> MA & BA
+                    MA -->|"writes"| ME
+                    BA -->|"writes"| BD
+
+                    U3 --> PAYLOAD
+                    LI & RES & INV & ME & BD -->|"reads"| PAYLOAD
+                    PAYLOAD -->|"injects into prompt"| ARIA
+
+                    ARIA -->|"delegates"| PA
+                    ARIA -->|"delegates"| BI
+                    ARIA -->|"delegates"| MR
+                    ARIA -->|"delegates + proposals"| PG
+
+                    PA -->|"gaps, LOS, revenue"| ARIA
+                    BI -->|"velocity, channel mix"| ARIA
+                    MR -->|"events, competitors"| ARIA
+                    PG -->|"validated proposals"| ARIA
+
+                    ARIA -->|"proposals JSON"| GR
+                    GR -->|"enforced proposals"| U1
+
+                    style ARIA fill:#f39c12,stroke:#e67e22,color:#000,font-weight:bold
+                    style PG fill:#ef4444,stroke:#dc2626,color:#fff,font-weight:bold
+                    style MA fill:#3b82f6,stroke:#2563eb,color:#fff
+                    style BA fill:#3b82f6,stroke:#2563eb,color:#fff
+                    style GR fill:#dc2626,stroke:#b91c1c,color:#fff,font-weight:bold
+                </div>
+            </div>
+        </div>
+
+        <!-- ───────────────────────────────────── -->
+        <!-- SETUP PHASE DETAIL                   -->
+        <!-- ───────────────────────────────────── -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(59,130,246,0.15);">⚡</div>
+                <h2>Phase 1: Setup ("Run Aria" Click)</h2>
+            </div>
+
+            <div class="mermaid-container">
+                <div class="mermaid">
+                    sequenceDiagram
+                    actor RM as Revenue Manager
+                    participant UI as Frontend
+                    participant API as /api/market-setup
+                    participant MA as Agent 6: Marketing
+                    participant BA as Agent 7: Benchmark
+                    participant DB as PostgreSQL
+
+                    RM->>UI: Clicks "Run Aria"
+                    UI->>API: POST { listingId, dateFrom, dateTo }
+
+                    par Parallel Execution
+                    API->>MA: Search Dubai events<br />for date range
+                    MA-->>API: JSON: events[], holidays[]
+                    API->>DB: INSERT INTO market_events
+                    and
+                    API->>BA: Search competitor pricing<br />on Airbnb, Booking.com
+                    BA-->>API: JSON: comps[], rates{}
+                    API->>DB: INSERT INTO benchmark_data
+                    end
+
+                    API-->>UI: { eventsCount, benchmarkId, duration }
+                    UI->>RM: Toast: "Aria is Ready"<br />Chat activated
+                </div>
+            </div>
+
+            <div class="info-card">
+                <h3>What triggers this phase?</h3>
+                <p style="color: var(--text-muted);">The "Run Aria" button in the UI. It calls
+                    <code>/api/market-setup</code> which runs Agent 6 and Agent 7 in parallel using Perplexity Sonar
+                    (internet search LLM). Their results are saved to the database — <strong>not sent to the
+                        chat</strong>. The chat agents read from these tables later.</p>
+            </div>
+        </div>
+
+        <!-- ───────────────────────────────────── -->
+        <!-- CHAT PHASE DETAIL                    -->
+        <!-- ───────────────────────────────────── -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(16,185,129,0.15);">💬</div>
+                <h2>Phase 2: Chat (User Messages)</h2>
+            </div>
+
+            <div class="mermaid-container">
+                <div class="mermaid">
+                    sequenceDiagram
+                    actor RM as Revenue Manager
+                    participant UI as Frontend
+                    participant RT as route.ts (Backend)
+                    participant NDB as Neon DB
+                    participant ARIA as Aria (CRO Router)
+                    participant PA as Property Analyst
+                    participant BI as Booking Intel
+                    participant MR as Market Research
+                    participant PG as PriceGuard
+                    participant GR as enforceGuardrails()
+
+                    RM->>UI: "Give me full analysis"
+                    UI->>RT: POST /api/chat { message, dateRange }
+
+                    Note over RT: First message only
+                    RT->>NDB: Fetch listing, reservations,<br />inventory, events, benchmark
+                    NDB-->>RT: Raw data rows
+                    RT->>RT: Build JSON payload with<br />analysis_window
+
+                    RT->>ARIA: User message + injected payload
+
+                    Note over ARIA: Routes to ALL 4 agents
+                    ARIA->>PA: property + metrics + reservations
+                    PA-->>ARIA: gaps, restrictions, LOS, revenue
+
+                    ARIA->>BI: property + metrics + reservations
+                    BI-->>ARIA: velocity, channel mix, LOS buckets
+
+                    ARIA->>MR: property + benchmark + events
+                    MR-->>ARIA: positioning, P25-P90, comps
+
+                    ARIA->>PG: property + metrics + benchmark + events + available dates
+                    PG-->>ARIA: proposals[] with guard_verdict
+
+                    ARIA-->>RT: { routing, proposals[], chat_response }
+
+                    RT->>GR: proposals[] + floor/ceiling
+                    GR-->>RT: enforced proposals[]
+
+                    RT->>NDB: Save to chat_messages
+                    RT-->>UI: JSON response
+                    UI-->>RM: Formatted analysis + proposal cards
+                </div>
+            </div>
+        </div>
+
+        <!-- ───────────────────────────────────── -->
+        <!-- ROUTING TABLE                        -->
+        <!-- ───────────────────────────────────── -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(139,92,246,0.15);">🔀</div>
+                <h2>Aria's Routing Table</h2>
+            </div>
+
+            <div class="info-card">
+                <p style="color: var(--text-muted); margin-bottom: 16px;">Aria classifies the user's intent and decides
+                    which sub-agents to invoke. PriceGuard is ALWAYS invoked when pricing proposals are needed.</p>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>User Says</th>
+                            <th>Property Analyst</th>
+                            <th>Booking Intel</th>
+                            <th>Market Research</th>
+                            <th>PriceGuard</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>"What's my occupancy?" / "Show me gaps"</td>
+                            <td class="check">✓</td>
+                            <td>—</td>
+                            <td>—</td>
+                            <td>—</td>
+                        </tr>
+                        <tr>
+                            <td>"Booking velocity" / "Revenue breakdown"</td>
+                            <td>—</td>
+                            <td class="check">✓</td>
+                            <td>—</td>
+                            <td>—</td>
+                        </tr>
+                        <tr>
+                            <td>"Competitor rates" / "Market events"</td>
+                            <td>—</td>
+                            <td>—</td>
+                            <td class="check">✓</td>
+                            <td>—</td>
+                        </tr>
+                        <tr>
+                            <td>"What should I price?" / "Optimize pricing"</td>
+                            <td class="check">✓</td>
+                            <td>—</td>
+                            <td class="check">✓</td>
+                            <td class="check" style="color: var(--red);">✓ Required</td>
+                        </tr>
+                        <tr style="background: rgba(243,156,18,0.05);">
+                            <td><strong>"Full analysis" / "Analysis"</strong></td>
+                            <td class="check">✓</td>
+                            <td class="check">✓</td>
+                            <td class="check">✓</td>
+                            <td class="check" style="color: var(--red);">✓ Required</td>
+                        </tr>
+                        <tr>
+                            <td>"Adjust min stay" / "Change restrictions"</td>
+                            <td class="check">✓</td>
+                            <td>—</td>
+                            <td>—</td>
+                            <td>—</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ───────────────────────────────────── -->
+        <!-- PRICING PIPELINE                     -->
+        <!-- ───────────────────────────────────── -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(239,68,68,0.15);">💰</div>
+                <h2>Pricing Pipeline (PriceGuard → Server Guardrails)</h2>
+            </div>
+
+            <div class="mermaid-container">
+                <div class="mermaid">
+                    flowchart LR
+                    subgraph PG["🛡️ PriceGuard (LLM - GPT-4o-mini)"]
+                    S1["STEP 1\nCompute Price\nbase × event_factor\n× occupancy_adj"]
+                    S2["STEP 2\nClamp to Floor/Ceiling\nif < floor → floor\nif> ceiling → ceiling"]
+                        S3["STEP 3\nValidate\n|change| > 50% → REJECT\nevent+high → APPROVE"]
+                        S4["STEP 4\nAssign Risk\n<5%=Low\n5-15%=Medium\n>15% = High"]
+                            end
+
+                            subgraph SV["🔒 Server (TypeScript Code)"]
+                            E1["Floor Clamp\nproposed < floor?"] E2["Ceiling Clamp\nproposed> ceiling?"]
+                                E3["Swing Check\n|change| > 50%?"]
+                                E4["Risk Compute\nDeterministic"]
+                                end
+
+                                S1 --> S2 --> S3 --> S4
+                                S4 -->|"proposals JSON"| E1
+                                E1 --> E2 --> E3 --> E4
+                                E4 -->|"enforced proposals"| FE["📱 Frontend\nProposal Cards"]
+
+                                style S1 fill:#1e3a5f,stroke:#2563eb,color:#fff
+                                style S2 fill:#1e3a5f,stroke:#2563eb,color:#fff
+                                style S3 fill:#1e3a5f,stroke:#2563eb,color:#fff
+                                style S4 fill:#1e3a5f,stroke:#2563eb,color:#fff
+                                style E1 fill:#7f1d1d,stroke:#dc2626,color:#fff
+                                style E2 fill:#7f1d1d,stroke:#dc2626,color:#fff
+                                style E3 fill:#7f1d1d,stroke:#dc2626,color:#fff
+                                style E4 fill:#7f1d1d,stroke:#dc2626,color:#fff
+                                style FE fill:#065f46,stroke:#10b981,color:#fff
+                </div>
+            </div>
+
+            <div class="info-card">
+                <h3>Defense in Depth — Why Two Layers?</h3>
+                <p style="color: var(--text-muted);">PriceGuard is an LLM — it <em>usually</em> follows instructions but
+                    can occasionally hallucinate or skip steps. The server-side <code>enforceGuardrails()</code> is
+                    hardcoded TypeScript — it <strong>always</strong> runs, cannot be bypassed, and guarantees business
+                    rules are upheld even if every prompt is deleted.</p>
+            </div>
+        </div>
+
+        <!-- ───────────────────────────────────── -->
+        <!-- GUEST REPLY FLOW                     -->
+        <!-- ───────────────────────────────────── -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(236,72,153,0.15);">💌</div>
+                <h2>Guest Communication Flow (Separate Pipeline)</h2>
+            </div>
+
+            <div class="mermaid-container">
+                <div class="mermaid">
+                    flowchart LR
+                    G["💌 Guest Message\n(Hostaway)"] --> API["API:\n/hostaway/suggest-reply"]
+                    API --> GRA["🗣️ Guest Reply Agent\n(GPT-4o-mini)\n• Read-only DB access\n• Warm, professional
+                    tone\n• Never quotes prices"]
+                    GRA --> REPLY["💬 Suggested Reply\n(Draft for RM to review)"]
+
+                    G2["📋 All Conversations"] --> CSA["📝 Conversation\nSummary Agent\n• Sentiment analysis\n•
+                    Recurring themes\n• Action items"]
+                    CSA --> SUM["📊 Summary Card\nin Sidebar"]
+
+                    style GRA fill:#be185d,stroke:#ec4899,color:#fff
+                    style CSA fill:#7c3aed,stroke:#8b5cf6,color:#fff
+                </div>
+            </div>
+        </div>
+
+        <!-- ───────────────────────────────────── -->
+        <!-- ALL 9 AGENT CARDS                    -->
+        <!-- ───────────────────────────────────── -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(6,182,212,0.15);">🤖</div>
+                <h2>All 9 Agents — Responsibilities & Data</h2>
+            </div>
+
+            <div class="agents-grid">
+
+                <!-- Aria -->
+                <div class="agent-card" style="border-left: 3px solid var(--accent);">
+                    <span class="badge badge-chat">Chat Agent</span>
+                    <h3>🤖 Agent 1: Aria (CRO Router)</h3>
+                    <div class="model">gemini-3.0-flash-preview · temp 0.2 · 4000 tokens</div>
+                    <div class="role">User-facing orchestrator. Classifies intent, delegates to sub-agents, merges
+                        outputs into a structured 10-section analysis.</div>
+                    <div class="tasks-label">Responsibilities</div>
+                    <ul>
+                        <li>Classify user intent from natural language</li>
+                        <li>Route to correct sub-agents using the routing table</li>
+                        <li>Merge sub-agent outputs into a unified response</li>
+                        <li>Classify dates: Protected / Healthy / At Risk / Distressed</li>
+                        <li>Generate 10-section Full Analysis report</li>
+                        <li>Never compute pricing — always delegate to PriceGuard</li>
+                    </ul>
+                    <div class="data-section">
+                        <div class="data-label data-in">📥 Receives (injected once)</div>
+                        <span class="data-item">analysis_window</span>
+                        <span class="data-item">property</span>
+                        <span class="data-item">metrics</span>
+                        <span class="data-item">benchmark</span>
+                        <span class="data-item">market_events</span>
+                        <span class="data-item">recent_reservations</span>
+                        <div class="data-label data-out" style="margin-top: 8px;">📤 Returns</div>
+                        <span class="data-item">routing{}</span>
+                        <span class="data-item">proposals[]</span>
+                        <span class="data-item">chat_response</span>
+                    </div>
+                </div>
+
+                <!-- Property Analyst -->
+                <div class="agent-card" style="border-left: 3px solid var(--green);">
+                    <span class="badge badge-chat">Chat Agent</span>
+                    <h3>📊 Agent 2: Property Analyst</h3>
+                    <div class="model">gpt-4o-mini · temp 0.1 · 1500 tokens</div>
+                    <div class="role">Calendar and gap analysis specialist. Finds vacant gaps, recommends LOS changes,
+                        projects revenue.</div>
+                    <div class="tasks-label">Responsibilities</div>
+                    <ul>
+                        <li>Detect gap types: 1-night orphan, 2-night micro, 3-night, last-minute</li>
+                        <li>Recommend LOS relaxation (prefer over discounting)</li>
+                        <li>Auto-revert: if LOS change unfilled 48hrs → revert</li>
+                        <li>Identify seasonal patterns</li>
+                        <li>Calculate confirmed / potential / projected revenue</li>
+                        <li>Never suggest below floor price</li>
+                    </ul>
+                    <div class="data-section">
+                        <div class="data-label data-out">📤 Returns</div>
+                        <span class="data-item">gap_nights[]</span>
+                        <span class="data-item">restrictions[]</span>
+                        <span class="data-item">seasonal{}</span>
+                        <span class="data-item">revenue{}</span>
+                    </div>
+                </div>
+
+                <!-- Booking Intelligence -->
+                <div class="agent-card" style="border-left: 3px solid var(--cyan);">
+                    <span class="badge badge-chat">Chat Agent</span>
+                    <h3>📈 Agent 3: Booking Intelligence</h3>
+                    <div class="model">gpt-4o-mini · temp 0.1 · 1500 tokens</div>
+                    <div class="role">Reservation pattern analyzer. Extracts booking velocity, LOS trends, channel mix,
+                        and cancellation signals.</div>
+                    <div class="tasks-label">Responsibilities</div>
+                    <ul>
+                        <li>Calculate booking velocity (accelerating/stable/decelerating)</li>
+                        <li>Analyze length of stay buckets (1-2, 3-4, 5-7, 7+)</li>
+                        <li>Channel mix breakdown (Airbnb, Booking.com, Direct %)</li>
+                        <li>Day-of-week fill patterns</li>
+                        <li>Cancellation rate analysis</li>
+                        <li>Lead time analysis (how far in advance guests book)</li>
+                    </ul>
+                    <div class="data-section">
+                        <div class="data-label data-out">📤 Returns</div>
+                        <span class="data-item">velocity{}</span>
+                        <span class="data-item">los_buckets{}</span>
+                        <span class="data-item">channel_mix{}</span>
+                        <span class="data-item">revenue_analysis{}</span>
+                    </div>
+                </div>
+
+                <!-- Market Research -->
+                <div class="agent-card" style="border-left: 3px solid var(--purple);">
+                    <span class="badge badge-chat">Chat Agent</span>
+                    <h3>🏆 Agent 4: Market Research</h3>
+                    <div class="model">gpt-4o-mini · temp 0.1 · 1500 tokens</div>
+                    <div class="role">Reads pre-cached market intelligence (from Agents 6+7). Returns event impact,
+                        competitor positioning, and pricing recommendations.</div>
+                    <div class="tasks-label">Responsibilities</div>
+                    <ul>
+                        <li>Parse and structure event data with impact levels</li>
+                        <li>Calculate market position (percentile vs P25/P50/P75/P90)</li>
+                        <li>Assign event premium factors (low=1.05x, medium=1.15x, high=1.30x)</li>
+                        <li>Return competitor comparisons</li>
+                        <li>Determine verdict: UNDERPRICED / FAIR / PREMIUM</li>
+                    </ul>
+                    <div class="data-section">
+                        <div class="data-label data-out">📤 Returns</div>
+                        <span class="data-item">events[]</span>
+                        <span class="data-item">positioning{}</span>
+                        <span class="data-item">competitors[]</span>
+                        <span class="data-item">recommendations{}</span>
+                    </div>
+                </div>
+
+                <!-- PriceGuard -->
+                <div class="agent-card" style="border-left: 3px solid var(--red);">
+                    <span class="badge badge-safety">Safety Gate</span>
+                    <h3>🛡️ Agent 5: PriceGuard</h3>
+                    <div class="model">gpt-4o-mini · temp 0.0 · 1200 tokens</div>
+                    <div class="role">Pricing engine + final safety validator. Has unconditional veto power — CRO Router
+                        cannot override a REJECTED verdict.</div>
+                    <div class="tasks-label">Responsibilities</div>
+                    <ul>
+                        <li>STEP 1: Compute — base × event_factor × occupancy_adj</li>
+                        <li>STEP 2: Clamp to floor/ceiling (NO EXCEPTIONS)</li>
+                        <li>STEP 3: Validate — reject if |change| > 50%</li>
+                        <li>STEP 4: Assign risk — &lt;5% Low, 5-15% Medium, &gt;15% High</li>
+                        <li>Differentiate: weekday ≠ weekend ≠ event prices</li>
+                        <li>Fallback: if benchmark = 0, use MAX(current, floor)</li>
+                    </ul>
+                    <div class="data-section">
+                        <div class="data-label data-out">📤 Returns (per date)</div>
+                        <span class="data-item">proposed_price</span>
+                        <span class="data-item">change_pct</span>
+                        <span class="data-item">risk_level</span>
+                        <span class="data-item">guard_verdict</span>
+                        <span class="data-item">reasoning</span>
+                    </div>
+                </div>
+
+                <!-- Marketing Agent -->
+                <div class="agent-card" style="border-left: 3px solid var(--blue);">
+                    <span class="badge badge-setup">Setup Agent</span>
+                    <h3>🌐 Agent 6: Marketing Agent</h3>
+                    <div class="model">gpt-4o (Perplexity Sonar) · temp 0.2 · 2000 tokens</div>
+                    <div class="role">Internet search agent. Runs ONLY during setup. Searches the web for Dubai events,
+                        holidays, and demand outlook.</div>
+                    <div class="tasks-label">Responsibilities</div>
+                    <ul>
+                        <li>Search for events in the date range (Art Dubai, Ramadan, etc.)</li>
+                        <li>Classify each event by impact (low / medium / high)</li>
+                        <li>Assign suggested premium percentages</li>
+                        <li>Find holidays and seasonal patterns</li>
+                        <li>Return structured JSON for database storage</li>
+                    </ul>
+                    <div class="data-section">
+                        <div class="data-label data-out">📤 Writes to</div>
+                        <span class="data-item">market_events table</span>
+                    </div>
+                </div>
+
+                <!-- Benchmark Agent -->
+                <div class="agent-card" style="border-left: 3px solid var(--blue);">
+                    <span class="badge badge-setup">Setup Agent</span>
+                    <h3>🌐 Agent 7: Benchmark Agent</h3>
+                    <div class="model">gpt-4o (Perplexity Sonar) · temp 0.2 · 2000 tokens</div>
+                    <div class="role">Competitor pricing specialist. Runs ONLY during setup. Searches Airbnb,
+                        Booking.com for real-time competitor rates.</div>
+                    <div class="tasks-label">Responsibilities</div>
+                    <ul>
+                        <li>Find comparable properties (same area, bedrooms)</li>
+                        <li>Extract actual nightly rates from OTAs</li>
+                        <li>Calculate P25, P50, P75, P90 rate distribution</li>
+                        <li>Recommend weekday / weekend / event rates</li>
+                        <li>Assign market position verdict + percentile</li>
+                    </ul>
+                    <div class="data-section">
+                        <div class="data-label data-out">📤 Writes to</div>
+                        <span class="data-item">benchmark_data table</span>
+                    </div>
+                </div>
+
+                <!-- Guest Reply -->
+                <div class="agent-card" style="border-left: 3px solid var(--pink);">
+                    <span class="badge badge-guest">Guest Agent</span>
+                    <h3>💌 Guest Reply Agent</h3>
+                    <div class="model">gpt-4o-mini · temp 0.4 · 500 tokens</div>
+                    <div class="role">Professional guest communicator. Generates warm, accurate replies using READ-only
+                        database access.</div>
+                    <div class="tasks-label">Responsibilities</div>
+                    <ul>
+                        <li>Read conversation history for context</li>
+                        <li>Query DB for property details, amenities, availability</li>
+                        <li>Generate short, human-sounding replies</li>
+                        <li>Match tone to situation (complaint → empathetic, inquiry → helpful)</li>
+                        <li>NEVER quote exact prices or make booking promises</li>
+                    </ul>
+                    <div class="data-section">
+                        <div class="data-label data-in">📥 Can READ</div>
+                        <span class="data-item">listings</span>
+                        <span class="data-item">reservations</span>
+                        <span class="data-item">inventory_master</span>
+                        <span class="data-item">market_events</span>
+                    </div>
+                </div>
+
+                <!-- Conversation Summary -->
+                <div class="agent-card" style="border-left: 3px solid var(--purple);">
+                    <span class="badge badge-guest">Guest Agent</span>
+                    <h3>📝 Conversation Summary Agent</h3>
+                    <div class="model">gpt-4o-mini · temp 0.3</div>
+                    <div class="role">Analyzes all guest conversations for a property to extract sentiment, themes, and
+                        action items.</div>
+                    <div class="tasks-label">Responsibilities</div>
+                    <ul>
+                        <li>One-line summary per conversation</li>
+                        <li>Overall sentiment: Positive / Neutral / Needs Attention</li>
+                        <li>Extract top 5 recurring themes</li>
+                        <li>Generate up to 5 action items</li>
+                        <li>Count conversations needing admin reply</li>
+                    </ul>
+                    <div class="data-section">
+                        <div class="data-label data-out">📤 Returns</div>
+                        <span class="data-item">summaries[]</span>
+                        <span class="data-item">sentiment</span>
+                        <span class="data-item">themes[]</span>
+                        <span class="data-item">action_items[]</span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- ───────────────────────────────────── -->
+        <!-- DATA FLOW DIAGRAM                    -->
+        <!-- ───────────────────────────────────── -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(6,182,212,0.15);">🗄️</div>
+                <h2>Database Data Flow</h2>
+            </div>
+
+            <div class="mermaid-container">
+                <div class="mermaid">
+                    flowchart LR
+                    subgraph WRITERS["✍️ Write to DB (Setup Phase)"]
+                    A6["Agent 6\nMarketing"]
+                    A7["Agent 7\nBenchmark"]
+                    HA["Hostaway\nSync"]
+                    end
+
+                    subgraph DATABASE["🗄️ PostgreSQL Tables"]
+                    ME["market_events"]
+                    BD["benchmark_data"]
+                    LI["listings"]
+                    RES["reservations"]
+                    INV["inventory_master"]
+                    CM["chat_messages"]
+                    end
+
+                    subgraph READERS["👀 Read from DB"]
+                    RT["route.ts\n(Data Injector)"]
+                    GR2["Guest Reply\nAgent"]
+                    end
+
+                    subgraph ZERO_DB["🚫 Zero DB Access (Chat Agents)"]
+                    AR["Aria"]
+                    PA2["Property\nAnalyst"]
+                    BI2["Booking\nIntel"]
+                    MR2["Market\nResearch"]
+                    PG2["PriceGuard"]
+                    end
+
+                    A6 -->|"writes"| ME
+                    A7 -->|"writes"| BD
+                    HA -->|"syncs"| LI & RES & INV
+
+                    RT -->|"reads all"| ME & BD & LI & RES & INV
+                    RT -->|"injects JSON"| AR
+                    AR -.->|"passes data"| PA2 & BI2 & MR2 & PG2
+
+                    GR2 -->|"reads"| LI & RES & INV & ME
+
+                    style AR fill:#f39c12,stroke:#e67e22,color:#000
+                    style RT fill:#065f46,stroke:#10b981,color:#fff
+                    style A6 fill:#1e40af,stroke:#3b82f6,color:#fff
+                    style A7 fill:#1e40af,stroke:#3b82f6,color:#fff
+                </div>
+            </div>
+
+            <div class="info-card">
+                <h3>Key Principle: Chat Agents Have ZERO Database Access</h3>
+                <p style="color: var(--text-muted);">Agents 1-5 (Aria, Property Analyst, Booking Intel, Market Research,
+                    PriceGuard) cannot touch the database. All data is injected into the first prompt message as a JSON
+                    payload by <code>route.ts</code>. This makes the system secure, testable, and deterministic — the
+                    agents work only with what they're given.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <footer
+        style="text-align: center; padding: 40px; color: var(--text-muted); font-size: 0.75rem; border-top: 1px solid var(--border);">
+        PriceOS Agent Orchestration · Generated March 4, 2026 · Architecture v2.0
+    </footer>
+
+</body>
+
+</html>

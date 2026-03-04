@@ -37,20 +37,31 @@ export function HeaderNav() {
   // Fetch user info from Neon Auth session — only after mount to avoid hydration mismatch
   useEffect(() => {
     setMounted(true);
-    async function loadSession() {
+    let cancelled = false;
+
+    async function loadSession(attempt = 0) {
+      if (cancelled) return;
       try {
         const res = await authClient.getSession();
+        if (cancelled) return;
         if (res?.data?.user) {
           const u = res.data.user;
           setUserName(u.name || u.email || "User Account");
           setUserInitial((u.name?.[0] || u.email?.[0] || "U").toUpperCase());
           setUserEmail(u.email || "");
         }
-      } catch (e) {
-        console.error("Failed to load session", e);
+      } catch (e: any) {
+        // Handle 429 rate limiting — retry once after delay
+        const msg = e?.message || String(e);
+        if (msg.includes("Too many") && attempt < 1) {
+          setTimeout(() => loadSession(attempt + 1), 2000);
+          return;
+        }
+        if (!cancelled) console.error("Failed to load session", e);
       }
     }
     loadSession();
+    return () => { cancelled = true; };
   }, []);
 
   const handleSignOut = async () => {

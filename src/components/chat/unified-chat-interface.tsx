@@ -665,17 +665,19 @@ export function UnifiedChatInterface({ properties }: Props) {
           <div className="flex items-center gap-2">
             {/* Price Guardrails Editor — shown when a property is selected */}
             {contextType === "property" && propertyId && (
-              <PriceGuardrailsEditor
-                listingId={propertyId}
-                initialFloor={priceFloor}
-                initialCeiling={priceCeiling}
-                currencyCode={activeListing?.currencyCode || "AED"}
-                highlightIfZero
-                onSaved={(floor, ceiling) => {
-                  setPriceFloor(floor);
-                  setPriceCeiling(ceiling);
-                }}
-              />
+              <div id="tour-guardrails">
+                <PriceGuardrailsEditor
+                  listingId={propertyId}
+                  initialFloor={priceFloor}
+                  initialCeiling={priceCeiling}
+                  currencyCode={activeListing?.currencyCode || "AED"}
+                  highlightIfZero
+                  onSaved={(floor, ceiling) => {
+                    setPriceFloor(floor);
+                    setPriceCeiling(ceiling);
+                  }}
+                />
+              </div>
             )}
             <Button
               variant={isSidebarOpen ? "secondary" : "ghost"}
@@ -713,20 +715,22 @@ export function UnifiedChatInterface({ properties }: Props) {
 
             <div className="hidden sm:block h-6 w-px bg-border/50 mx-1" />
 
-            <DateRangePicker
-              date={dateRange}
-              setDate={(newRange) => {
-                setDateRange(newRange);
-                if (!newRange?.from || !newRange?.to) setIsChatActive(false);
-              }}
-            />
+            <div id="tour-date-range">
+              <DateRangePicker
+                date={dateRange}
+                setDate={(newRange) => {
+                  setDateRange(newRange);
+                  if (!newRange?.from || !newRange?.to) setIsChatActive(false);
+                }}
+              />
+            </div>
 
             {chatMode === "agent" && (
               <>
                 <TooltipProvider delayDuration={100}>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span tabIndex={0} className="inline-flex">
+                      <span id="tour-run-aria" tabIndex={0} className="inline-flex">
                         <Button
                           variant="outline"
                           size="sm"
@@ -854,7 +858,7 @@ export function UnifiedChatInterface({ properties }: Props) {
                 <div ref={messagesEndRef} />
               </div>
 
-              <div className="border-t p-4 bg-background">
+              <div id="tour-chat-input" className="border-t p-4 bg-background">
                 <form onSubmit={handleSubmit} className="flex space-x-2">
                   <TooltipProvider delayDuration={100}>
                     <Tooltip>

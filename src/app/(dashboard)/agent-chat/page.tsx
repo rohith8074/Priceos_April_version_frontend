@@ -4,6 +4,7 @@ import { ContextPanel } from "@/components/layout/context-panel";
 import { UnifiedChatInterface } from "@/components/chat/unified-chat-interface";
 import { SidebarTabbedView } from "@/components/layout/sidebar-tabbed-view";
 import { RightSidebarLayout } from "@/components/layout/right-sidebar-layout";
+import { OnboardingTour } from "@/components/chat/onboarding-tour";
 
 export default async function DashboardPage() {
   // 1. Fetch all listings (Drizzle returns camelCase objects)
@@ -52,7 +53,10 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex h-full overflow-hidden">
-      <ContextPanel properties={propertiesWithMetrics} />
+      <OnboardingTour />
+      <div id="tour-property-list">
+        <ContextPanel properties={propertiesWithMetrics} />
+      </div>
 
       {/* Center Chat Panel */}
       <div className="flex-[2] min-w-[500px] border-r flex flex-col h-full bg-background relative z-10 transition-all duration-300">
@@ -60,9 +64,11 @@ export default async function DashboardPage() {
       </div>
 
       {/* Right Side Stack: Events Table on top, Sync status below */}
-      <RightSidebarLayout>
-        <SidebarTabbedView />
-      </RightSidebarLayout>
+      <div id="tour-sidebar">
+        <RightSidebarLayout>
+          <SidebarTabbedView />
+        </RightSidebarLayout>
+      </div>
     </div>
   );
 }
