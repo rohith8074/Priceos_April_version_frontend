@@ -404,7 +404,7 @@ export function UnifiedChatInterface({ properties }: Props) {
     // Block if guardrails are not set
     if (guardrailsNotSet) {
       toast.warning("Set Price Guardrails First", {
-        description: "Click the \"Set Guardrails\" button above to define your floor and ceiling price before running Market Analysis.",
+        description: "Click the \"Set Guardrails\" button above to define your floor and ceiling price before clicking Run Aria.",
         duration: 5000,
       });
       return;
@@ -413,7 +413,7 @@ export function UnifiedChatInterface({ properties }: Props) {
     setIsSettingUp(true);
     useContextStore.getState().setIsMarketAnalysisRunning(true);
 
-    toast("Initializing Market Analysis...", {
+    toast("Initializing Aria...", {
       description: "Setting up research agents for your location...",
     });
 
@@ -485,7 +485,7 @@ export function UnifiedChatInterface({ properties }: Props) {
       // Start with a clean chat — no trace messages
       setMessages([]);
 
-      toast.success("Market Analysis Complete", {
+      toast.success("Aria is Ready", {
         description: `Analyzed ${data.eventsCount} market signals in ${data.duration}. Ask me anything!`,
       });
       triggerMarketRefresh();
@@ -735,13 +735,13 @@ export function UnifiedChatInterface({ properties }: Props) {
                           className="h-9 gap-2 bg-background hover:bg-background/80 border-border/50 font-bold shadow-sm"
                         >
                           <Settings className={`h-4 w-4 ${isSettingUp ? "animate-spin text-amber-500" : ""}`} />
-                          <span className="hidden sm:inline">{isSettingUp ? "Processing..." : "Market Analysis"}</span>
+                          <span className="hidden sm:inline">{isSettingUp ? "Processing..." : "Run Aria"}</span>
                         </Button>
                       </span>
                     </TooltipTrigger>
                     {guardrailsNotSet && (
                       <TooltipContent side="bottom" className="bg-amber-600 text-white font-bold text-xs px-3 py-2 max-w-[240px] text-center">
-                        ⚠️ Please set the Guardrails first, then click Market Analysis
+                        ⚠️ Please set the Guardrails first, then click Run Aria
                       </TooltipContent>
                     )}
                   </Tooltip>
@@ -863,7 +863,7 @@ export function UnifiedChatInterface({ properties }: Props) {
                           <Input
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder={guardrailsNotSet ? "Please set the Guardrails and click on Market Analysis button" : !isChatActive ? "Select date range and click 'Market Analysis' to start..." : "Ask about pricing, events, market rates..."}
+                            placeholder={guardrailsNotSet ? "Please set the Guardrails and click Run Aria" : !isChatActive ? "Select date range and click 'Run Aria' to start..." : "Ask about pricing, events, market rates..."}
                             disabled={isLoading || !isChatActive || guardrailsNotSet}
                             className="w-full"
                           />
@@ -871,7 +871,7 @@ export function UnifiedChatInterface({ properties }: Props) {
                       </TooltipTrigger>
                       {guardrailsNotSet && (
                         <TooltipContent side="top" className="bg-amber-600 text-white font-bold text-xs px-3 py-2 max-w-[280px] text-center">
-                          ⚠️ Please set the Guardrails first, then click Market Analysis
+                          ⚠️ Please set the Guardrails first, then click Run Aria
                         </TooltipContent>
                       )}
                     </Tooltip>

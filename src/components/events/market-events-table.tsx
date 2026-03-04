@@ -112,7 +112,7 @@ export function MarketEventsTable() {
                     <div className="space-y-2">
                         <p className="font-black text-sm text-foreground uppercase tracking-widest">No Market Signals Found</p>
                         <p className="text-[11px] font-medium leading-relaxed max-w-[280px] mx-auto text-muted-foreground">
-                            Use the <strong className="text-foreground">"Market Analysis"</strong> button in the chat area to scan the internet for events in your date range.
+                            Use the <strong className="text-foreground">"Run Aria"</strong> button in the chat area to scan the internet for events in your date range.
                         </p>
                     </div>
                 </div>
