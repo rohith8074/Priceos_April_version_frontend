@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PriceOS — Changes Documentation (March 4, 2026)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0a;
+            --surface: #141414;
+            --surface2: #1c1c1c;
+            --border: #2a2a2a;
+            --text: #e5e5e5;
+            --text-muted: #888;
+            --accent: #f39c12;
+            --accent2: #e67e22;
+            --green: #10b981;
+            --red: #ef4444;
+            --blue: #3b82f6;
+            --purple: #8b5cf6;
+            --amber: #f59e0b;
+            --cyan: #06b6d4;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            padding: 0;
+        }
+
+        .hero {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            padding: 60px 40px;
+            border-bottom: 1px solid var(--border);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -20%;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(243, 156, 18, 0.08) 0%, transparent 70%);
+            border-radius: 50%;
+        }
+
+        .hero h1 {
+            font-size: 2.8rem;
+            font-weight: 900;
+            letter-spacing: -1px;
+            background: linear-gradient(135deg, var(--accent), #fff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .hero .subtitle {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            font-weight: 400;
+        }
+
+        .hero .date {
+            display: inline-block;
+            margin-top: 16px;
+            padding: 6px 16px;
+            background: rgba(243, 156, 18, 0.15);
+            border: 1px solid rgba(243, 156, 18, 0.3);
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--accent);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 40px 24px;
+        }
+
+        /* Stats bar */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 16px;
+            margin-bottom: 48px;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .stat-card .num {
+            font-size: 2rem;
+            font-weight: 900;
+            color: var(--accent);
+        }
+
+        .stat-card .label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* TOC */
+        .toc {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px 32px;
+            margin-bottom: 48px;
+        }
+
+        .toc h2 {
+            font-size: 0.8rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--accent);
+            margin-bottom: 16px;
+        }
+
+        .toc ol {
+            padding-left: 20px;
+        }
+
+        .toc li {
+            margin-bottom: 6px;
+        }
+
+        .toc a {
+            color: var(--text);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: color 0.2s;
+        }
+
+        .toc a:hover {
+            color: var(--accent);
+        }
+
+        /* Sections */
+        .section {
+            margin-bottom: 56px;
+        }
+
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .section-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            flex-shrink: 0;
+        }
+
+        .section-header h2 {
+            font-size: 1.4rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        .section-header .tag {
+            margin-left: auto;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 0.65rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .tag-code {
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--blue);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+        }
+
+        .tag-prompt {
+            background: rgba(139, 92, 246, 0.15);
+            color: var(--purple);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+
+        .tag-ui {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--green);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+
+        .tag-fix {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--red);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        /* Content cards */
+        .change-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+
+        .change-card h3 {
+            font-size: 1rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text);
+        }
+
+        .change-card p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 12px;
+        }
+
+        /* Before/After */
+        .before-after {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .before-after>div {
+            background: var(--surface2);
+            border-radius: 8px;
+            padding: 14px;
+            border: 1px solid var(--border);
+        }
+
+        .before-after .label-before {
+            font-size: 0.65rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--red);
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .before-after .label-after {
+            font-size: 0.65rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--green);
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        /* File reference */
+        .file-ref {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            color: var(--accent);
+            margin: 2px 4px 2px 0;
+        }
+
+        /* Code blocks */
+        pre {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+            font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+            font-size: 0.8rem;
+            line-height: 1.6;
+            color: #c9d1d9;
+            margin: 12px 0;
+        }
+
+        .line-add {
+            color: var(--green);
+        }
+
+        .line-del {
+            color: var(--red);
+            text-decoration: line-through;
+            opacity: 0.7;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.85rem;
+        }
+
+        th {
+            background: var(--surface2);
+            padding: 10px 14px;
+            text-align: left;
+            font-weight: 700;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-muted);
+        }
+
+        td:first-child {
+            color: var(--text);
+            font-weight: 500;
+        }
+
+        tr:hover td {
+            background: rgba(243, 156, 18, 0.03);
+        }
+
+        /* Status badges */
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.65rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-done {
+            background: rgba(16, 185, 129, 0.15);
+            color: var(--green);
+        }
+
+        .badge-new {
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--blue);
+        }
+
+        .badge-critical {
+            background: rgba(239, 68, 68, 0.15);
+            color: var(--red);
+        }
+
+        /* Flow diagram */
+        .flow {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 12px 0;
+        }
+
+        .flow-step {
+            padding: 8px 14px;
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .flow-arrow {
+            color: var(--accent);
+            font-weight: 900;
+            font-size: 1.1rem;
+        }
+
+        @media (max-width: 768px) {
+            .hero {
+                padding: 40px 20px;
+            }
+
+            .hero h1 {
+                font-size: 1.8rem;
+            }
+
+            .before-after {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-bar {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- Hero -->
+    <div class="hero">
+        <h1>PriceOS Changes Documentation</h1>
+        <p class="subtitle">All code, prompt, and UI changes made during the March 4, 2026 session</p>
+        <span class="date">Session: March 4, 2026 · 09:48 – 12:52 IST</span>
+    </div>
+
+    <div class="container">
+
+        <!-- Stats -->
+        <div class="stats-bar">
+            <div class="stat-card">
+                <div class="num">10</div>
+                <div class="label">Files Modified</div>
+            </div>
+            <div class="stat-card">
+                <div class="num">7</div>
+                <div class="label">Major Changes</div>
+            </div>
+            <div class="stat-card">
+                <div class="num">5</div>
+                <div class="label">Prompts Updated</div>
+            </div>
+            <div class="stat-card">
+                <div class="num">0</div>
+                <div class="label">Build Errors</div>
+            </div>
+        </div>
+
+        <!-- TOC -->
+        <div class="toc">
+            <h2>Table of Contents</h2>
+            <ol>
+                <li><a href="#guardrails">Server-Side Guardrails (Defense in Depth)</a></li>
+                <li><a href="#date-range">Date Range Injection — analysis_window</a></li>
+                <li><a href="#chat-session">Chat History Scoped to Date Range</a></li>
+                <li><a href="#aria">Agent Persona — "Aria" Naming</a></li>
+                <li><a href="#response-format">Full Analysis Response Format (10 Sections)</a></li>
+                <li><a href="#pricing-formula">PriceGuard Pricing Formula — Fallback & Differentiation</a></li>
+                <li><a href="#tooltip">Guardrails Tooltip & Chat Disable</a></li>
+                <li><a href="#max-tokens">Max Tokens Increase (2000 → 4000)</a></li>
+                <li><a href="#sub-agents">Sub-Agent Date Alignment</a></li>
+                <li><a href="#files-modified">Complete Files Modified List</a></li>
+            </ol>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- CHANGE 1: Server-Side Guardrails -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <div class="section" id="guardrails">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(239,68,68,0.15);">🛡️</div>
+                <h2>1. Server-Side Guardrails (Defense in Depth)</h2>
+                <span class="tag tag-code">Backend Code</span>
+            </div>
+
+            <div class="change-card">
+                <h3>Problem</h3>
+                <p>Floor/ceiling clamping and ±50% swing checks only existed in <strong>prompts</strong>. If anyone
+                    changed the prompt or the LLM ignored instructions, proposals could violate business rules — prices
+                    below floor, above ceiling, or with dangerous swings.</p>
+
+                <h3>Solution</h3>
+                <p>Added an <code>enforceGuardrails()</code> function in TypeScript that runs <strong>after</strong> the
+                    LLM returns its response and <strong>before</strong> sending proposals to the frontend. This is the
+                    "Layer 3" defense — it cannot be bypassed by prompt changes.</p>
+
+                <div class="file-ref">📄 src/app/api/chat/route.ts → lines 497–555</div>
+
+                <h3>What It Does (4 Checks)</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Check</th>
+                            <th>Rule</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="badge badge-critical">HARD GATE</span> Floor Clamp</td>
+                            <td><code>proposed_price &lt; floor_price</code></td>
+                            <td>Set to floor_price. Log in <code>server_notes</code></td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-critical">HARD GATE</span> Ceiling Clamp</td>
+                            <td><code>proposed_price &gt; ceiling_price</code></td>
+                            <td>Set to ceiling_price. Log in <code>server_notes</code></td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-critical">REJECT</span> Swing Limit</td>
+                            <td><code>|change_pct| &gt; 50%</code></td>
+                            <td>Set <code>guard_verdict = "REJECTED"</code></td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge badge-done">COMPUTE</span> Risk Level</td>
+                            <td><code>&lt;5% = low, 5-15% = medium, &gt;15% = high</code></td>
+                            <td>Overwrite LLM's risk level with deterministic value</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Data Flow</h3>
+                <div class="flow">
+                    <div class="flow-step">LLM Response</div>
+                    <span class="flow-arrow">→</span>
+                    <div class="flow-step">extractAgentMessage()</div>
+                    <span class="flow-arrow">→</span>
+                    <div class="flow-step" style="border-color: var(--red); color: var(--red);">🛡️ enforceGuardrails()
+                    </div>
+                    <span class="flow-arrow">→</span>
+                    <div class="flow-step">Save to DB</div>
+                    <span class="flow-arrow">→</span>
+                    <div class="flow-step">Return to Frontend</div>
+                </div>
+
+                <pre><code><span class="line-add">+ const floorPrice = Number(propertyDataPayload?.property?.floor_price || 0);</span>
+<span class="line-add">+ const ceilingPrice = Number(propertyDataPayload?.property?.ceiling_price || 0);</span>
+<span class="line-add">+ let enforcedProposals = parsedJson?.proposals || null;</span>
+<span class="line-add">+</span>
+<span class="line-add">+ if (enforcedProposals && Array.isArray(enforcedProposals) && (floorPrice > 0 || ceilingPrice > 0)) {</span>
+<span class="line-add">+   enforcedProposals = enforceGuardrails(enforcedProposals, floorPrice, ceilingPrice);</span>
+<span class="line-add">+ }</span></code></pre>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- CHANGE 2: Date Range Injection -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <div class="section" id="date-range">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(59,130,246,0.15);">📅</div>
+                <h2>2. Date Range Injection — analysis_window</h2>
+                <span class="tag tag-fix">Critical Fix</span>
+            </div>
+
+            <div class="change-card">
+                <h3>Problem</h3>
+                <p>The user selected <strong>March 4 – March 18</strong> in the UI, but the agent responded with
+                    analysis for <strong>March 1 – March 15</strong>. The date range was <em>never sent</em> to the LLM
+                    — it had to guess from the data it saw.</p>
+
+                <h3>Root Cause</h3>
+                <p>The <code>propertyDataPayload</code> injected into the LLM prompt had <code>property</code>,
+                    <code>metrics</code>, <code>benchmark</code>, <code>market_events</code>, and
+                    <code>recent_reservations</code> — but <strong>no date range field</strong>.</p>
+
+                <h3>Solution</h3>
+                <p>Added <code>analysis_window</code> as the <strong>first field</strong> in the payload:</p>
+
+                <div class="file-ref">📄 src/app/api/chat/route.ts → lines 238–242</div>
+
+                <div class="before-after">
+                    <div>
+                        <span class="label-before">Before</span>
+                        <pre><code>propertyDataPayload = {
+  property: { ... },
+  metrics: { ... },
+  ...
+}</code></pre>
+                    </div>
+                    <div>
+                        <span class="label-after">After</span>
+                        <pre><code>propertyDataPayload = {
+  <span class="line-add">analysis_window: {</span>
+  <span class="line-add">  from: "2026-03-04",</span>
+  <span class="line-add">  to: "2026-03-18"</span>
+  <span class="line-add">},</span>
+  property: { ... },
+  metrics: { ... },
+  ...
+}</code></pre>
+                    </div>
+                </div>
+
+                <h3>Prompt Update</h3>
+                <p>Added to the CRO Router prompt with bold emphasis:</p>
+                <pre><code><span class="line-add">- `analysis_window`: `from` (YYYY-MM-DD), `to` (YYYY-MM-DD)</span>
+<span class="line-add">   — THIS IS THE Date Range the user selected.</span>
+<span class="line-add">   Use these dates as the start and end of your analysis window.</span>
+<span class="line-add">   NEVER use any other dates.</span></code></pre>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- CHANGE 3: Chat History Scoped to Date Range -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <div class="section" id="chat-session">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(6,182,212,0.15);">💬</div>
+                <h2>3. Chat History Scoped to Date Range</h2>
+                <span class="tag tag-code">Backend + Frontend</span>
+            </div>
+
+            <div class="change-card">
+                <h3>Problem</h3>
+                <p>Changing the date range from Mar 3–17 to Mar 4–18 still showed the old chat messages. The history API
+                    loaded messages by <code>listingId</code> only — it didn't check the date range.</p>
+
+                <h3>Solution</h3>
+                <p>The session ID already encodes the date range (e.g.,
+                    <code>property-225-2026-03-04-2026-03-18</code>). We now pass this to the history API to scope the
+                    query.</p>
+
+                <div class="file-ref">📄 src/app/api/chat/history/route.ts</div>
+                <div class="file-ref">📄 src/components/chat/unified-chat-interface.tsx</div>
+
+                <h3>Changes</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>File</th>
+                            <th>What Changed</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>history/route.ts</td>
+                            <td>Added <code>sessionId</code> query parameter. When provided, filters messages by both
+                                <code>listingId</code> AND <code>sessionId</code></td>
+                        </tr>
+                        <tr>
+                            <td>unified-chat-interface.tsx</td>
+                            <td>Frontend now passes <code>sessionId</code> to the history API. Also added
+                                <code>dateRange</code> to the <code>useEffect</code> dependencies so chat refreshes
+                                immediately on date change</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Result</h3>
+                <div class="flow">
+                    <div class="flow-step">User selects Mar 4–18</div>
+                    <span class="flow-arrow">→</span>
+                    <div class="flow-step">Session ID: property-225-...-03-04-...-03-18</div>
+                    <span class="flow-arrow">→</span>
+                    <div class="flow-step">History API: WHERE sessionId = ?</div>
+                    <span class="flow-arrow">→</span>
+                    <div class="flow-step" style="border-color: var(--green); color: var(--green);">Empty chat (clean
+                        slate)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- CHANGE 4: Aria Naming -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <div class="section" id="aria">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(139,92,246,0.15);">🤖</div>
+                <h2>4. Agent Persona — "Aria"</h2>
+                <span class="tag tag-prompt">Prompt</span>
+            </div>
+
+            <div class="change-card">
+                <h3>Problem</h3>
+                <p>The agent introduced itself as <em>"Hello! I'm your PriceOS CRO Router"</em> — exposing internal
+                    architecture names to end users.</p>
+
+                <h3>Solution</h3>
+                <p>Renamed the CRO Router's persona to <strong>Aria</strong>. Added explicit rules to never reveal
+                    internal names.</p>
+
+                <div class="file-ref">📄 updated_prompts_2/01-cro-router.md</div>
+
+                <div class="before-after">
+                    <div>
+                        <span class="label-before">Before</span>
+                        <p style="color: var(--text); font-size: 0.9rem;"><em>"Hello! I'm your PriceOS CRO Router."</em>
+                        </p>
+                    </div>
+                    <div>
+                        <span class="label-after">After</span>
+                        <p style="color: var(--text); font-size: 0.9rem;"><em>"Hello! I'm Aria, your AI Revenue
+                                Manager."</em></p>
+                    </div>
+                </div>
+
+                <pre><code><span class="line-add">You are **Aria** — the AI Revenue Manager for PriceOS.</span>
+<span class="line-add">**Never reveal your internal name (CRO Router) or mention</span>
+<span class="line-add">sub-agent names (PropertyAnalyst, BookingIntelligence, etc.)</span>
+<span class="line-add">to the user.**</span></code></pre>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- CHANGE 5: Full Analysis Response Format -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <div class="section" id="response-format">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(243,156,18,0.15);">📊</div>
+                <h2>5. Full Analysis Response Format (10 Sections)</h2>
+                <span class="tag tag-prompt">Prompt</span>
+            </div>
+
+            <div class="change-card">
+                <h3>Problem</h3>
+                <p>The agent's "Full Analysis" response was missing critical sections a Revenue Manager expects: booking
+                    velocity, channel mix, competitor details, revenue projection, min-stay recommendations.</p>
+
+                <h3>Solution</h3>
+                <p>Replaced the 5-line response format with a comprehensive 10-section format aligned to the PRD:</p>
+
+                <div class="file-ref">📄 updated_prompts_2/01-cro-router.md</div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Section</th>
+                            <th>What RM Gets</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>1</td>
+                            <td>📍 Executive Summary</td>
+                            <td>Property, window dates, overall health in 2–3 lines</td>
+                        </tr>
+                        <tr>
+                            <td>2</td>
+                            <td>📊 Performance Scorecard</td>
+                            <td>Occupancy %, ADR, floor/ceiling, market position table</td>
+                        </tr>
+                        <tr>
+                            <td>3</td>
+                            <td>📈 Booking Intelligence</td>
+                            <td>Velocity trend, avg LOS, channel mix %, day-of-week pattern</td>
+                        </tr>
+                        <tr>
+                            <td>4</td>
+                            <td>🏆 Competitor Positioning</td>
+                            <td>P25–P90 distribution, price vs median, notable competitors</td>
+                        </tr>
+                        <tr>
+                            <td>5</td>
+                            <td>📅 Gap Analysis</td>
+                            <td>Each vacant gap, LOS recommendations, orphan nights</td>
+                        </tr>
+                        <tr>
+                            <td>6</td>
+                            <td>🎪 Event Calendar & Impact</td>
+                            <td>Active events, impact levels, premium factors</td>
+                        </tr>
+                        <tr>
+                            <td>7</td>
+                            <td>💰 Pricing Strategy</td>
+                            <td>WHY weekday/weekend/event rates differ, tiered rates</td>
+                        </tr>
+                        <tr>
+                            <td>8</td>
+                            <td>📈 Revenue Projection</td>
+                            <td>Current vs proposed potential, uplift AED + %</td>
+                        </tr>
+                        <tr>
+                            <td>9</td>
+                            <td>⚠️ Risk Summary</td>
+                            <td>Low/medium/high counts, FLAGGED/REJECTED reasons</td>
+                        </tr>
+                        <tr>
+                            <td>10</td>
+                            <td>✅ Action Items</td>
+                            <td>Numbered list of steps the RM should take</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- CHANGE 6: PriceGuard Pricing Formula -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <div class="section" id="pricing-formula">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(16,185,129,0.15);">💰</div>
+                <h2>6. PriceGuard Pricing Formula — Fallback & Differentiation</h2>
+                <span class="tag tag-prompt">Prompt</span>
+            </div>
+
+            <div class="change-card">
+                <h3>Problem</h3>
+                <p>All 8 proposals came back as <strong>AED 600</strong> (the floor price). Every date got the same
+                    price — no differentiation between weekdays, weekends, and event dates. The formula's base rate was
+                    0 when benchmark data was missing.</p>
+
+                <h3>Solution — Two Changes</h3>
+
+                <div class="file-ref">📄 updated_prompts_2/05-price-guard.md</div>
+
+                <h3>A. Fallback when benchmark rates are 0:</h3>
+                <pre><code><span class="line-add">FALLBACK: If the benchmark rate is 0 or missing:</span>
+<span class="line-add">  - Use MAX(property.current_price, property.floor_price) as base</span>
+<span class="line-add">  - For weekends: base × 1.10</span>
+<span class="line-add">  - For event dates: base × 1.20</span></code></pre>
+
+                <h3>B. Differentiation Rule:</h3>
+                <pre><code><span class="line-add">**CRITICAL: Differentiation Rule**</span>
+<span class="line-add">- Event dates MUST be priced HIGHER than non-event dates</span>
+<span class="line-add">- Weekend rates MUST be different from weekday rates</span>
+<span class="line-add">- If clamping makes everything equal to floor, increase</span>
+<span class="line-add">  event dates to floor × event_factor</span></code></pre>
+
+                <h3>Expected Pricing After Fix</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Day Type</th>
+                            <th>Before (All Same)</th>
+                            <th>After (Differentiated)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Mar 4 (Tue)</td>
+                            <td>Weekday</td>
+                            <td>AED 600</td>
+                            <td>AED 600</td>
+                        </tr>
+                        <tr>
+                            <td>Mar 5 (Wed)</td>
+                            <td>Weekday</td>
+                            <td>AED 600</td>
+                            <td>AED 600</td>
+                        </tr>
+                        <tr>
+                            <td>Mar 6 (Thu, Art Dubai)</td>
+                            <td>Event</td>
+                            <td>AED 600</td>
+                            <td style="color: var(--green); font-weight: 700;">AED 690+</td>
+                        </tr>
+                        <tr>
+                            <td>Mar 7 (Fri, Art Dubai)</td>
+                            <td>Weekend + Event</td>
+                            <td>AED 600</td>
+                            <td style="color: var(--green); font-weight: 700;">AED 759+</td>
+                        </tr>
+                        <tr>
+                            <td>Mar 8 (Sat, Art Dubai)</td>
+                            <td>Weekend + Event</td>
+                            <td>AED 600</td>
+                            <td style="color: var(--green); font-weight: 700;">AED 759+</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- CHANGE 7: Tooltip & Chat Disable -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <div class="section" id="tooltip">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(245,158,11,0.15);">⚠️</div>
+                <h2>7. Guardrails Tooltip & Chat Disable</h2>
+                <span class="tag tag-ui">UI</span>
+            </div>
+
+            <div class="change-card">
+                <h3>Problem</h3>
+                <p>When guardrails (floor/ceiling) are not set for a property, the user could still see old chat
+                    messages. The native HTML <code>title</code> tooltip was invisible on disabled buttons and had a
+                    1-second delay.</p>
+
+                <h3>Solution</h3>
+                <p>Replaced native <code>title</code> with Radix <code>&lt;Tooltip&gt;</code> component showing an amber
+                    popup on hover. Disabled the chat input when guardrails aren't set.</p>
+
+                <div class="file-ref">📄 src/components/chat/unified-chat-interface.tsx</div>
+
+                <h3>Behavior When Guardrails NOT Set</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Element</th>
+                            <th>State</th>
+                            <th>Hover Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Guardrails Badge</td>
+                            <td>⚠️ Amber: "Set Guardrails — Not set"</td>
+                            <td>—</td>
+                        </tr>
+                        <tr>
+                            <td>Chat Input</td>
+                            <td><strong>Disabled</strong></td>
+                            <td>⚠️ Please set the Guardrails first, then click Market Analysis</td>
+                        </tr>
+                        <tr>
+                            <td>Market Analysis Button</td>
+                            <td><strong>Disabled</strong></td>
+                            <td>⚠️ Please set the Guardrails first, then click Market Analysis</td>
+                        </tr>
+                        <tr>
+                            <td>Chat Input Placeholder</td>
+                            <td>—</td>
+                            <td>"Please set the Guardrails and click on Market Analysis button"</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Behavior When Guardrails ARE Set</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Element</th>
+                            <th>State</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Guardrails Badge</td>
+                            <td>✅ Green: "Guardrails AED 600 – 2,000"</td>
+                        </tr>
+                        <tr>
+                            <td>Chat Input</td>
+                            <td>Enabled — "Ask about pricing, events, market rates..."</td>
+                        </tr>
+                        <tr>
+                            <td>Market Analysis Button</td>
+                            <td>Enabled — "Run market analysis"</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- CHANGE 8: Max Tokens -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <div class="section" id="max-tokens">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(59,130,246,0.15);">📝</div>
+                <h2>8. Max Tokens: 2000 → 4000</h2>
+                <span class="tag tag-prompt">Prompt</span>
+            </div>
+
+            <div class="change-card">
+                <h3>Problem</h3>
+                <p>The CRO Router's <code>max_tokens</code> was set to 2000. A full analysis with 10 sections + 8
+                    proposals in structured JSON easily exceeds 2000 tokens, causing the response to be
+                    <strong>truncated</strong> — which is why sections like booking velocity and competitor data were
+                    missing.</p>
+
+                <h3>Solution</h3>
+                <p>Increased to 4000 tokens to accommodate the comprehensive response format.</p>
+
+                <div class="file-ref">📄 updated_prompts_2/01-cro-router.md → line 4</div>
+
+                <div class="before-after">
+                    <div>
+                        <span class="label-before">Before</span>
+                        <pre><code>`gemini-3.0-flash-preview` | temp `0.2` | max_tokens `2000`</code></pre>
+                    </div>
+                    <div>
+                        <span class="label-after">After</span>
+                        <pre><code>`gemini-3.0-flash-preview` | temp `0.2` | max_tokens `4000`</code></pre>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- CHANGE 9: Sub-Agent Date Alignment -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <div class="section" id="sub-agents">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(6,182,212,0.15);">🔗</div>
+                <h2>9. Sub-Agent Date Alignment</h2>
+                <span class="tag tag-prompt">Prompt × 4</span>
+            </div>
+
+            <div class="change-card">
+                <h3>Problem</h3>
+                <p>Only the CRO Router had the <code>analysis_window</code> field. Sub-agents could still analyze dates
+                    outside the user's selected range — depending on what data they received.</p>
+
+                <h3>Solution</h3>
+                <p>Added <code>analysis_window</code> with explicit date boundary rules to ALL 4 sub-agent prompts:</p>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Agent</th>
+                            <th>File</th>
+                            <th>Rule Added</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Property Analyst</td>
+                            <td><span class="file-ref">02-property-analyst.md</span></td>
+                            <td>"ALL analysis MUST be within these dates only."</td>
+                        </tr>
+                        <tr>
+                            <td>Booking Intelligence</td>
+                            <td><span class="file-ref">03-booking-intelligence.md</span></td>
+                            <td>"Only analyze reservations within analysis_window."</td>
+                        </tr>
+                        <tr>
+                            <td>Market Research</td>
+                            <td><span class="file-ref">04-market-research.md</span></td>
+                            <td>"Only include events that overlap with analysis_window."</td>
+                        </tr>
+                        <tr>
+                            <td>PriceGuard</td>
+                            <td><span class="file-ref">05-price-guard.md</span></td>
+                            <td>"Only generate proposals for dates within this range."</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- FILES MODIFIED -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <div class="section" id="files-modified">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(139,92,246,0.15);">📁</div>
+                <h2>10. Complete Files Modified</h2>
+            </div>
+
+            <div class="change-card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>File</th>
+                            <th>Type</th>
+                            <th>Changes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>src/app/api/chat/route.ts</td>
+                            <td><span class="badge badge-done">Backend</span></td>
+                            <td>Added <code>analysis_window</code> to payload, added <code>enforceGuardrails()</code>
+                                function (65 lines), scope fix for floor/ceiling</td>
+                        </tr>
+                        <tr>
+                            <td>src/app/api/chat/history/route.ts</td>
+                            <td><span class="badge badge-done">Backend</span></td>
+                            <td>Added <code>sessionId</code> filter to scope chat history to date range</td>
+                        </tr>
+                        <tr>
+                            <td>src/components/chat/unified-chat-interface.tsx</td>
+                            <td><span class="badge badge-new">Frontend</span></td>
+                            <td>Added Radix Tooltip for guardrails warning, disabled chat when guardrails not set,
+                                scoped history fetch to sessionId, added dateRange to useEffect deps</td>
+                        </tr>
+                        <tr>
+                            <td>updated_prompts_2/01-cro-router.md</td>
+                            <td><span class="badge badge-critical">Prompt</span></td>
+                            <td>Renamed to "Aria", added analysis_window, expanded to 10-section response format,
+                                max_tokens 2000→4000</td>
+                        </tr>
+                        <tr>
+                            <td>updated_prompts_2/02-property-analyst.md</td>
+                            <td><span class="badge badge-critical">Prompt</span></td>
+                            <td>Added analysis_window with date boundary rule</td>
+                        </tr>
+                        <tr>
+                            <td>updated_prompts_2/03-booking-intelligence.md</td>
+                            <td><span class="badge badge-critical">Prompt</span></td>
+                            <td>Added analysis_window with date boundary rule</td>
+                        </tr>
+                        <tr>
+                            <td>updated_prompts_2/04-market-research.md</td>
+                            <td><span class="badge badge-critical">Prompt</span></td>
+                            <td>Added analysis_window with date boundary rule</td>
+                        </tr>
+                        <tr>
+                            <td>updated_prompts_2/05-price-guard.md</td>
+                            <td><span class="badge badge-critical">Prompt</span></td>
+                            <td>Added analysis_window, FALLBACK pricing formula, differentiation rule</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Summary -->
+        <div class="section">
+            <div class="section-header">
+                <div class="section-icon" style="background: rgba(16,185,129,0.15);">✅</div>
+                <h2>Session Summary</h2>
+            </div>
+
+            <div class="change-card">
+                <h3>Defense in Depth — 3-Layer Safety System</h3>
+                <div class="flow">
+                    <div class="flow-step" style="border-color: var(--purple);">Layer 1: Prompts<br><small
+                            style="color: var(--text-muted);">LLM instructions (suggestions)</small></div>
+                    <span class="flow-arrow">+</span>
+                    <div class="flow-step" style="border-color: var(--blue);">Layer 2: Schema Validation<br><small
+                            style="color: var(--text-muted);">API route input validation</small></div>
+                    <span class="flow-arrow">+</span>
+                    <div class="flow-step" style="border-color: var(--red);">Layer 3: enforceGuardrails()<br><small
+                            style="color: var(--text-muted);">Bulletproof TypeScript code</small></div>
+                </div>
+
+                <h3 style="margin-top: 24px;">Key Principle</h3>
+                <p>Even if every prompt is deleted, the server-side guardrails guarantee that no proposal will ever
+                    violate floor/ceiling bounds or exceed ±50% swing limits. The risk level is computed
+                    deterministically in code, not by the LLM.</p>
+
+                <h3 style="margin-top: 24px;">Build Status</h3>
+                <p><span class="badge badge-done" style="font-size: 0.8rem; padding: 4px 12px;">✅ ZERO BUILD
+                        ERRORS</span> — All changes verified with <code>npx tsc --noEmit</code></p>
+            </div>
+        </div>
+
+    </div>
+
+    <footer
+        style="text-align: center; padding: 40px; color: var(--text-muted); font-size: 0.75rem; border-top: 1px solid var(--border);">
+        PriceOS Changes Documentation · Generated March 4, 2026 · Session: 09:48 – 12:52 IST
+    </footer>
+
+</body>
+
+</html>

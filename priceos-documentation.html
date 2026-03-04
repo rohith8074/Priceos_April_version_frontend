@@ -1,0 +1,1614 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PriceOS — Technical Documentation v2.0</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0f;
+            --surface: #12121a;
+            --surface-2: #1a1a28;
+            --border: #2a2a3d;
+            --text: #e4e4ed;
+            --text-muted: #8888a0;
+            --accent: #f59e0b;
+            --accent-dim: #b45309;
+            --green: #22c55e;
+            --red: #ef4444;
+            --blue: #3b82f6;
+            --purple: #a855f7;
+            --cyan: #06b6d4;
+            --pink: #ec4899;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            font-size: 15px;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 32px;
+        }
+
+        /* ── NAV ── */
+        nav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(10, 10, 15, 0.92);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 0;
+        }
+
+        nav .container {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        nav .logo {
+            font-weight: 900;
+            font-size: 20px;
+            color: var(--accent);
+            letter-spacing: -0.5px;
+        }
+
+        nav .badge {
+            background: var(--accent);
+            color: #000;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        nav .nav-links {
+            margin-left: auto;
+            display: flex;
+            gap: 24px;
+        }
+
+        nav a {
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+
+        nav a:hover {
+            color: var(--accent);
+        }
+
+        /* ── HERO ── */
+        .hero {
+            padding: 80px 0 60px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .hero h1 {
+            font-size: 48px;
+            font-weight: 900;
+            letter-spacing: -2px;
+            line-height: 1.1;
+        }
+
+        .hero h1 span {
+            color: var(--accent);
+        }
+
+        .hero p {
+            color: var(--text-muted);
+            font-size: 18px;
+            max-width: 700px;
+            margin-top: 16px;
+        }
+
+        .hero .meta {
+            display: flex;
+            gap: 32px;
+            margin-top: 32px;
+        }
+
+        .hero .meta-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .hero .meta-label {
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--text-muted);
+        }
+
+        .hero .meta-value {
+            font-size: 16px;
+            font-weight: 700;
+            margin-top: 4px;
+        }
+
+        /* ── SECTIONS ── */
+        section {
+            padding: 60px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        section h2 {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            letter-spacing: -1px;
+        }
+
+        section h2 .num {
+            color: var(--accent);
+            margin-right: 8px;
+        }
+
+        section .subtitle {
+            color: var(--text-muted);
+            font-size: 15px;
+            margin-bottom: 32px;
+        }
+
+        h3 {
+            font-size: 18px;
+            font-weight: 700;
+            margin: 32px 0 12px;
+            color: var(--accent);
+        }
+
+        h4 {
+            font-size: 15px;
+            font-weight: 700;
+            margin: 20px 0 8px;
+        }
+
+        p {
+            margin-bottom: 12px;
+        }
+
+        /* ── CARDS ── */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin: 16px 0;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            transition: border-color 0.3s;
+        }
+
+        .card:hover {
+            border-color: var(--accent);
+        }
+
+        .card .card-icon {
+            font-size: 28px;
+            margin-bottom: 12px;
+        }
+
+        .card .card-title {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .card .card-desc {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .card .card-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 12px;
+        }
+
+        .tag-green {
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--green);
+        }
+
+        .tag-blue {
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--blue);
+        }
+
+        .tag-purple {
+            background: rgba(168, 85, 247, 0.15);
+            color: var(--purple);
+        }
+
+        .tag-amber {
+            background: rgba(245, 158, 11, 0.15);
+            color: var(--accent);
+        }
+
+        .tag-pink {
+            background: rgba(236, 72, 153, 0.15);
+            color: var(--pink);
+        }
+
+        /* ── CODE ── */
+        pre {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 20px;
+            overflow-x: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12.5px;
+            line-height: 1.7;
+            margin: 12px 0 20px;
+        }
+
+        code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12.5px;
+        }
+
+        .inline-code {
+            background: var(--surface-2);
+            padding: 2px 7px;
+            border-radius: 5px;
+            font-size: 12.5px;
+            color: var(--cyan);
+        }
+
+        /* ── TABLES ── */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 13px;
+        }
+
+        th {
+            background: var(--surface);
+            text-align: left;
+            padding: 12px 16px;
+            font-weight: 700;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            border-bottom: 2px solid var(--border);
+        }
+
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+        }
+
+        tr:hover td {
+            background: var(--surface);
+        }
+
+        /* ── FLOW DIAGRAM ── */
+        .flow-box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 32px;
+            margin: 20px 0;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            line-height: 2;
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        .flow-box .hl {
+            color: var(--accent);
+            font-weight: 700;
+        }
+
+        .flow-box .green {
+            color: var(--green);
+        }
+
+        .flow-box .blue {
+            color: var(--blue);
+        }
+
+        .flow-box .red {
+            color: var(--red);
+        }
+
+        .flow-box .purple {
+            color: var(--purple);
+        }
+
+        /* ── ALERT BOXES ── */
+        .alert {
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin: 16px 0;
+            font-size: 13px;
+        }
+
+        .alert-info {
+            background: rgba(59, 130, 246, 0.1);
+            border-left: 4px solid var(--blue);
+        }
+
+        .alert-warning {
+            background: rgba(245, 158, 11, 0.1);
+            border-left: 4px solid var(--accent);
+        }
+
+        .alert-danger {
+            background: rgba(239, 68, 68, 0.1);
+            border-left: 4px solid var(--red);
+        }
+
+        .alert strong {
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        /* ── BADGE LIST ── */
+        .badge-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 8px 0 16px;
+        }
+
+        .badge-item {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            padding: 4px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        /* ── SCHEMA BLOCK ── */
+        .schema-block {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin: 16px 0;
+        }
+
+        .schema-name {
+            font-size: 16px;
+            font-weight: 800;
+            color: var(--cyan);
+            margin-bottom: 4px;
+        }
+
+        .schema-desc {
+            color: var(--text-muted);
+            font-size: 13px;
+            margin-bottom: 16px;
+        }
+
+        /* ── TOC ── */
+        .toc {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px 32px;
+            margin: 24px 0;
+        }
+
+        .toc h3 {
+            margin-top: 0;
+            color: var(--text);
+        }
+
+        .toc ol {
+            padding-left: 20px;
+        }
+
+        .toc li {
+            margin: 6px 0;
+        }
+
+        .toc a {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .toc a:hover {
+            text-decoration: underline;
+        }
+
+        /* ── FOOTER ── */
+        footer {
+            padding: 40px 0;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 32px;
+            }
+
+            .card-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero .meta {
+                flex-direction: column;
+                gap: 16px;
+            }
+
+            .flow-box {
+                font-size: 11px;
+                padding: 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <nav>
+        <div class="container">
+            <span class="logo">PriceOS</span>
+            <span class="badge">v2.0</span>
+            <div class="nav-links">
+                <a href="#architecture">Architecture</a>
+                <a href="#agents">Agents</a>
+                <a href="#database">Database</a>
+                <a href="#api">API Routes</a>
+                <a href="#flows">Data Flows</a>
+                <a href="#guardrails">Guardrails</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ═══════════════════════════════════════ HERO ═══════════════════════════════════════ -->
+    <div class="hero">
+        <div class="container">
+            <h1>PriceOS <span>Technical Documentation</span></h1>
+            <p>Complete technical reference for the AI-powered Dubai short-term rental pricing copilot. Covers
+                architecture, database schema, agent orchestration, API routes, and data flows.</p>
+            <div class="meta">
+                <div class="meta-item">
+                    <span class="meta-label">Framework</span>
+                    <span class="meta-value">Next.js 15 + React 19</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">Database</span>
+                    <span class="meta-value">PostgreSQL (Neon)</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">AI Platform</span>
+                    <span class="meta-value">Lyzr Agent Studio</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label">PMS Integration</span>
+                    <span class="meta-value">Hostaway API</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════ TABLE OF CONTENTS ═══════════════════════════════ -->
+    <section>
+        <div class="container">
+            <div class="toc">
+                <h3>📑 Table of Contents</h3>
+                <ol>
+                    <li><a href="#architecture">System Architecture Overview</a></li>
+                    <li><a href="#tech-stack">Technology Stack</a></li>
+                    <li><a href="#agents">Agent Orchestration — All 9 Agents</a></li>
+                    <li><a href="#database">Database Schema — 10 Tables</a></li>
+                    <li><a href="#api">API Routes — Complete Reference</a></li>
+                    <li><a href="#flows">Step-by-Step Data Flows</a></li>
+                    <li><a href="#guardrails">Price Guardrails & Safety</a></li>
+                    <li><a href="#env">Environment Variables</a></li>
+                </ol>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════════════════ 1. ARCHITECTURE ═══════════════════════════════ -->
+    <section id="architecture">
+        <div class="container">
+            <h2><span class="num">01</span> System Architecture Overview</h2>
+            <p class="subtitle">How data flows from Hostaway PMS through AI agents to the user interface.</p>
+
+            <div class="flow-box"><span
+                    class="hl">┌─────────────────────────────────────────────────────────────────────┐</span>
+                <span class="hl">│ PriceOS Architecture │</span>
+                <span class="hl">└─────────────────────────────────────────────────────────────────────┘</span>
+
+                <span class="blue">Hostaway PMS API</span> ──GET──▶ <span class="green">Python Sync Backend</span>
+                ──INSERT──▶ <span class="purple">PostgreSQL (Neon)</span>
+                (Listings, (FastAPI @ :8000) (10 tables)
+                Calendar, Syncs listings,
+                Reservations) calendar, reservations
+
+                <span class="purple">PostgreSQL</span> ──SELECT──▶ <span class="hl">Next.js API Routes</span> ──JSON
+                Payload──▶ <span class="blue">Lyzr Agent Studio</span>
+                (/api/chat) (CRO Router Agent)
+                (/api/market-setup) (Sub-Agents)
+                (/api/events)
+                (/api/benchmark)
+
+                <span class="blue">Lyzr Agent Studio</span> ──Structured JSON──▶ <span class="hl">Next.js API</span>
+                ──Response──▶ <span class="green">React Frontend</span>
+                CRO Router (/api/chat) Chat UI
+                → PropertyAnalyst Parses JSON Sidebar
+                → BookingIntelligence Saves to DB Proposals
+                → MarketResearch Returns to UI Calendar
+                → PriceGuard
+            </div>
+
+            <div class="alert alert-info">
+                <strong>💡 Key Design Decision: Data Injection on First Message</strong>
+                On the user's first message in a chat session, <code class="inline-code">route.ts</code> fetches ALL
+                property data from PostgreSQL and injects it directly into the Lyzr prompt. The agent remembers this
+                data for the entire session. Subsequent messages do NOT re-fetch data.
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════════════════ 2. TECH STACK ═══════════════════════════════ -->
+    <section id="tech-stack">
+        <div class="container">
+            <h2><span class="num">02</span> Technology Stack</h2>
+            <p class="subtitle">Complete list of technologies, frameworks, and services used.</p>
+
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-icon">⚛️</div>
+                    <div class="card-title">Frontend</div>
+                    <div class="card-desc">Next.js 15 (App Router), React 19, TypeScript, ShadCN UI, Sonner (toasts),
+                        Zustand (state).</div>
+                    <span class="card-tag tag-blue">UI Layer</span>
+                </div>
+                <div class="card">
+                    <div class="card-icon">🔧</div>
+                    <div class="card-title">Backend</div>
+                    <div class="card-desc">Next.js API Routes, Drizzle ORM, PostgreSQL (Neon), Python FastAPI for
+                        Hostaway sync.</div>
+                    <span class="card-tag tag-green">API Layer</span>
+                </div>
+                <div class="card">
+                    <div class="card-icon">🤖</div>
+                    <div class="card-title">AI Agents</div>
+                    <div class="card-desc">Lyzr Agent Studio (agent orchestration), Gemini 3 Flash Preview (router),
+                        GPT-4o-mini (sub-agents), Sonar (internet search).</div>
+                    <span class="card-tag tag-purple">Intelligence Layer</span>
+                </div>
+                <div class="card">
+                    <div class="card-icon">🏠</div>
+                    <div class="card-title">PMS Integration</div>
+                    <div class="card-desc">Hostaway API — GET-only for listings, calendar, reservations, conversations.
+                        Write operations planned for v1.5.</div>
+                    <span class="card-tag tag-amber">Data Source</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════════════════ 3. AGENTS ═══════════════════════════════ -->
+    <section id="agents">
+        <div class="container">
+            <h2><span class="num">03</span> Agent Orchestration — All 9 Agents</h2>
+            <p class="subtitle">Each agent has a specific role, model, and structured output schema.</p>
+
+            <div class="alert alert-warning">
+                <strong>⚡ Agent Categories</strong>
+                Agents fall into two categories: <strong>Chat Agents</strong> (invoked during user conversations) and
+                <strong>Setup Agents</strong> (invoked once when "Market Analysis" is clicked). Setup agents do NOT grow
+                context over conversation.
+            </div>
+
+            <!-- CHAT AGENTS -->
+            <h3>Chat Agents (invoked per user message)</h3>
+
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-icon">🧭</div>
+                    <div class="card-title">Agent 1: CRO Router</div>
+                    <div class="card-desc">
+                        <strong>Model:</strong> Gemini 3 Flash Preview | temp 0.2<br>
+                        <strong>Role:</strong> User-facing orchestrator. Classifies user intent, routes to sub-agents,
+                        merges outputs into conversational response.<br>
+                        <strong>Data:</strong> Receives full property JSON payload on first message. Remembers for
+                        session.<br>
+                        <strong>Output:</strong> <code
+                            class="inline-code">{ routing, proposals[], chat_response }</code>
+                    </div>
+                    <span class="card-tag tag-amber">Orchestrator</span>
+                </div>
+                <div class="card">
+                    <div class="card-icon">📊</div>
+                    <div class="card-title">Agent 2: Property Analyst</div>
+                    <div class="card-desc">
+                        <strong>Model:</strong> GPT-4o-mini | temp 0.1<br>
+                        <strong>Role:</strong> Analyses calendar gaps, restrictions (min stay), seasonal patterns,
+                        revenue forecasts.<br>
+                        <strong>Key Logic:</strong> Gap detection (1-night orphan, micro-gaps, last-minute vacancy),
+                        auto-revert intelligence.<br>
+                        <strong>Output:</strong> <code
+                            class="inline-code">{ gap_nights[], restrictions[], seasonal, revenue, summary }</code>
+                    </div>
+                    <span class="card-tag tag-green">Analysis</span>
+                </div>
+                <div class="card">
+                    <div class="card-icon">📈</div>
+                    <div class="card-title">Agent 3: Booking Intelligence</div>
+                    <div class="card-desc">
+                        <strong>Model:</strong> GPT-4o-mini | temp 0.1<br>
+                        <strong>Role:</strong> Booking velocity, length of stay analysis, revenue breakdown, event
+                        correlation.<br>
+                        <strong>Key Logic:</strong> Velocity trend (accelerating/stable/decelerating based on occupancy
+                        %), LOS buckets.<br>
+                        <strong>Output:</strong> <code
+                            class="inline-code">{ velocity, length_of_stay, revenue, day_of_week, summary }</code>
+                    </div>
+                    <span class="card-tag tag-green">Analysis</span>
+                </div>
+                <div class="card">
+                    <div class="card-icon">🌍</div>
+                    <div class="card-title">Agent 4: Market Research</div>
+                    <div class="card-desc">
+                        <strong>Model:</strong> GPT-4o-mini | temp 0.1<br>
+                        <strong>Role:</strong> Parses pre-cached market events, competitor rates, positioning
+                        verdict.<br>
+                        <strong>Key Logic:</strong> Event price factors (high=1.3x, medium=1.15x), positioning vs
+                        P50.<br>
+                        <strong>Output:</strong> <code
+                            class="inline-code">{ events[], competitors, positioning, summary }</code>
+                    </div>
+                    <span class="card-tag tag-blue">Market Intel</span>
+                </div>
+                <div class="card">
+                    <div class="card-icon">🛡️</div>
+                    <div class="card-title">Agent 5: PriceGuard</div>
+                    <div class="card-desc">
+                        <strong>Model:</strong> GPT-4o-mini | temp 0.0<br>
+                        <strong>Role:</strong> Pricing engine + final safety validator. Computes prices, clamps to
+                        floor/ceiling, validates, assigns risk.<br>
+                        <strong>Key Logic:</strong> 4-step pipeline: Compute → Clamp → Validate (6 rules) → Risk Level.
+                        Has unconditional veto power.<br>
+                        <strong>Output:</strong> <code class="inline-code">{ results[], batch_summary }</code>
+                    </div>
+                    <span class="card-tag tag-pink">Validation</span>
+                </div>
+                <div class="card">
+                    <div class="card-icon">💬</div>
+                    <div class="card-title">Guest Reply Agent</div>
+                    <div class="card-desc">
+                        <strong>Model:</strong> GPT-4o-mini | temp 0.3<br>
+                        <strong>Role:</strong> Drafts professional guest replies based on conversation history and
+                        booking context.<br>
+                        <strong>Output:</strong> Conversational reply text
+                    </div>
+                    <span class="card-tag tag-green">Communication</span>
+                </div>
+            </div>
+
+            <!-- SETUP AGENTS -->
+            <h3>Setup Agents (invoked once per Market Analysis click)</h3>
+
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-icon">🔍</div>
+                    <div class="card-title">Agent 6: Marketing Agent</div>
+                    <div class="card-desc">
+                        <strong>Model:</strong> Sonar (internet search)<br>
+                        <strong>Role:</strong> Searches the internet for events, holidays, and demand signals for the
+                        property's area and date range.<br>
+                        <strong>Output:</strong> Structured events with impact levels, premium %.<br>
+                        <strong>Trigger:</strong> "Market Analysis" button click.
+                    </div>
+                    <span class="card-tag tag-amber">Setup Phase</span>
+                </div>
+                <div class="card">
+                    <div class="card-icon">📏</div>
+                    <div class="card-title">Agent 7: Benchmark Agent</div>
+                    <div class="card-desc">
+                        <strong>Model:</strong> Sonar (internet search)<br>
+                        <strong>Role:</strong> Searches for competitor rates, computes P25/P50/P75/P90 market
+                        distribution, recommends weekday/weekend/event rates.<br>
+                        <strong>Output:</strong> Benchmark data with rate distribution + competitor examples.<br>
+                        <strong>Trigger:</strong> "Market Analysis" button click.
+                    </div>
+                    <span class="card-tag tag-amber">Setup Phase</span>
+                </div>
+                <div class="card">
+                    <div class="card-icon">📝</div>
+                    <div class="card-title">Conversation Summary Agent</div>
+                    <div class="card-desc">
+                        <strong>Model:</strong> GPT-4o-mini<br>
+                        <strong>Role:</strong> Summarizes guest conversations to extract sentiment, themes, and action
+                        items.<br>
+                        <strong>Trigger:</strong> When guest conversations are synced.
+                    </div>
+                    <span class="card-tag tag-amber">Setup Phase</span>
+                </div>
+            </div>
+
+            <!-- ROUTING TABLE -->
+            <h3>CRO Router — Intent → Agent Routing Table</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>User Says</th>
+                        <th>Agents Invoked</th>
+                        <th>PriceGuard?</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>"What's my occupancy?" / "Show gaps"</td>
+                        <td>PropertyAnalyst</td>
+                        <td>No</td>
+                    </tr>
+                    <tr>
+                        <td>"Booking velocity" / "Revenue"</td>
+                        <td>BookingIntelligence</td>
+                        <td>No</td>
+                    </tr>
+                    <tr>
+                        <td>"Competitor rates" / "Market events"</td>
+                        <td>MarketResearch</td>
+                        <td>No</td>
+                    </tr>
+                    <tr>
+                        <td>"What should I price?" / "Optimize"</td>
+                        <td>PropertyAnalyst + MarketResearch + PriceGuard</td>
+                        <td>✅ Yes</td>
+                    </tr>
+                    <tr>
+                        <td><strong>"Analysis" / "Full analysis"</strong></td>
+                        <td><strong>All 4 agents + PriceGuard</strong></td>
+                        <td>✅ Yes</td>
+                    </tr>
+                    <tr>
+                        <td>"Adjust min stay"</td>
+                        <td>PropertyAnalyst</td>
+                        <td>No</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- ═══════════════════════════════ 4. DATABASE ═══════════════════════════════ -->
+    <section id="database">
+        <div class="container">
+            <h2><span class="num">04</span> Database Schema — 10 Tables</h2>
+            <p class="subtitle">PostgreSQL (Neon) with Drizzle ORM. Schema defined in <code
+                    class="inline-code">src/lib/db/schema.ts</code>.</p>
+
+            <!-- LISTINGS -->
+            <div class="schema-block">
+                <div class="schema-name">1. listings</div>
+                <div class="schema-desc">Property registry — one row per Hostaway listing.</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>id</td>
+                            <td>serial PK</td>
+                            <td>Internal ID</td>
+                        </tr>
+                        <tr>
+                            <td>hostaway_id</td>
+                            <td>text UNIQUE</td>
+                            <td>Hostaway listing ID</td>
+                        </tr>
+                        <tr>
+                            <td>name</td>
+                            <td>text</td>
+                            <td>Property name (e.g. "City Walk 1BR")</td>
+                        </tr>
+                        <tr>
+                            <td>city, area</td>
+                            <td>text</td>
+                            <td>Location (e.g. "Dubai", "JBR")</td>
+                        </tr>
+                        <tr>
+                            <td>bedrooms_number, bathrooms_number</td>
+                            <td>int</td>
+                            <td>Property specs</td>
+                        </tr>
+                        <tr>
+                            <td>price</td>
+                            <td>numeric(10,2)</td>
+                            <td>Current nightly rate</td>
+                        </tr>
+                        <tr>
+                            <td>currency_code</td>
+                            <td>varchar(3)</td>
+                            <td>"AED" by default</td>
+                        </tr>
+                        <tr>
+                            <td><strong>price_floor</strong></td>
+                            <td>numeric(10,2)</td>
+                            <td>⬇️ Minimum allowed price (guardrail)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>price_ceiling</strong></td>
+                            <td>numeric(10,2)</td>
+                            <td>⬆️ Maximum allowed price (guardrail)</td>
+                        </tr>
+                        <tr>
+                            <td>amenities</td>
+                            <td>jsonb</td>
+                            <td>String array of amenities</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- INVENTORY MASTER -->
+            <div class="schema-block">
+                <div class="schema-name">2. inventory_master</div>
+                <div class="schema-desc">Daily price calendar — one row per listing per date. Source of occupancy
+                    calculations.</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>id</td>
+                            <td>serial PK</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>listing_id</td>
+                            <td>int FK → listings</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>date</td>
+                            <td>date</td>
+                            <td>Calendar date</td>
+                        </tr>
+                        <tr>
+                            <td>status</td>
+                            <td>text</td>
+                            <td>"available" | "reserved" | "booked" | "blocked"</td>
+                        </tr>
+                        <tr>
+                            <td>current_price</td>
+                            <td>numeric(10,2)</td>
+                            <td>Active nightly rate for this date</td>
+                        </tr>
+                        <tr>
+                            <td>min_stay, max_stay</td>
+                            <td>int</td>
+                            <td>Length of stay restrictions</td>
+                        </tr>
+                        <tr>
+                            <td>proposed_price</td>
+                            <td>numeric(10,2)</td>
+                            <td>AI-proposed price (pending approval)</td>
+                        </tr>
+                        <tr>
+                            <td>change_pct</td>
+                            <td>int</td>
+                            <td>% change from current</td>
+                        </tr>
+                        <tr>
+                            <td>proposal_status</td>
+                            <td>text</td>
+                            <td>"pending" | "approved" | "rejected"</td>
+                        </tr>
+                        <tr>
+                            <td>reasoning</td>
+                            <td>text</td>
+                            <td>AI reasoning for the proposal</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="alert alert-info">
+                    <strong>📊 Occupancy Query</strong>
+                    <code>SELECT COUNT(*), COUNT(CASE WHEN status IN ('reserved','booked') THEN 1 END) FROM inventory_master WHERE listing_id = ? AND date BETWEEN ? AND ?</code>
+                </div>
+            </div>
+
+            <!-- RESERVATIONS -->
+            <div class="schema-block">
+                <div class="schema-name">3. reservations</div>
+                <div class="schema-desc">Guest bookings from Hostaway. Used for booking intelligence and revenue
+                    analysis.</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>id</td>
+                            <td>serial PK</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>listing_id</td>
+                            <td>int FK → listings</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>guest_name, guest_email</td>
+                            <td>text</td>
+                            <td>Guest details</td>
+                        </tr>
+                        <tr>
+                            <td>start_date, end_date</td>
+                            <td>date</td>
+                            <td>Stay dates</td>
+                        </tr>
+                        <tr>
+                            <td>channel_name</td>
+                            <td>text</td>
+                            <td>"Airbnb" | "Booking.com" | "Direct"</td>
+                        </tr>
+                        <tr>
+                            <td>total_price, price_per_night</td>
+                            <td>numeric</td>
+                            <td>Financials</td>
+                        </tr>
+                        <tr>
+                            <td>reservation_status</td>
+                            <td>text</td>
+                            <td>"confirmed" | "pending" | "cancelled"</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- MARKET EVENTS -->
+            <div class="schema-block">
+                <div class="schema-name">4. market_events</div>
+                <div class="schema-desc">AI-discovered events, holidays, and market signals from the Marketing Agent
+                    (internet search).</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>id</td>
+                            <td>serial PK</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>listing_id</td>
+                            <td>int FK → listings</td>
+                            <td>null = portfolio-level</td>
+                        </tr>
+                        <tr>
+                            <td>title</td>
+                            <td>text</td>
+                            <td>"Art Dubai" | "Ramadan"</td>
+                        </tr>
+                        <tr>
+                            <td>start_date, end_date</td>
+                            <td>date</td>
+                            <td>Event dates</td>
+                        </tr>
+                        <tr>
+                            <td>event_type</td>
+                            <td>text</td>
+                            <td>"event" | "holiday" | "competitor_intel" | "positioning"</td>
+                        </tr>
+                        <tr>
+                            <td>expected_impact</td>
+                            <td>text</td>
+                            <td>"high" | "medium" | "low"</td>
+                        </tr>
+                        <tr>
+                            <td>suggested_premium</td>
+                            <td>numeric(5,2)</td>
+                            <td>AI-suggested % price increase</td>
+                        </tr>
+                        <tr>
+                            <td>confidence</td>
+                            <td>int</td>
+                            <td>0–100 confidence score</td>
+                        </tr>
+                        <tr>
+                            <td>description</td>
+                            <td>text</td>
+                            <td>Event description</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- BENCHMARK DATA -->
+            <div class="schema-block">
+                <div class="schema-name">5. benchmark_data</div>
+                <div class="schema-desc">Competitor pricing intelligence from the Benchmark Agent. One row per listing +
+                    date range.</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>p25_rate, p50_rate, p75_rate, p90_rate</td>
+                            <td>numeric</td>
+                            <td>Market rate distribution</td>
+                        </tr>
+                        <tr>
+                            <td>avg_weekday, avg_weekend</td>
+                            <td>numeric</td>
+                            <td>Average competitor rates</td>
+                        </tr>
+                        <tr>
+                            <td>recommended_weekday/weekend/event</td>
+                            <td>numeric</td>
+                            <td>AI-recommended target rates</td>
+                        </tr>
+                        <tr>
+                            <td>verdict</td>
+                            <td>text</td>
+                            <td>"UNDERPRICED" | "FAIR" | "SLIGHTLY_ABOVE" | "OVERPRICED"</td>
+                        </tr>
+                        <tr>
+                            <td>percentile</td>
+                            <td>int</td>
+                            <td>Your position in the market (e.g. 65th = FAIR)</td>
+                        </tr>
+                        <tr>
+                            <td>comps</td>
+                            <td>jsonb[]</td>
+                            <td>Array of competitor listings (name, source, avgRate, rating)</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- OTHER TABLES -->
+            <div class="schema-block">
+                <div class="schema-name">6–10. Supporting Tables</div>
+                <div class="schema-desc">Additional tables for conversations, settings, and guest management.</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Table</th>
+                            <th>Purpose</th>
+                            <th>Key Columns</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>chat_messages</strong></td>
+                            <td>AI conversation memory</td>
+                            <td>session_id, role, content, structured (jsonb)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>user_settings</strong></td>
+                            <td>User preferences & API keys</td>
+                            <td>user_id, lyzr_api_key, hostaway_api_key, preferences</td>
+                        </tr>
+                        <tr>
+                            <td><strong>guest_summaries</strong></td>
+                            <td>AI summary of guest conversations</td>
+                            <td>listing_id, sentiment, themes[], action_items[]</td>
+                        </tr>
+                        <tr>
+                            <td><strong>hostaway_conversations</strong></td>
+                            <td>Cached guest messages from Hostaway</td>
+                            <td>hostaway_conversation_id, messages (jsonb)</td>
+                        </tr>
+                        <tr>
+                            <td><strong>mock_hostaway_replies</strong></td>
+                            <td>Shadow table for safe admin replies</td>
+                            <td>conversation_id, text</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════════════════ 5. API ROUTES ═══════════════════════════════ -->
+    <section id="api">
+        <div class="container">
+            <h2><span class="num">05</span> API Routes — Complete Reference</h2>
+            <p class="subtitle">All Next.js API routes in <code class="inline-code">src/app/api/</code>.</p>
+
+            <h3>Core Chat & Analysis</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Route</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>POST</strong></td>
+                        <td>/api/chat</td>
+                        <td>Main chat endpoint. Fetches data on first message, injects into Lyzr prompt, returns agent
+                            response.</td>
+                    </tr>
+                    <tr>
+                        <td>POST</td>
+                        <td>/api/market-setup</td>
+                        <td>Triggers Market Analysis. Calls Marketing + Benchmark agents, saves events & benchmark to
+                            DB.</td>
+                    </tr>
+                    <tr>
+                        <td>GET</td>
+                        <td>/api/events?listingId=X&dateFrom=Y&dateTo=Z</td>
+                        <td>Returns market events for sidebar display.</td>
+                    </tr>
+                    <tr>
+                        <td>GET</td>
+                        <td>/api/benchmark?listingId=X&dateFrom=Y&dateTo=Z</td>
+                        <td>Returns benchmark data (P25/P50/P75) for sidebar.</td>
+                    </tr>
+                    <tr>
+                        <td>GET</td>
+                        <td>/api/calendar-metrics?listingId=X&from=Y&to=Z</td>
+                        <td>Returns occupancy %, booked/available/blocked nights.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Property & Calendar Management</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Route</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>GET</td>
+                        <td>/api/calendar?listingId=X&from=Y&to=Z</td>
+                        <td>Returns daily inventory (prices, status, min stay).</td>
+                    </tr>
+                    <tr>
+                        <td>POST</td>
+                        <td>/api/calendar/block</td>
+                        <td>Blocks specific dates.</td>
+                    </tr>
+                    <tr>
+                        <td>POST</td>
+                        <td>/api/calendar/unblock</td>
+                        <td>Unblocks specific dates.</td>
+                    </tr>
+                    <tr>
+                        <td>PATCH</td>
+                        <td>/api/listings/:id</td>
+                        <td>Updates listing (floor price, ceiling price, etc).</td>
+                    </tr>
+                    <tr>
+                        <td>GET</td>
+                        <td>/api/reservations?listingId=X</td>
+                        <td>Returns reservations for a listing.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Proposals</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Route</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>POST</td>
+                        <td>/api/proposals/bulk-save</td>
+                        <td>Saves AI proposals to inventory_master.</td>
+                    </tr>
+                    <tr>
+                        <td>POST</td>
+                        <td>/api/proposals/:id/approve</td>
+                        <td>Approves a single proposal.</td>
+                    </tr>
+                    <tr>
+                        <td>POST</td>
+                        <td>/api/proposals/bulk-approve</td>
+                        <td>Approves all pending proposals for a listing.</td>
+                    </tr>
+                    <tr>
+                        <td>POST</td>
+                        <td>/api/proposals/bulk-reject</td>
+                        <td>Rejects all pending proposals for a listing.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Data Sync (Hostaway → PostgreSQL)</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Route</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>POST</td>
+                        <td>/api/sync</td>
+                        <td>Triggers full sync via Python backend (listings, calendar, reservations).</td>
+                    </tr>
+                    <tr>
+                        <td>POST</td>
+                        <td>/api/sync/trigger</td>
+                        <td>Triggers sync for a specific data type.</td>
+                    </tr>
+                    <tr>
+                        <td>GET</td>
+                        <td>/api/sync/status</td>
+                        <td>Returns sync status (last synced timestamps).</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- ═══════════════════════════════ 6. DATA FLOWS ═══════════════════════════════ -->
+    <section id="flows">
+        <div class="container">
+            <h2><span class="num">06</span> Step-by-Step Data Flows</h2>
+            <p class="subtitle">Exactly what happens when each button is clicked and each query is made.</p>
+
+            <!-- FLOW 1: MARKET ANALYSIS -->
+            <h3>Flow 1: User clicks "Market Analysis" button</h3>
+            <div class="flow-box"><span class="hl">Frontend (unified-chat-interface.tsx)</span>
+                │
+                ├─ 1. Validate: Date range selected? ✓ Guardrails set? ✓
+                │
+                ├─ 2. <span class="green">POST /api/market-setup</span>
+                │ Body: { dateRange, context: { propertyId, propertyName }, userId }
+                │
+                <span class="hl">Backend (market-setup/route.ts)</span>
+                │
+                ├─ 3. SELECT listing from <span class="purple">listings</span> WHERE id = listingId
+                │
+                ├─ 4. SELECT calendar metrics from <span class="purple">inventory_master</span>
+                │ → occupancy_pct, booked_nights, avg_price
+                │
+                ├─ 5. SELECT reservations from <span class="purple">reservations</span>
+                │ → recent bookings for context
+                │
+                ├─ 6. Build prompt for <span class="blue">Marketing Agent (Sonar)</span>
+                │ "Search for events, holidays in {area} between {dateFrom}-{dateTo}"
+                │ → Returns: events with impact, premium %, confidence
+                │
+                ├─ 7. <span class="green">UPSERT</span> events into <span class="purple">market_events</span> table
+                │ (unique on listing_id + title + start_date)
+                │
+                ├─ 8. Build prompt for <span class="blue">Benchmark Agent (Sonar)</span>
+                │ "Find competitor rates for {bedrooms}BR in {area}"
+                │ → Returns: P25/P50/P75/P90, recommended rates, competitor list
+                │
+                ├─ 9. <span class="green">UPSERT</span> into <span class="purple">benchmark_data</span> table
+                │
+                └─ 10. Return { eventsCount, duration, sqlTrace[] }
+
+                <span class="hl">Frontend receives response:</span>
+                ├─ Toast: "Market Analysis Complete — X events in Y seconds"
+                ├─ Sidebar refreshes (events + benchmark widgets)
+                └─ Chat area stays clean — ready for user's first message
+            </div>
+
+            <!-- FLOW 2: FIRST CHAT MESSAGE -->
+            <h3>Flow 2: User sends first message (e.g. "Hi" or "Give me the analysis")</h3>
+            <div class="flow-box"><span class="hl">Frontend (unified-chat-interface.tsx)</span>
+                │
+                ├─ 1. <span class="green">POST /api/chat</span>
+                │ Body: { message, context: { type, propertyId, propertyName }, dateRange, sessionId }
+                │
+                <span class="hl">Backend (chat/route.ts)</span>
+                │
+                ├─ 2. Check: Is this the first NON-SYSTEM user message in this session?
+                │ SELECT id FROM <span class="purple">chat_messages</span>
+                │ WHERE session_id = ? AND role = 'user' AND content NOT LIKE '[SYSTEM]%'
+                │ → <span class="green">needsDataInjection = (count == 0)</span>
+                │
+                ├─ 3. <span class="hl">IF needsDataInjection:</span>
+                │ ├─ SELECT * FROM <span class="purple">listings</span> WHERE id = listingId
+                │ │ → property: { name, area, current_price, <span class="red">floor_price, ceiling_price</span> }
+                │ │
+                │ ├─ SELECT COUNT(*), occupancy FROM <span class="purple">inventory_master</span>
+                │ │ WHERE listing_id = ? AND date BETWEEN ? AND ?
+                │ │ → metrics: { occupancy_pct, booked_nights, bookable_nights }
+                │ │
+                │ ├─ SELECT * FROM <span class="purple">reservations</span>
+                │ │ WHERE listing_id = ? AND dates overlap range
+                │ │ → recent_reservations: [{ guestName, dates, totalPrice, channel }]
+                │ │
+                │ ├─ SELECT * FROM <span class="purple">benchmark_data</span>
+                │ │ WHERE listing_id = ? AND date range matches
+                │ │ → benchmark: { p25, p50, p75, recommended_weekday/weekend/event }
+                │ │
+                │ ├─ SELECT * FROM <span class="purple">market_events</span>
+                │ │ WHERE listing_id = ? AND dates overlap range
+                │ │ → market_events: [{ title, dates, impact, premium }]
+                │ │
+                │ └─ <span class="green">Build propertyDataPayload (all numbers, no strings)</span>
+                │
+                ├─ 4. SAVE user message to <span class="purple">chat_messages</span>
+                │
+                ├─ 5. Construct anchoredMessage:
+                │ "[SYSTEM: CURRENT PROPERTY DATA]
+                │ {JSON.stringify(propertyDataPayload)}
+                │ [/SYSTEM]
+                │ User Message: {message}"
+                │
+                ├─ 6. <span class="green">POST to Lyzr Agent Studio</span>
+                │ { agent_id, session_id, message: anchoredMessage }
+                │
+                ├─ 7. Parse Lyzr response → extract JSON { routing, proposals, chat_response }
+                │
+                ├─ 8. SAVE agent reply to <span class="purple">chat_messages</span>
+                │
+                └─ 9. Return response to frontend
+
+                <span class="hl">Frontend receives response:</span>
+                ├─ Display chat_response as markdown
+                ├─ If proposals[] is not empty → show proposal cards
+                └─ Proposal cards have "Deploy to Control" / "Discard" buttons
+            </div>
+
+            <!-- FLOW 3: GUARDRAILS SAVE -->
+            <h3>Flow 3: User edits Price Guardrails</h3>
+            <div class="flow-box"><span class="hl">PriceGuardrailsEditor component</span>
+                │
+                ├─ 1. User clicks guardrails badge → inline editor opens
+                ├─ 2. User enters floor (e.g. 600) and ceiling (e.g. 1800)
+                ├─ 3. Validation: floor &gt; 0, ceiling &gt; floor
+                │
+                ├─ 4. <span class="green">PATCH /api/listings/:id</span>
+                │ Body: { priceFloor: 600, priceCeiling: 1800 }
+                │
+                ├─ 5. UPDATE <span class="purple">listings</span> SET price_floor = 600, price_ceiling = 1800
+                │
+                └─ 6. UI updates → Market Analysis button becomes enabled</div>
+        </div>
+    </section>
+
+    <!-- ═══════════════════════════════ 7. GUARDRAILS ═══════════════════════════════ -->
+    <section id="guardrails">
+        <div class="container">
+            <h2><span class="num">07</span> Price Guardrails & Safety System</h2>
+            <p class="subtitle">How PriceOS prevents bad pricing decisions.</p>
+
+            <h3>PriceGuard 4-Step Pipeline</h3>
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-icon">🔢</div>
+                    <div class="card-title">Step 1: Compute</div>
+                    <div class="card-desc">base × event_factor × occupancy_factor<br>Uses benchmark recommended rates as
+                        base.</div>
+                    <span class="card-tag tag-blue">Calculation</span>
+                </div>
+                <div class="card">
+                    <div class="card-icon">📏</div>
+                    <div class="card-title">Step 2: Clamp</div>
+                    <div class="card-desc">if price &lt; floor → price = floor<br>if price &gt; ceiling → price =
+                        ceiling<br><strong>No exceptions.</strong></div>
+                    <span class="card-tag tag-amber">Hard Limit</span>
+                </div>
+                <div class="card">
+                    <div class="card-icon">✅</div>
+                    <div class="card-title">Step 3: Validate</div>
+                    <div class="card-desc">6 rules checked in order. Stop at first failure:<br>• Floor check
+                        (REJECT)<br>• Ceiling check (REJECT)<br>• ±50% swing (REJECT)<br>• P25/P75 market outlier (FLAG)
+                    </div>
+                    <span class="card-tag tag-green">Validation</span>
+                </div>
+                <div class="card">
+                    <div class="card-icon">⚡</div>
+                    <div class="card-title">Step 4: Risk Level</div>
+                    <div class="card-desc">&lt;5% change → Low (auto-approve OK)<br>5-15% → Medium (human
+                        approval)<br>&gt;15% → High (human approval)<br>Any event → at least Medium</div>
+                    <span class="card-tag tag-pink">Classification</span>
+                </div>
+            </div>
+
+            <h3>Date Classification System</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Classification</th>
+                        <th>Criteria</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="color: var(--green);">🟢 Protected</td>
+                        <td>High-impact event OR occupancy &gt; 70%</td>
+                        <td>Do NOT discount. Premium pricing.</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--blue);">🔵 Healthy</td>
+                        <td>&gt; 45 days out, priced appropriately</td>
+                        <td>Monitor only. No action needed.</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--accent);">🟡 At Risk</td>
+                        <td>&lt; 30 days out, below target occupancy</td>
+                        <td>Consider price adjustment.</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--red);">🔴 Distressed</td>
+                        <td>&lt; 14 days out, vacant, no demand</td>
+                        <td>Aggressive LOS relaxation + discount.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Verdict System</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Verdict</th>
+                        <th>Meaning</th>
+                        <th>Can Deploy?</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td style="color: var(--green);"><strong>APPROVED</strong></td>
+                        <td>All rules passed. Safe to deploy.</td>
+                        <td>✅ Yes</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--accent);"><strong>FLAGGED</strong></td>
+                        <td>Market outlier or large change. Review recommended.</td>
+                        <td>⚠️ With caution</td>
+                    </tr>
+                    <tr>
+                        <td style="color: var(--red);"><strong>REJECTED</strong></td>
+                        <td>Violates floor/ceiling or ±50% limit. Cannot deploy.</td>
+                        <td>❌ No</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- ═══════════════════════════════ 8. ENV VARS ═══════════════════════════════ -->
+    <section id="env">
+        <div class="container">
+            <h2><span class="num">08</span> Environment Variables</h2>
+            <p class="subtitle">Required <code class="inline-code">.env</code> configuration.</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Variable</th>
+                        <th>Description</th>
+                        <th>Example</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>DATABASE_URL</strong></td>
+                        <td>PostgreSQL connection string (Neon)</td>
+                        <td>postgresql://user:pass@host/db?sslmode=require</td>
+                    </tr>
+                    <tr>
+                        <td><strong>LYZR_API_KEY</strong></td>
+                        <td>Lyzr Agent Studio API key</td>
+                        <td>sk-d...mFk0</td>
+                    </tr>
+                    <tr>
+                        <td><strong>LYZR_API_URL</strong></td>
+                        <td>Lyzr chat inference endpoint</td>
+                        <td>https://agent-prod.studio.lyzr.ai/v3/inference/chat/</td>
+                    </tr>
+                    <tr>
+                        <td><strong>AGENT_ID</strong></td>
+                        <td>CRO Router agent ID in Lyzr</td>
+                        <td>69998743f4d61186679a9515</td>
+                    </tr>
+                    <tr>
+                        <td>MARKET_RESEARCH_ID</td>
+                        <td>Marketing Agent ID</td>
+                        <td>(from Lyzr Studio)</td>
+                    </tr>
+                    <tr>
+                        <td>PROPERTY_ANALYST_ID</td>
+                        <td>Benchmark Agent ID</td>
+                        <td>(from Lyzr Studio)</td>
+                    </tr>
+                    <tr>
+                        <td>PYTHON_BACKEND_URL</td>
+                        <td>Python sync backend URL</td>
+                        <td>http://localhost:8000</td>
+                    </tr>
+                    <tr>
+                        <td>HOSTAWAY_API_KEY</td>
+                        <td>Hostaway API key for PMS access</td>
+                        <td>(from Hostaway dashboard)</td>
+                    </tr>
+                    <tr>
+                        <td>NEXT_PUBLIC_APP_URL</td>
+                        <td>Public app URL</td>
+                        <td>http://localhost:3000</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <p style="color: var(--accent); font-weight: 700;">PriceOS Documentation v2.0</p>
+            <p>Generated March 2026 · Dubai Short-Term Rental Revenue Intelligence</p>
+        </div>
+    </footer>
+
+</body>
+
+</html>

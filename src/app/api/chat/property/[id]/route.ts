@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, listings, chatMessages, inventoryMaster } from "@/lib/db";
-import { eq } from "drizzle-orm";
-import { addDays } from "date-fns";
-import { DataSyncAgent } from "@/lib/agents/data-sync-agent";
-import { EventIntelligenceAgent } from "@/lib/agents/event-intelligence-agent";
-import { PricingAnalystAgent } from "@/lib/agents/pricing-analyst-agent";
+import { db, listings, chatMessages, inventoryMaster, marketEvents } from "@/lib/db";
+import { eq, and, gte, lte } from "drizzle-orm";
+import { addDays, format } from "date-fns";
 
 export async function POST(
   req: NextRequest,
@@ -14,9 +11,12 @@ export async function POST(
     const { id } = await params;
     const listingId = parseInt(id);
     const body = await req.json();
-    const { message } = body;
+    const { message, startDate: startStr, endDate: endStr } = body;
 
-    // Verify listing exists
+    const startDate = startStr ? new Date(startStr) : new Date();
+    const endDate = endStr ? new Date(endStr) : addDays(startDate, 30);
+
+    // 1. Fetch Internal Property Data
     const [listing] = await db
       .select()
       .from(listings)
@@ -24,13 +24,59 @@ export async function POST(
       .limit(1);
 
     if (!listing) {
-      return NextResponse.json(
-        { error: "Property not found" },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: "Property not found" }, { status: 404 });
     }
 
-    // Save user message
+    // 2. Fetch Inventory/Calendar Data
+    const calendar = await db
+      .select()
+      .from(inventoryMaster)
+      .where(
+        and(
+          eq(inventoryMaster.listingId, listingId),
+          gte(inventoryMaster.date, format(startDate, "yyyy-MM-dd")),
+          lte(inventoryMaster.date, format(endDate, "yyyy-MM-dd"))
+        )
+      );
+
+    // 3. Fetch Market Intel (Events)
+    const events = await db
+      .select()
+      .from(marketEvents)
+      .where(
+        and(
+          gte(marketEvents.endDate, format(startDate, "yyyy-MM-dd")),
+          lte(marketEvents.startDate, format(endDate, "yyyy-MM-dd"))
+        )
+      );
+
+    // 4. Consolidate into Cache (Global Context)
+    const contextData = {
+      property: {
+        id: listing.id,
+        name: listing.name,
+        area: listing.area,
+        city: listing.city,
+        base_price: listing.price,
+        price_floor: listing.priceFloor,
+        price_ceiling: listing.priceCeiling,
+        amenities: listing.amenities,
+      },
+      inventory: calendar.map(c => ({
+        date: c.date,
+        status: c.status,
+        price: c.currentPrice,
+        min_stay: c.minStay
+      })),
+      market_events: events.map(e => ({
+        title: e.title,
+        dates: `${e.startDate} to ${e.endDate}`,
+        impact: e.expectedImpact,
+        description: e.description
+      }))
+    };
+
+    // 5. Save User Message
     await db.insert(chatMessages).values({
       userId: "user-1", // TODO: Get from auth
       sessionId: `property-${listingId}`,
@@ -40,85 +86,45 @@ export async function POST(
       structured: { listingId },
     });
 
-    // Step 1: Ensure fresh data
-    const dataSyncAgent = new DataSyncAgent(process.env.HOSTAWAY_API_KEY || "");
-    const isCacheStale = await dataSyncAgent.isCacheStale(listingId);
+    // 6. Proxy to Python Backend
+    const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+    const agentResponse = await fetch(`${backendUrl}/api/agent/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: message,
+        user_id: "user-1",
+        session_id: `property-${listingId}`,
+        cache: contextData
+      }),
+    });
 
-    if (isCacheStale) {
-      await dataSyncAgent.syncProperty(listingId);
+    if (!agentResponse.ok) {
+      const errText = await agentResponse.text();
+      throw new Error(`Backend Error: ${errText}`);
     }
 
-    // Step 2: Analyze events and generate proposals
-    const eventAgent = new EventIntelligenceAgent();
-    const pricingAgent = new PricingAnalystAgent();
+    const result = await agentResponse.json();
+    const responseMessage = result.response?.response || "I couldn't generate a report right now.";
 
-    const startDate = new Date();
-    const endDate = addDays(startDate, 30); // Next 30 days
-
-    const [eventAnalysis, pricingAnalysis] = await Promise.all([
-      eventAgent.analyzeEvents(startDate, endDate),
-      pricingAgent.generateProposals(listingId, startDate, endDate),
-    ]);
-
-    // Step 3: Save proposals to database
-    const proposalIds = await pricingAgent.saveProposals(pricingAnalysis);
-
-    // Step 4: Format response
-    let responseMessage = "";
-
-    if (pricingAnalysis.proposals.length > 0) {
-      responseMessage = `I've analyzed pricing for ${listing.name} for the next 30 days.\n\n`;
-      responseMessage += `📊 Found ${pricingAnalysis.proposals.length} pricing opportunities:\n`;
-      responseMessage += `• ${eventAnalysis.events.length} events detected\n`;
-      responseMessage += `• ${pricingAnalysis.proposals.filter(p => p.riskLevel === "low").length} low-risk proposals\n`;
-      responseMessage += `• ${pricingAnalysis.proposals.filter(p => p.riskLevel === "medium").length} medium-risk proposals\n`;
-      responseMessage += `• ${pricingAnalysis.proposals.filter(p => p.riskLevel === "high").length} high-risk proposals\n\n`;
-      responseMessage += `Review the proposals below and approve the ones you'd like to execute.`;
-    } else {
-      responseMessage = `I've analyzed pricing for ${listing.name}, but I don't see any strong opportunities right now. The current pricing looks appropriate based on:\n\n`;
-      responseMessage += `• Current occupancy trends\n`;
-      responseMessage += `• ${eventAnalysis.events.length} upcoming events\n`;
-      responseMessage += `• Market conditions\n\n`;
-      responseMessage += `I'll continue monitoring and notify you of any changes.`;
-    }
-
-    // Save assistant message
+    // 7. Save Assistant Message
     await db.insert(chatMessages).values({
-      userId: "user-1", // TODO: Get from auth
+      userId: "user-1",
       sessionId: `property-${listingId}`,
       role: "assistant",
       content: responseMessage,
       listingId: listingId,
       structured: {
         listingId,
-        proposalIds,
+        backend_result: result.response
       },
     });
 
-    // Fetch the saved proposals from DB to return
-    const savedProposals = await db
-      .select()
-      .from(inventoryMaster)
-      .where(eq(inventoryMaster.listingId, listingId));
-
-    // Format proposals for frontend
-    const formattedProposals = savedProposals
-      .filter(p => p.proposalStatus === "pending")
-      .map(p => ({
-        id: p.id,
-        dateRangeStart: p.date,
-        dateRangeEnd: p.date, // Same day
-        currentPrice: parseFloat(p.currentPrice),
-        proposedPrice: parseFloat(p.proposedPrice || "0"),
-        changePct: p.changePct,
-        riskLevel: "medium", // Default or extract based on pct later
-        reasoning: p.reasoning,
-      }));
-
     return NextResponse.json({
       message: responseMessage,
-      proposals: formattedProposals,
+      proposals: [], // Handled by Python/Router in future
     });
+
   } catch (error) {
     console.error("Error in property chat:", error);
     return NextResponse.json(

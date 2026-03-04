@@ -1,0 +1,486 @@
+2026-03-02 12:29:37,160 - INFO - ==================================================
+2026-03-02 12:29:37,160 - INFO - STARTING LYZR CONTEXT FEATURE TEST
+2026-03-02 12:29:37,160 - INFO - ==================================================
+2026-03-02 12:29:37,160 - INFO - Initializing Lyzr Studio...
+2026-03-02 12:29:37,202 - INFO - Creating Pricing Agent...
+2026-03-02 12:29:38,175 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/agents/ "HTTP/1.1 200 OK"
+2026-03-02 12:29:38,639 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69a5355a60efc11acdbd7d4f "HTTP/1.1 200 OK"
+2026-03-02 12:29:38,640 - INFO - [STEP 1] Testing WITHOUT Context...
+2026-03-02 12:29:39,302 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 12:29:39,303 - INFO - Response: NO DATA
+2026-03-02 12:29:39,303 - INFO - [STEP 2] Adding Context for 'Property X'...
+2026-03-02 12:29:39,540 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/contexts/ "HTTP/1.1 200 OK"
+2026-03-02 12:29:39,774 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/69a5355bd59147c2c2e3d0a4 "HTTP/1.1 200 OK"
+2026-03-02 12:29:40,010 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69a5355a60efc11acdbd7d4f "HTTP/1.1 200 OK"
+2026-03-02 12:29:40,267 - INFO - HTTP Request: PUT https://agent-prod.studio.lyzr.ai/v3/agents/69a5355a60efc11acdbd7d4f "HTTP/1.1 200 OK"
+2026-03-02 12:29:40,499 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69a5355a60efc11acdbd7d4f "HTTP/1.1 200 OK"
+2026-03-02 12:29:40,500 - INFO - Context 'prop_x_context' added successfully.
+2026-03-02 12:29:40,500 - INFO - [STEP 3] Testing WITH Context...
+2026-03-02 12:29:41,352 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 12:29:41,353 - INFO - Response: The floor price for 'Property X' is AED 800.
+2026-03-02 12:29:41,353 - INFO - [STEP 4] Updating Context for 'Property X' (New Floor Price)...
+2026-03-02 12:29:41,592 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/contexts/ "HTTP/1.1 200 OK"
+2026-03-02 12:29:41,823 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/69a5355d8f619685109a6d00 "HTTP/1.1 200 OK"
+2026-03-02 12:29:42,060 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69a5355a60efc11acdbd7d4f "HTTP/1.1 200 OK"
+2026-03-02 12:29:42,311 - INFO - HTTP Request: PUT https://agent-prod.studio.lyzr.ai/v3/agents/69a5355a60efc11acdbd7d4f "HTTP/1.1 200 OK"
+2026-03-02 12:29:42,546 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69a5355a60efc11acdbd7d4f "HTTP/1.1 200 OK"
+2026-03-02 12:29:42,546 - INFO - Updated context 'prop_x_context' added.
+2026-03-02 12:29:42,546 - INFO - [STEP 5] Testing WITH UPDATED Context...
+2026-03-02 12:29:43,642 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 12:29:43,643 - INFO - Response: The current floor price for 'Property X' is AED 950.
+2026-03-02 12:29:43,643 - INFO - [STEP 6] Removing Context (Clearing Agent Contexts)...
+2026-03-02 12:29:43,643 - INFO - Re-initializing agent to simulate context removal...
+2026-03-02 12:29:43,883 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/agents/ "HTTP/1.1 200 OK"
+2026-03-02 12:29:44,119 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69a5355f60efc11acdbd7d53 "HTTP/1.1 200 OK"
+2026-03-02 12:29:44,119 - INFO - [STEP 7] Testing AFTER Context Removal...
+2026-03-02 12:29:44,748 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 12:29:44,749 - INFO - Response: NO DATA
+2026-03-02 12:29:44,750 - INFO - ==================================================
+2026-03-02 12:29:44,750 - INFO - TEST CONCLUDED
+2026-03-02 12:29:44,750 - INFO - ==================================================
+2026-03-02 12:40:44,031 - ERROR - Missing LYZR_API_KEY or AGENT_ID in .env
+2026-03-02 12:41:50,092 - INFO - ==================================================
+2026-03-02 12:41:50,092 - INFO - UPDATING CONTEXT FOR AGENT: 69998743f4d61186679a9515
+2026-03-02 12:41:50,092 - INFO - ==================================================
+2026-03-02 12:41:50,136 - INFO - Connecting to existing agent...
+2026-03-02 12:41:51,116 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 12:41:51,120 - INFO - Creating context object...
+2026-03-02 12:41:51,360 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/contexts/ "HTTP/1.1 200 OK"
+2026-03-02 12:41:51,600 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/69a53837d6c00d8a97919ced "HTTP/1.1 200 OK"
+2026-03-02 12:41:51,602 - INFO - Pushing context to Studio...
+2026-03-02 12:41:51,841 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 12:41:52,112 - INFO - HTTP Request: PUT https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 12:41:52,348 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 12:41:52,351 - INFO - ✅ Context successfully pushed and associated with agent in Lyzr Studio.
+2026-03-02 12:41:52,352 - INFO - Quick verification chat...
+2026-03-02 12:41:55,395 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 12:41:55,395 - INFO - Agent Response: {
+  "routing": {
+    "user_intent": "floor_price_inquiry",
+    "agents_invoked": [],
+    "listing_id": 1,
+    "price_guard_required": false
+  },
+  "proposals": [],
+  "chat_response": "**Your strict floor price for Test Property - Marina Heights is AED 1,100.**
+
+According to your account configuration:
+
+*   **Floor Price**: **AED 1,100** (Strict minimum)
+*   **Ceiling Price**: **AED 2,800**
+
+I am programmed to **strictly never suggest any rates below this AED 1,100 threshold**, regardless of market conditions, low occupancy, or competitor pricing. This ensures your baseline revenue requirements are always protected.
+
+Would you like me to check if your current calendar rates are approaching this floor?"
+}
+2026-03-02 12:48:10,944 - INFO - ==================================================
+2026-03-02 12:48:10,944 - INFO - STRICT SINGLE CONTEXT UPDATE FOR AGENT: 69998743f4d61186679a9515
+2026-03-02 12:48:10,945 - INFO - ==================================================
+2026-03-02 12:48:10,984 - INFO - Scanning for existing context: 'active_property_data'...
+2026-03-02 12:48:10,984 - ERROR - Failed to update context: 'Studio' object has no attribute 'get_contexts'
+Traceback (most recent call last):
+  File "/Users/rohithp/Desktop/Agent_preneur/priceos-latest2/priceos/text_context_feature/test_context.py", line 45, in update_agent_context_strictly
+    all_contexts = studio.get_contexts()
+                   ^^^^^^^^^^^^^^^^^^^
+AttributeError: 'Studio' object has no attribute 'get_contexts'
+2026-03-02 12:50:58,907 - INFO - ==================================================
+2026-03-02 12:50:58,908 - INFO - STRICT SINGLE CONTEXT UPDATE FOR AGENT: 69998743f4d61186679a9515
+2026-03-02 12:50:58,908 - INFO - ==================================================
+2026-03-02 12:50:59,905 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 12:50:59,912 - INFO - Scanning for existing contexts on agent...
+2026-03-02 12:50:59,912 - INFO - Removed 0 stale context(s) from agent.
+2026-03-02 12:50:59,912 - INFO - Creating fresh 'active_property_data' in Studio...
+2026-03-02 12:51:00,180 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/contexts/ "HTTP/1.1 200 OK"
+2026-03-02 12:51:00,413 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/69a53a5c60efc11acdbd7d78 "HTTP/1.1 200 OK"
+2026-03-02 12:51:00,414 - INFO - Attaching new context to agent...
+2026-03-02 12:51:00,652 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 12:51:00,921 - INFO - HTTP Request: PUT https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 12:51:01,151 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 12:51:01,154 - INFO - ✅ Single Context successfully updated.
+2026-03-02 12:51:01,154 - INFO - Verifying agent grounding...
+2026-03-02 12:51:03,528 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 12:51:03,529 - INFO - Agent Response: The floor price for the **Skyline Penthouse** is **AED 2,100**.
+
+Is there anything else you'd like to know about this property or its pricing?
+2026-03-02 13:00:20,451 - INFO - ==================================================
+2026-03-02 13:00:20,451 - INFO - STRICT SINGLE CONTEXT UPDATE FOR AGENT: 69998743f4d61186679a9515
+2026-03-02 13:00:20,451 - INFO - ==================================================
+2026-03-02 13:00:21,533 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:00:21,536 - INFO - Scanning for existing contexts on agent...
+2026-03-02 13:00:21,536 - INFO - Removed 0 stale context(s) from agent.
+2026-03-02 13:00:21,536 - INFO - Creating fresh 'active_property_data' in Studio...
+2026-03-02 13:00:21,790 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/contexts/ "HTTP/1.1 200 OK"
+2026-03-02 13:00:22,034 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/69a53c8d13c3a8dc3f5fc49c "HTTP/1.1 200 OK"
+2026-03-02 13:00:22,035 - INFO - Attaching new context to agent...
+2026-03-02 13:00:22,272 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:00:23,094 - INFO - HTTP Request: PUT https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:00:23,333 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:00:23,337 - INFO - ✅ Single Context successfully updated.
+2026-03-02 13:00:23,337 - INFO - Verifying agent grounding...
+2026-03-02 13:00:26,663 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 13:00:26,664 - INFO - Agent Response: **The floor price for the Skyline Penthouse is currently set at AED 2,100.**
+
+As per the latest property configuration updated on **March 2, 2026**, here is the pricing safety envelope for your property:
+
+| Metric | Value |
+| :--- | :--- |
+| **Property Name** | Skyline Penthouse |
+| **Floor Price (Minimum)** | **AED 2,100** |
+| **Ceiling Price (Maximum)** | **AED 4,500** |
+| **Current Occupancy** | **88%** |
+| **Last Updated** | 2026-03-02 12:53:00 |
+
+### Quick Observation:
+With your occupancy sitting strong at **88%**, you are well-positioned. The floor price of **AED 2,100** acts as your absolute safety net, ensuring no automated adjustments or last-minute discounts drop your rate below this threshold, preserving your brand value and covering high operational costs associated with a penthouse.
+
+**Would you like me to check if any upcoming dates are currently priced near this floor, or should we look at pushing the ceiling for the remaining 12% of inventory?**
+2026-03-02 13:02:53,418 - INFO - ==================================================
+2026-03-02 13:02:53,418 - INFO - STRICT SINGLE CONTEXT UPDATE FOR AGENT: 69998743f4d61186679a9515
+2026-03-02 13:02:53,418 - INFO - ==================================================
+2026-03-02 13:02:53,418 - ERROR - Failed to update context: name 'Studio' is not defined
+Traceback (most recent call last):
+  File "/Users/rohithp/Desktop/Agent_preneur/priceos-latest2/priceos/text_context_feature/test_context.py", line 41, in update_agent_context_strictly
+    studio = Studio(api_key=api_key)
+             ^^^^^^
+NameError: name 'Studio' is not defined
+2026-03-02 13:08:43,250 - INFO - ==================================================
+2026-03-02 13:08:43,250 - INFO - STRICT SINGLE CONTEXT UPDATE FOR AGENT: 69998743f4d61186679a9515
+2026-03-02 13:08:43,250 - INFO - ==================================================
+2026-03-02 13:08:44,275 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:08:44,278 - INFO - Scanning for existing contexts on agent...
+2026-03-02 13:08:44,278 - INFO - Removed 0 stale context(s) from agent.
+2026-03-02 13:08:44,278 - INFO - Creating fresh 'active_property_data' in Studio...
+2026-03-02 13:08:44,536 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/contexts/ "HTTP/1.1 200 OK"
+2026-03-02 13:08:44,776 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/69a53e8463b9aae72fb96aea "HTTP/1.1 200 OK"
+2026-03-02 13:08:44,777 - INFO - Attaching new context to agent...
+2026-03-02 13:08:45,028 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:08:45,305 - INFO - HTTP Request: PUT https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:08:45,544 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:08:45,548 - INFO - ✅ Single Context successfully updated.
+2026-03-02 13:08:45,549 - INFO - Verifying agent grounding...
+2026-03-02 13:08:48,460 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 13:08:48,461 - INFO - Agent Response: The floor price for the **Skyline Penthouse** is **AED 2,100**.
+
+Here is a summary of the current property configuration for your reference:
+
+| Attribute | Details |
+| :--- | :--- |
+| **Property Name** | Skyline Penthouse |
+| **Floor Price** | **AED 2,100** |
+| **Ceiling Price** | AED 4,500 |
+| **Current Occupancy** | 88% |
+| **Last Updated** | 2026-03-02 12:53:00 |
+
+Your current occupancy is strong at **88%**. With the floor price set at **AED 2,100**, we have a solid safety net in place to ensure no bookings are accepted below your minimum yield requirements during optimization.
+
+**Would you like me to analyze if we should push the rates closer to the AED 4,500 ceiling for any upcoming high-demand dates?**
+2026-03-02 13:11:25,693 - INFO - ==================================================
+2026-03-02 13:11:25,693 - INFO - STRICT SINGLE CONTEXT UPDATE FOR AGENT: 69998743f4d61186679a9515
+2026-03-02 13:11:25,693 - INFO - ==================================================
+2026-03-02 13:11:27,097 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:11:27,098 - INFO - Scanning for existing contexts on agent...
+2026-03-02 13:11:27,098 - INFO - Removed 0 stale context(s) from agent.
+2026-03-02 13:11:27,099 - INFO - Creating fresh 'active_property_data_test' in Studio...
+2026-03-02 13:11:27,326 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/contexts/ "HTTP/1.1 200 OK"
+2026-03-02 13:11:27,554 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/69a53f2722f1121a097a444a "HTTP/1.1 200 OK"
+2026-03-02 13:11:27,556 - INFO - Attaching new context to agent...
+2026-03-02 13:11:27,789 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:11:28,055 - INFO - HTTP Request: PUT https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:11:28,281 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:11:28,286 - INFO - ✅ Single Context successfully updated.
+2026-03-02 13:11:28,286 - INFO - Verifying agent grounding...
+2026-03-02 13:11:31,035 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 13:11:31,036 - INFO - Agent Response: The floor price for the **Skyline Penthouse** is **AED 2,100**.
+
+### Property Overview: Skyline Penthouse
+| Metric | Value |
+| :--- | :--- |
+| **Floor Price** | **AED 2,100** |
+| **Ceiling Price** | **AED 4,500** |
+| **Current Occupancy** | **88%** |
+| **Last Updated** | 2026-03-02 12:53:00 |
+
+**Insights:**
+*   Your penthouse is currently performing at a high occupancy rate of **88%**.
+*   The pricing is strictly guarded between a minimum of **AED 2,100** and a maximum of **AED 4,500**.
+
+Would you like me to analyze if we should push closer to the ceiling price for any upcoming high-demand dates?
+2026-03-02 13:12:40,688 - INFO - ==================================================
+2026-03-02 13:12:40,689 - INFO - STRICT SINGLE CONTEXT UPDATE FOR AGENT: 69998743f4d61186679a9515
+2026-03-02 13:12:40,689 - INFO - ==================================================
+2026-03-02 13:12:41,615 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:12:41,616 - INFO - Scanning for existing contexts on agent...
+2026-03-02 13:12:41,616 - INFO - Removed 0 stale context(s) from agent.
+2026-03-02 13:12:41,616 - INFO - Creating fresh 'active_property_data_test' in Studio...
+2026-03-02 13:12:41,854 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/contexts/ "HTTP/1.1 200 OK"
+2026-03-02 13:12:42,084 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/69a53f71121d82a3e0624a4f "HTTP/1.1 200 OK"
+2026-03-02 13:12:42,085 - INFO - Attaching new context to agent...
+2026-03-02 13:12:42,309 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:12:42,570 - INFO - HTTP Request: PUT https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:12:42,798 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:12:42,802 - INFO - ✅ Single Context successfully updated.
+2026-03-02 13:12:42,803 - INFO - Verifying agent grounding...
+2026-03-02 13:12:45,756 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 13:12:45,757 - INFO - Agent Response: **The floor price for the Skyline Penthouse is AED 2,100.**
+
+Here are the current pricing and occupancy details for your property as of the latest update:
+
+| Metric | Value |
+| :--- | :--- |
+| **Property Name** | Skyline Penthouse |
+| **Floor Price** | **AED 2,100** |
+| **Ceiling Price** | **AED 4,500** |
+| **Current Occupancy** | **88%** |
+| **Last Updated** | 2026-03-02 12:53:00 |
+
+*   **Status**: Your occupancy is strong at **88%**, suggesting the current pricing strategy is performing well.
+*   **Price Range**: You have a healthy spread between your floor and ceiling, allowing for significant upside during high-demand events.
+
+**Would you like me to analyze if we should push closer to the AED 4,500 ceiling for any upcoming dates?**
+2026-03-02 13:20:16,961 - INFO - ==================================================
+2026-03-02 13:20:16,961 - INFO - STRICT SINGLE CONTEXT UPDATE FOR AGENT: 69998743f4d61186679a9515
+2026-03-02 13:20:16,961 - INFO - ==================================================
+2026-03-02 13:20:17,961 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:20:17,963 - INFO - Scanning for existing contexts on agent...
+2026-03-02 13:20:17,963 - INFO - Removed 0 stale context(s) from agent.
+2026-03-02 13:20:17,963 - INFO - Creating fresh 'active_property_data_test' in Studio...
+2026-03-02 13:20:18,196 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/contexts/ "HTTP/1.1 200 OK"
+2026-03-02 13:20:18,433 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/69a5413afe21f211258d4043 "HTTP/1.1 200 OK"
+2026-03-02 13:20:18,434 - INFO - Attaching new context to agent...
+2026-03-02 13:20:18,678 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:20:18,944 - INFO - HTTP Request: PUT https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:20:19,172 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:20:19,175 - INFO - ✅ Single Context successfully updated.
+2026-03-02 13:20:19,175 - INFO - Verifying agent grounding...
+2026-03-02 13:20:21,498 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 13:20:21,499 - INFO - Agent Response: The floor price for the **Skyline Penthouse** is **AED 2,100**. 
+
+For context, your current pricing parameters are:
+*   **Floor Price:** AED 2,100
+*   **Ceiling Price:** AED 4,500
+*   **Current Occupancy:** 88%
+*   **Last Updated:** 2026-03-02 12:53:00
+
+Is there anything specific you'd like to adjust or analyze regarding this pricing?
+2026-03-02 13:21:34,496 - INFO - ==================================================
+2026-03-02 13:21:34,496 - INFO - STRICT SINGLE CONTEXT UPDATE FOR AGENT: 69998743f4d61186679a9515
+2026-03-02 13:21:34,496 - INFO - ==================================================
+2026-03-02 13:21:35,514 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:21:35,517 - INFO - Scanning Lyzr Studio for contexts named: 'active_property_data_test'...
+2026-03-02 13:21:35,753 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/?skip=0&limit=100 "HTTP/1.1 200 OK"
+2026-03-02 13:21:35,754 - INFO - Physically DELETING context ID: 69a5413afe21f211258d4043 from Studio...
+2026-03-02 13:21:35,992 - INFO - HTTP Request: DELETE https://agent-prod.studio.lyzr.ai/v3/contexts/69a5413afe21f211258d4043 "HTTP/1.1 200 OK"
+2026-03-02 13:21:35,993 - INFO - Physically DELETING context ID: 69a53f71121d82a3e0624a4f from Studio...
+2026-03-02 13:21:36,227 - INFO - HTTP Request: DELETE https://agent-prod.studio.lyzr.ai/v3/contexts/69a53f71121d82a3e0624a4f "HTTP/1.1 200 OK"
+2026-03-02 13:21:36,228 - INFO - Physically DELETING context ID: 69a53f2722f1121a097a444a from Studio...
+2026-03-02 13:21:36,460 - INFO - HTTP Request: DELETE https://agent-prod.studio.lyzr.ai/v3/contexts/69a53f2722f1121a097a444a "HTTP/1.1 200 OK"
+2026-03-02 13:21:36,461 - INFO - Cleared 3 stale context(s) from your Studio account.
+2026-03-02 13:21:36,461 - INFO - Creating fresh 'active_property_data_test' in Studio...
+2026-03-02 13:21:36,700 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/contexts/ "HTTP/1.1 200 OK"
+2026-03-02 13:21:36,931 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/69a54188121d82a3e0624a81 "HTTP/1.1 200 OK"
+2026-03-02 13:21:36,932 - INFO - Attaching new context to agent...
+2026-03-02 13:21:37,160 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:21:37,442 - INFO - HTTP Request: PUT https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:21:37,672 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:21:37,677 - INFO - ✅ Single Context successfully updated.
+2026-03-02 13:21:37,677 - INFO - Verifying agent grounding...
+2026-03-02 13:21:39,627 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 13:21:39,628 - INFO - Agent Response: The floor price for the **Skyline Penthouse** is **AED 2,100**. 
+
+Is there anything specific you'd like me to analyze regarding this price point, or should I check if your current rates are approaching this limit?
+2026-03-02 13:26:46,241 - INFO - ==================================================
+2026-03-02 13:26:46,241 - INFO - STRICT SINGLE CONTEXT UPDATE FOR AGENT: 69998743f4d61186679a9515
+2026-03-02 13:26:46,241 - INFO - ==================================================
+2026-03-02 13:26:47,280 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:26:47,282 - INFO - Scanning Lyzr Studio for contexts named: 'active_property_data_test'...
+2026-03-02 13:26:47,509 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/?skip=0&limit=100 "HTTP/1.1 200 OK"
+2026-03-02 13:26:47,510 - INFO - No stale contexts found in Studio.
+2026-03-02 13:26:47,511 - INFO - Creating fresh 'active_property_data_test' in Studio...
+2026-03-02 13:26:47,740 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/contexts/ "HTTP/1.1 200 OK"
+2026-03-02 13:26:47,968 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/69a542bfa65288a1da8b0a37 "HTTP/1.1 200 OK"
+2026-03-02 13:26:47,969 - INFO - Attaching new context to agent...
+2026-03-02 13:26:48,199 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:26:48,461 - INFO - HTTP Request: PUT https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:26:48,688 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:26:48,691 - INFO - ✅ Single Context successfully updated.
+2026-03-02 13:26:48,691 - INFO - Verifying agent grounding...
+2026-03-02 13:26:50,834 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 13:26:50,836 - INFO - Agent Response: The floor price for the **Skyline Penthouse** is **AED 2,100**.
+
+For your reference, here are the current pricing parameters for this property:
+*   **Floor Price:** AED 2,100
+*   **Ceiling Price:** AED 4,500
+*   **Current Occupancy:** 88%
+*   **Last Updated:** 2026-03-02
+
+Would you like me to analyze if we should adjust these boundaries based on upcoming market demand?
+2026-03-02 13:27:07,735 - INFO - ==================================================
+2026-03-02 13:27:07,735 - INFO - STRICT SINGLE CONTEXT UPDATE FOR AGENT: 69998743f4d61186679a9515
+2026-03-02 13:27:07,735 - INFO - ==================================================
+2026-03-02 13:27:08,667 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:27:08,669 - INFO - Scanning Lyzr Studio for contexts named: 'active_property_data_test'...
+2026-03-02 13:27:08,893 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/?skip=0&limit=100 "HTTP/1.1 200 OK"
+2026-03-02 13:27:08,894 - INFO - Physically DELETING context ID: 69a542bfa65288a1da8b0a37 from Studio...
+2026-03-02 13:27:09,125 - INFO - HTTP Request: DELETE https://agent-prod.studio.lyzr.ai/v3/contexts/69a542bfa65288a1da8b0a37 "HTTP/1.1 200 OK"
+2026-03-02 13:27:09,126 - INFO - Cleared 1 stale context(s) from your Studio account.
+2026-03-02 13:27:09,126 - INFO - Creating fresh 'active_property_data_test' in Studio...
+2026-03-02 13:27:09,371 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/contexts/ "HTTP/1.1 200 OK"
+2026-03-02 13:27:09,598 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/69a542d5fe21f211258d40b4 "HTTP/1.1 200 OK"
+2026-03-02 13:27:09,599 - INFO - Attaching new context to agent...
+2026-03-02 13:27:09,826 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:27:10,089 - INFO - HTTP Request: PUT https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:27:10,315 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:27:10,317 - INFO - ✅ Single Context successfully updated.
+2026-03-02 13:27:10,317 - INFO - Verifying agent grounding...
+2026-03-02 13:27:13,470 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 13:27:13,471 - INFO - Agent Response: **The floor price for the Skyline Penthouse is AED 2,100.**
+
+Based on the current property context, here is the pricing configuration and status for your penthouse:
+
+| Metric | Value |
+| :--- | :--- |
+| **Property Name** | Skyline Penthouse |
+| **Floor Price** | **AED 2,100** |
+| **Ceiling Price** | AED 4,500 |
+| **Current Occupancy** | 88% |
+| **Last Updated** | 2026-03-02 12:53:00 |
+
+**Key Observations:**
+*   **Strong Occupancy:** Your current occupancy of **88%** indicates the property is performing very well at its current positioning.
+*   **Pricing Room:** You are currently protected by a floor of **AED 2,100**, ensuring no bookings come in below your operational break-even point.
+*   **Update Recency:** These settings were last verified/updated on **March 2nd, 2026**.
+
+Would you like me to check if any upcoming dates are currently sitting at the floor price, or should I run a market comparison to see if we should adjust this floor?
+2026-03-02 13:27:33,564 - INFO - ==================================================
+2026-03-02 13:27:33,565 - INFO - STRICT SINGLE CONTEXT UPDATE FOR AGENT: 69998743f4d61186679a9515
+2026-03-02 13:27:33,565 - INFO - ==================================================
+2026-03-02 13:27:34,487 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:27:34,491 - INFO - Scanning Lyzr Studio for contexts named: 'active_property_data_test'...
+2026-03-02 13:27:34,720 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/?skip=0&limit=100 "HTTP/1.1 200 OK"
+2026-03-02 13:27:34,721 - INFO - No stale contexts found in Studio.
+2026-03-02 13:27:34,721 - INFO - Creating fresh 'active_property_data_test' in Studio...
+2026-03-02 13:27:34,954 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/contexts/ "HTTP/1.1 200 OK"
+2026-03-02 13:27:35,188 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/69a542eed59147c2c2e3d164 "HTTP/1.1 200 OK"
+2026-03-02 13:27:35,188 - INFO - Attaching new context to agent...
+2026-03-02 13:27:35,420 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:27:35,694 - INFO - HTTP Request: PUT https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:27:35,923 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:27:35,927 - INFO - ✅ Single Context successfully updated.
+2026-03-02 13:27:35,927 - INFO - Verifying agent grounding...
+2026-03-02 13:27:37,802 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 13:27:37,803 - INFO - Agent Response: The floor price for the **Skyline** property is **AED 2,100**. 
+
+Would you like me to analyze how your current rates compare to this floor price for your upcoming bookings?
+2026-03-02 13:29:16,048 - INFO - ==================================================
+2026-03-02 13:29:16,048 - INFO - STRICT SINGLE CONTEXT UPDATE FOR AGENT: 69998743f4d61186679a9515
+2026-03-02 13:29:16,048 - INFO - ==================================================
+2026-03-02 13:29:17,023 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:29:17,029 - INFO - Scanning Lyzr Studio for contexts named: 'active_property_data_test'...
+2026-03-02 13:29:17,261 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/?skip=0&limit=100 "HTTP/1.1 200 OK"
+2026-03-02 13:29:17,262 - INFO - Found 2 total contexts in account.
+2026-03-02 13:29:17,262 - INFO - Checking Studio Context: 'active_property_data_test' (ID: 69a542eed59147c2c2e3d164)
+2026-03-02 13:29:17,262 - INFO - MATCH FOUND. Physically DELETING context ID: 69a542eed59147c2c2e3d164...
+2026-03-02 13:29:17,490 - INFO - HTTP Request: DELETE https://agent-prod.studio.lyzr.ai/v3/contexts/69a542eed59147c2c2e3d164 "HTTP/1.1 200 OK"
+2026-03-02 13:29:17,493 - INFO - Checking Studio Context: 'active_property_data_test' (ID: 69a542d5fe21f211258d40b4)
+2026-03-02 13:29:17,493 - INFO - MATCH FOUND. Physically DELETING context ID: 69a542d5fe21f211258d40b4...
+2026-03-02 13:29:17,721 - INFO - HTTP Request: DELETE https://agent-prod.studio.lyzr.ai/v3/contexts/69a542d5fe21f211258d40b4 "HTTP/1.1 200 OK"
+2026-03-02 13:29:17,722 - INFO - SUCCESS: Purged 2 stale context(s) from Studio.
+2026-03-02 13:29:17,722 - INFO - Creating fresh 'active_property_data_test' in Studio...
+2026-03-02 13:29:17,952 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/contexts/ "HTTP/1.1 200 OK"
+2026-03-02 13:29:18,180 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/69a5435534e68268d652abae "HTTP/1.1 200 OK"
+2026-03-02 13:29:18,181 - INFO - Attaching new context to agent...
+2026-03-02 13:29:18,403 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:29:18,671 - INFO - HTTP Request: PUT https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:29:18,898 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:29:18,902 - INFO - ✅ Single Context successfully updated.
+2026-03-02 13:29:18,902 - INFO - Verifying agent grounding...
+2026-03-02 13:29:20,946 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 13:29:20,947 - INFO - Agent Response: The floor price for the **Skyline** property is **AED 2,100**. 
+
+Would you like me to analyze how this compares to your current booking performance or the market benchmark for this period?
+2026-03-02 13:31:09,436 - INFO - ==================================================
+2026-03-02 13:31:09,436 - INFO - STRICT SINGLE CONTEXT UPDATE FOR AGENT: 69998743f4d61186679a9515
+2026-03-02 13:31:09,436 - INFO - ==================================================
+2026-03-02 13:31:10,405 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:31:10,407 - INFO - Scanning Lyzr Studio for contexts named: 'active_property_data_test'...
+2026-03-02 13:31:10,633 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/?skip=0&limit=100 "HTTP/1.1 200 OK"
+2026-03-02 13:31:10,634 - INFO - Found 1 total contexts in account.
+2026-03-02 13:31:10,634 - INFO - Checking Studio Context: 'active_property_data_test' (ID: 69a5435534e68268d652abae)
+2026-03-02 13:31:10,634 - INFO - MATCH FOUND. Physically DELETING context ID: 69a5435534e68268d652abae...
+2026-03-02 13:31:10,867 - INFO - HTTP Request: DELETE https://agent-prod.studio.lyzr.ai/v3/contexts/69a5435534e68268d652abae "HTTP/1.1 200 OK"
+2026-03-02 13:31:10,867 - INFO - SUCCESS: Purged 1 stale context(s) from Studio.
+2026-03-02 13:31:10,868 - INFO - Creating fresh 'active_property_data_test' in Studio...
+2026-03-02 13:31:11,102 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/contexts/ "HTTP/1.1 200 OK"
+2026-03-02 13:31:11,330 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/69a543c734e68268d652abbd "HTTP/1.1 200 OK"
+2026-03-02 13:31:11,331 - INFO - Attaching new context to agent...
+2026-03-02 13:31:11,553 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:31:11,825 - INFO - HTTP Request: PUT https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:31:12,074 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:31:12,075 - INFO - ✅ Single Context successfully updated.
+2026-03-02 13:31:12,075 - INFO - Verifying agent grounding...
+2026-03-02 13:31:14,039 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 13:31:14,040 - INFO - Agent Response: The current property in context is **Skyline**, which has a floor price of **AED 2,100**. 
+
+Is this the penthouse you are referring to, or would you like me to look up a different property?
+2026-03-02 13:32:33,826 - INFO - ==================================================
+2026-03-02 13:32:33,826 - INFO - STRICT SINGLE CONTEXT UPDATE FOR AGENT: 69998743f4d61186679a9515
+2026-03-02 13:32:33,826 - INFO - ==================================================
+2026-03-02 13:32:34,847 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:32:34,851 - INFO - Scanning Lyzr Studio for contexts named: 'active_property_data_test'...
+2026-03-02 13:32:35,096 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/?skip=0&limit=100 "HTTP/1.1 200 OK"
+2026-03-02 13:32:35,097 - INFO - Found 1 total contexts in account.
+2026-03-02 13:32:35,097 - INFO - Checking Studio Context: 'active_property_data_test' (ID: 69a543c734e68268d652abbd)
+2026-03-02 13:32:35,098 - INFO - MATCH FOUND. Physically DELETING context ID: 69a543c734e68268d652abbd...
+2026-03-02 13:32:35,339 - INFO - HTTP Request: DELETE https://agent-prod.studio.lyzr.ai/v3/contexts/69a543c734e68268d652abbd "HTTP/1.1 200 OK"
+2026-03-02 13:32:35,340 - INFO - SUCCESS: Purged 1 stale context(s) from Studio.
+2026-03-02 13:32:35,340 - INFO - Creating fresh 'active_property_data_test' in Studio...
+2026-03-02 13:32:35,581 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/contexts/ "HTTP/1.1 200 OK"
+2026-03-02 13:32:35,821 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/69a5441b197f493b18f1aab0 "HTTP/1.1 200 OK"
+2026-03-02 13:32:35,822 - INFO - Attaching new context to agent...
+2026-03-02 13:32:36,061 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:32:36,336 - INFO - HTTP Request: PUT https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:32:36,574 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:32:36,578 - INFO - ✅ Single Context successfully updated.
+2026-03-02 13:32:36,579 - INFO - Verifying agent grounding...
+2026-03-02 13:32:38,752 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 13:32:38,755 - INFO - Agent Response: The floor price for the **Skyline** property is **AED 2,100**. 
+
+Is there anything specific you'd like to analyze regarding this price point or the property's performance?
+2026-03-02 13:33:05,805 - INFO - ==================================================
+2026-03-02 13:33:05,805 - INFO - STRICT SINGLE CONTEXT UPDATE FOR AGENT: 69998743f4d61186679a9515
+2026-03-02 13:33:05,805 - INFO - ==================================================
+2026-03-02 13:33:06,797 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:33:06,798 - INFO - Scanning Lyzr Studio for contexts named: 'active_property_data_test'...
+2026-03-02 13:33:07,040 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/?skip=0&limit=100 "HTTP/1.1 200 OK"
+2026-03-02 13:33:07,041 - INFO - Found 1 total contexts in account.
+2026-03-02 13:33:07,041 - INFO - Checking Studio Context: 'active_property_data_test' (ID: 69a5441b197f493b18f1aab0)
+2026-03-02 13:33:07,041 - INFO - MATCH FOUND. Physically DELETING context ID: 69a5441b197f493b18f1aab0...
+2026-03-02 13:33:07,285 - INFO - HTTP Request: DELETE https://agent-prod.studio.lyzr.ai/v3/contexts/69a5441b197f493b18f1aab0 "HTTP/1.1 200 OK"
+2026-03-02 13:33:07,286 - INFO - SUCCESS: Purged 1 stale context(s) from Studio.
+2026-03-02 13:33:07,286 - INFO - Creating fresh 'active_property_data_test' in Studio...
+2026-03-02 13:33:07,531 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/contexts/ "HTTP/1.1 200 OK"
+2026-03-02 13:33:07,774 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/contexts/69a5443b121d82a3e0624b00 "HTTP/1.1 200 OK"
+2026-03-02 13:33:07,775 - INFO - Attaching new context to agent...
+2026-03-02 13:33:08,015 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:33:08,308 - INFO - HTTP Request: PUT https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:33:08,557 - INFO - HTTP Request: GET https://agent-prod.studio.lyzr.ai/v3/agents/69998743f4d61186679a9515 "HTTP/1.1 200 OK"
+2026-03-02 13:33:08,560 - INFO - ✅ Single Context successfully updated.
+2026-03-02 13:33:08,561 - INFO - Verifying agent grounding...
+2026-03-02 13:33:11,877 - INFO - HTTP Request: POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/ "HTTP/1.1 200 OK"
+2026-03-02 13:33:11,878 - INFO - Agent Response: **The floor price for the Skylinehghgh penthouse is AED 2,100.**
+
+Based on the current property context, here are the pricing guardrails and status for your penthouse:
+
+| Metric | Value |
+| :--- | :--- |
+| **Property Name** | Skylinehghgh |
+| **Floor Price (Minimum)** | **AED 2,100** |
+| **Ceiling Price (Maximum)** | **AED 4,500** |
+| **Current Occupancy** | **88%** |
+| **Last Updated** | 2026-03-02 12:53:00 |
+
+**Key Observations:**
+*   **Strong Performance:** Your occupancy is currently at **88%**, which is significantly high.
+*   **Pricing Room:** You are currently operating within your defined range of **AED 2,100 to AED 4,500**.
+
+Would you like me to check if we can push the rates closer to the ceiling price for any remaining dates, or should I look for any specific gaps in the calendar?

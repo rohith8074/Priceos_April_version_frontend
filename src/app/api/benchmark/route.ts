@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "listingId is required" }, { status: 400 });
         }
 
-        // Build exact-match conditions. If no date range, return the most recent row.
+        // RANGE OVERLAP: benchmark overlaps if bench.dateFrom <= queryEnd AND bench.dateTo >= queryStart
         const conditions = [eq(benchmarkData.listingId, listingId)];
         if (dateFrom && dateTo) {
             conditions.push(lte(benchmarkData.dateFrom, dateTo));
@@ -28,6 +28,8 @@ export async function GET(req: NextRequest) {
             .limit(1);
 
         const row = rows[0] ?? null;
+
+        console.log(`📊 [Benchmark API] listingId=${listingId} range=${dateFrom}→${dateTo} → ${row ? `FOUND (verdict: ${row.verdict}, median: ${row.p50Rate})` : 'NO DATA'}`);
 
         return NextResponse.json({
             success: true,

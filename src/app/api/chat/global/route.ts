@@ -41,9 +41,11 @@ export async function POST(req: NextRequest) {
               )
             );
 
-          const bookedDays = calendar.filter((day) => day.status === "booked").length;
+          const bookedDays = calendar.filter((day) => day.status === "booked" || day.status === "reserved").length;
+          const blockedDays = calendar.filter((day) => day.status === "blocked").length;
           const totalDays = calendar.length || 1;
-          const occupancy = Math.round((bookedDays / totalDays) * 100);
+          const bookableDays = totalDays - blockedDays;
+          const occupancy = bookableDays > 0 ? Math.round((bookedDays / bookableDays) * 100) : 0;
 
           return { ...listing, occupancy };
         })
@@ -126,9 +128,11 @@ export async function POST(req: NextRequest) {
             )
           );
 
-        const bookedDays = calendar.filter((day) => day.status === "booked").length;
+        const bookedDays = calendar.filter((day) => day.status === "booked" || day.status === "reserved").length;
+        const blockedDays = calendar.filter((day) => day.status === "blocked").length;
         const totalDays = calendar.length || 1;
-        const occupancy = Math.round((bookedDays / totalDays) * 100);
+        const bookableDays = totalDays - blockedDays;
+        const occupancy = bookableDays > 0 ? Math.round((bookedDays / bookableDays) * 100) : 0;
 
         return occupancy;
       });

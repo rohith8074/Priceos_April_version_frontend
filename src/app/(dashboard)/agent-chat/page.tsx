@@ -9,13 +9,16 @@ export default async function DashboardPage() {
   // 1. Fetch all listings (Drizzle returns camelCase objects)
   const allListings = await db.select().from(listings);
 
-  // 2. Fetch aggregation stats for next 30 days using raw SQL
+  // 2. Fetch occupancy/rate stats for the next 14 days (matches typical short-stay analysis window)
+  //    NOTE: This is a server-render snapshot used for the property card badges only.
+  //    The right sidebar (Summary) and Agent always use the user-selected date range.
   const statsQuery = sql`
     SELECT
       listing_id,
       COALESCE(
         ROUND(
-          100.0 * COUNT(id) FILTER (WHERE status IN ('reserved', 'booked')) / NULLIF(COUNT(id), 0),
+          100.0 * COUNT(id) FILTER (WHERE status IN ('reserved', 'booked'))
+          / NULLIF(COUNT(id) FILTER (WHERE status != 'blocked'), 0),
           0
         ),
         0
@@ -23,23 +26,25 @@ export default async function DashboardPage() {
       COALESCE(
         ROUND(AVG(current_price), 2),
         0
-      ) as avg_price
+      ) as avg_price,
+      CURRENT_DATE as queried_at
     FROM inventory_master
-    WHERE date BETWEEN CURRENT_DATE AND CURRENT_DATE + 30
+    WHERE date BETWEEN CURRENT_DATE AND CURRENT_DATE + 14
     GROUP BY listing_id
   `;
 
   const statsResult = await db.execute(statsQuery);
 
   // 3. Merge stats into listing objects
+  //    occupancy here = next-14-day snapshot for the sidebar CARD badge only.
+  //    The agent and right sidebar always re-query with the user-selected date range.
   const propertiesWithMetrics = allListings.map((listing) => {
-    // Determine the type of rows returned by db.execute
-    // Drizzle with neon-http usually returns an array of row objects
-    const rows = Array.isArray(statsResult) ? statsResult : statsResult.rows || [];
+    const rows = Array.isArray(statsResult) ? statsResult : (statsResult as any).rows || [];
     const stat = rows.find((r: any) => r.listing_id === listing.id);
 
     return {
       ...listing,
+      // Use booked/(total-blocked) formula (already applied in query via FILTER)
       occupancy: stat ? Number(stat.occupancy) : 0,
       avgPrice: stat && Number(stat.avg_price) > 0 ? Number(stat.avg_price) : Number(listing.price),
     };

@@ -34,6 +34,10 @@ interface ContextStore {
   // Sync Trigger
   marketRefreshTrigger: number;
   triggerMarketRefresh: () => void;
+
+  // Analysis state
+  isMarketAnalysisRunning: boolean;
+  setIsMarketAnalysisRunning: (running: boolean) => void;
 }
 
 // Helper to convert JSON strings back to dates
@@ -63,6 +67,7 @@ export const useContextStore = create<ContextStore>()(
       },
 
       marketRefreshTrigger: 0,
+      isMarketAnalysisRunning: false,
 
       // UI Actions
       toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
@@ -73,6 +78,8 @@ export const useContextStore = create<ContextStore>()(
       setConversationSummary: (summary: any | null) => set({ conversationSummary: summary }),
 
       triggerMarketRefresh: () => set((state) => ({ marketRefreshTrigger: state.marketRefreshTrigger + 1 })),
+
+      setIsMarketAnalysisRunning: (running: boolean) => set({ isMarketAnalysisRunning: running }),
 
       setDateRange: (range: DateRange | undefined) =>
         set({

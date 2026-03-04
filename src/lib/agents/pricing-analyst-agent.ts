@@ -66,8 +66,8 @@ export class PricingAnalystAgent {
         )
       );
 
-    // Calculate occupancy rate (last 30 days)
-    const occupancy = await this.calculateOccupancy(listingId);
+    // Calculate occupancy rate for the SELECTED period
+    const occupancy = await this.calculateOccupancy(listingId, startDate, endDate);
 
     // Generate proposals for each day
     const days = eachDayOfInterval({ start: startDate, end: endDate });
@@ -106,8 +106,8 @@ export class PricingAnalystAgent {
           proposedPrice = currentPrice * 1.1; // 10% increase for high occupancy
           reasoning = `High occupancy (${occupancy}%). Demand is strong, increase pricing.`;
         } else if (occupancy < 60) {
-          proposedPrice = currentPrice * 0.95; // 5% decrease for low occupancy
-          reasoning = `Low occupancy (${occupancy}%). Decrease price to attract bookings.`;
+          proposedPrice = currentPrice * 0.90; // 10% decrease for low occupancy (more aggressive)
+          reasoning = `Low occupancy (${occupancy}% in selected range). Decrease price to attract bookings.`;
         } else {
           proposedPrice = currentPrice;
           reasoning = `Moderate occupancy (${occupancy}%). Maintain current pricing.`;
@@ -203,27 +203,31 @@ export class PricingAnalystAgent {
   }
 
   /**
-   * Calculate occupancy rate for last 30 days
+   * Calculate occupancy rate for a specific window
+   * Formula: booked / (total - blocked)
    */
-  private async calculateOccupancy(listingId: number): Promise<number> {
-    const thirtyDaysAgo = addDays(new Date(), -30);
-    const today = new Date();
-
+  private async calculateOccupancy(listingId: number, start: Date, end: Date): Promise<number> {
     const calendar = await db
       .select()
       .from(inventoryMaster)
       .where(
         and(
           eq(inventoryMaster.listingId, listingId),
-          gte(inventoryMaster.date, format(thirtyDaysAgo, "yyyy-MM-dd")),
-          lte(inventoryMaster.date, format(today, "yyyy-MM-dd"))
+          gte(inventoryMaster.date, format(start, "yyyy-MM-dd")),
+          lte(inventoryMaster.date, format(end, "yyyy-MM-dd"))
         )
       );
 
     if (calendar.length === 0) return 0;
 
-    const bookedDays = calendar.filter((day) => day.status === "booked").length;
-    return Math.round((bookedDays / calendar.length) * 100);
+    const total = calendar.length;
+    const blocked = calendar.filter(d => d.status === 'blocked').length;
+    const booked = calendar.filter(d => d.status === 'booked' || d.status === 'reserved').length;
+
+    const divisor = total - blocked;
+    if (divisor <= 0) return 0;
+
+    return Math.round((booked / divisor) * 100);
   }
 
   /**

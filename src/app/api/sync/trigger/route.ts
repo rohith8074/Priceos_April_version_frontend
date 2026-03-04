@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { HostawayClient } from "@/lib/pms/hostaway-client";
+import { createPMSClient } from "@/lib/pms";
 import { db } from "@/lib/db";
 import { listings, reservations } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -15,7 +15,7 @@ globalThis.syncStatus = globalThis.syncStatus || { status: 'idle', message: '' }
 async function performBackgroundSync() {
     globalThis.syncStatus = { status: 'syncing', message: 'Starting sync...', startedAt: Date.now() };
     try {
-        const client = new HostawayClient();
+        const client = createPMSClient();
         console.log("------------------------------------------");
         console.log("🚀 Starting Hostaway Synchronization (BACKGROUND)...");
         console.log("------------------------------------------");

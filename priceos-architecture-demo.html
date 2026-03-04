@@ -1,0 +1,1230 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PriceOS — Architecture & Agent Orchestration</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+        :root {
+            --bg: #0a0a0f;
+            --bg2: #111118;
+            --bg3: #16161f;
+            --border: rgba(255, 255, 255, 0.06);
+            --border2: rgba(255, 255, 255, 0.1);
+            --text: #e8e8f0;
+            --muted: #6b6b80;
+            --accent: #7c6af7;
+            --accent2: #5b9cf7;
+            --green: #3ec97a;
+            --amber: #f59e0b;
+            --red: #ef4444;
+            --teal: #2dd4bf;
+            --pink: #f472b6;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+
+        /* ─── NAV ─── */
+        nav {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(10, 10, 15, 0.85);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            padding: 0 2rem;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .nav-logo {
+            font-size: 1.1rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--accent), var(--accent2));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.5px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 1.5rem;
+            margin-left: auto;
+        }
+
+        .nav-links a {
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            transition: color 0.2s;
+        }
+
+        .nav-links a:hover {
+            color: var(--text);
+        }
+
+        /* ─── HERO ─── */
+        .hero {
+            padding: 5rem 2rem 4rem;
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            background: rgba(124, 106, 247, 0.12);
+            border: 1px solid rgba(124, 106, 247, 0.3);
+            color: var(--accent);
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            padding: 0.3rem 1rem;
+            border-radius: 100px;
+            margin-bottom: 1.5rem;
+        }
+
+        .hero h1 {
+            font-size: clamp(2.2rem, 5vw, 3.5rem);
+            font-weight: 900;
+            letter-spacing: -1.5px;
+            line-height: 1.1;
+            margin-bottom: 1.2rem;
+            background: linear-gradient(160deg, #fff 40%, var(--muted));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p {
+            color: var(--muted);
+            font-size: 1.05rem;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* ─── LAYOUT ─── */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 2rem;
+        }
+
+        section {
+            padding: 4rem 0;
+            border-top: 1px solid var(--border);
+        }
+
+        .section-label {
+            font-size: 0.65rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--accent);
+            margin-bottom: 0.8rem;
+        }
+
+        .section-title {
+            font-size: clamp(1.5rem, 3vw, 2rem);
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            margin-bottom: 0.5rem;
+        }
+
+        .section-sub {
+            color: var(--muted);
+            font-size: 0.92rem;
+            margin-bottom: 2.5rem;
+            max-width: 600px;
+        }
+
+        /* ─── CARDS ─── */
+        .card {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            transition: border-color 0.2s;
+        }
+
+        .card:hover {
+            border-color: var(--border2);
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 1.2rem;
+        }
+
+        /* ─── AGENT CARDS ─── */
+        .agent-card {
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .agent-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+        }
+
+        .agent-card.internet::before {
+            background: linear-gradient(90deg, var(--amber), var(--pink));
+        }
+
+        .agent-card.db::before {
+            background: linear-gradient(90deg, var(--accent2), var(--teal));
+        }
+
+        .agent-card.manager::before {
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+        }
+
+        .agent-card.guard::before {
+            background: linear-gradient(90deg, var(--red), var(--amber));
+        }
+
+        .agent-number {
+            font-size: 0.6rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--muted);
+            margin-bottom: 0.5rem;
+        }
+
+        .agent-name {
+            font-size: 1rem;
+            font-weight: 800;
+            margin-bottom: 0.3rem;
+        }
+
+        .agent-desc {
+            font-size: 0.8rem;
+            color: var(--muted);
+            margin-bottom: 1rem;
+            line-height: 1.5;
+        }
+
+        .agent-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+        }
+
+        .tag {
+            font-size: 0.65rem;
+            font-weight: 700;
+            padding: 0.2rem 0.55rem;
+            border-radius: 100px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .tag.internet {
+            background: rgba(245, 158, 11, 0.12);
+            color: var(--amber);
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .tag.db {
+            background: rgba(91, 156, 247, 0.12);
+            color: var(--accent2);
+            border: 1px solid rgba(91, 156, 247, 0.2);
+        }
+
+        .tag.context {
+            background: rgba(124, 106, 247, 0.12);
+            color: var(--accent);
+            border: 1px solid rgba(124, 106, 247, 0.2);
+        }
+
+        .tag.setup {
+            background: rgba(244, 114, 182, 0.12);
+            color: var(--pink);
+            border: 1px solid rgba(244, 114, 182, 0.2);
+        }
+
+        .tag.chat {
+            background: rgba(62, 201, 122, 0.12);
+            color: var(--green);
+            border: 1px solid rgba(62, 201, 122, 0.2);
+        }
+
+        .tag.readonly {
+            background: rgba(107, 107, 128, 0.12);
+            color: var(--muted);
+            border: 1px solid rgba(107, 107, 128, 0.2);
+        }
+
+        /* ─── FLOW DIAGRAM ─── */
+        .flow {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .flow-step {
+            display: grid;
+            grid-template-columns: 48px 1fr;
+            gap: 1rem;
+            align-items: start;
+        }
+
+        .flow-step-spine {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .flow-dot {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 800;
+            flex-shrink: 0;
+            border: 1px solid var(--border2);
+        }
+
+        .flow-dot.purple {
+            background: rgba(124, 106, 247, 0.2);
+            color: var(--accent);
+            border-color: rgba(124, 106, 247, 0.3);
+        }
+
+        .flow-dot.blue {
+            background: rgba(91, 156, 247, 0.2);
+            color: var(--accent2);
+            border-color: rgba(91, 156, 247, 0.3);
+        }
+
+        .flow-dot.green {
+            background: rgba(62, 201, 122, 0.2);
+            color: var(--green);
+            border-color: rgba(62, 201, 122, 0.3);
+        }
+
+        .flow-dot.amber {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--amber);
+            border-color: rgba(245, 158, 11, 0.3);
+        }
+
+        .flow-dot.teal {
+            background: rgba(45, 212, 191, 0.2);
+            color: var(--teal);
+            border-color: rgba(45, 212, 191, 0.3);
+        }
+
+        .flow-connector {
+            width: 1px;
+            flex: 1;
+            min-height: 24px;
+            background: linear-gradient(180deg, var(--border2), transparent);
+            margin: 4px 0;
+        }
+
+        .flow-body {
+            padding-bottom: 2rem;
+        }
+
+        .flow-title {
+            font-weight: 700;
+            font-size: 0.95rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .flow-detail {
+            font-size: 0.82rem;
+            color: var(--muted);
+            line-height: 1.6;
+        }
+
+        .flow-code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            background: var(--bg3);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.75rem 1rem;
+            margin-top: 0.6rem;
+            color: var(--accent2);
+            white-space: pre;
+            overflow-x: auto;
+        }
+
+        /* ─── DB SCHEMA ─── */
+        .db-table {
+            background: var(--bg3);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .db-table-head {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .db-table-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--teal);
+        }
+
+        .db-table-desc {
+            font-size: 0.7rem;
+            color: var(--muted);
+            margin-left: auto;
+        }
+
+        .db-cols {
+            padding: 0.5rem 0;
+        }
+
+        .db-col {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.35rem 1rem;
+            border-bottom: 1px solid transparent;
+        }
+
+        .db-col:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .db-col-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            color: var(--text);
+            min-width: 160px;
+        }
+
+        .db-col-name.pk {
+            color: var(--amber);
+        }
+
+        .db-col-name.fk {
+            color: var(--accent2);
+        }
+
+        .db-col-type {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            color: var(--muted);
+            min-width: 100px;
+        }
+
+        .db-col-note {
+            font-size: 0.68rem;
+            color: var(--muted);
+            opacity: 0.7;
+        }
+
+        /* ─── CONTEXT BOX ─── */
+        .context-box {
+            background: linear-gradient(135deg, rgba(124, 106, 247, 0.08), rgba(91, 156, 247, 0.05));
+            border: 1px solid rgba(124, 106, 247, 0.25);
+            border-radius: 16px;
+            padding: 2rem;
+        }
+
+        .context-json {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1.2rem;
+            color: #a8d8ea;
+            white-space: pre;
+            overflow-x: auto;
+            margin-top: 1rem;
+            line-height: 1.7;
+        }
+
+        .json-key {
+            color: #c792ea;
+        }
+
+        .json-str {
+            color: #c3e88d;
+        }
+
+        .json-num {
+            color: #f78c6c;
+        }
+
+        /* ─── RULE LIST ─── */
+        .rules {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .rule {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 0.6rem 0.8rem;
+            border-radius: 8px;
+            font-size: 0.82rem;
+        }
+
+        .rule.ok {
+            background: rgba(62, 201, 122, 0.06);
+            color: var(--text);
+        }
+
+        .rule.no {
+            background: rgba(239, 68, 68, 0.06);
+            color: var(--text);
+        }
+
+        .rule-icon {
+            font-size: 1rem;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .rule-text {
+            color: var(--muted);
+        }
+
+        .rule-text strong {
+            color: var(--text);
+        }
+
+        /* ─── FOOTER ─── */
+        footer {
+            padding: 3rem 2rem;
+            text-align: center;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 0.8rem;
+        }
+
+        footer strong {
+            color: var(--text);
+        }
+
+        /* ─── RESPONSIVE ─── */
+        @media(max-width: 640px) {
+            nav {
+                padding: 0 1rem;
+            }
+
+            .container {
+                padding: 0 1rem;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .flow-code {
+                font-size: 0.62rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- NAV -->
+    <nav>
+        <span class="nav-logo">PriceOS</span>
+        <div class="nav-links">
+            <a href="#agents">Agents</a>
+            <a href="#flow">Market Analysis Flow</a>
+            <a href="#schema">Database Schema</a>
+            <a href="#context">Global Context</a>
+            <a href="#rules">Guardrails</a>
+        </div>
+    </nav>
+
+    <!-- HERO -->
+    <div class="hero">
+        <div class="hero-badge">Technical Architecture — Client Demo</div>
+        <h1>PriceOS Agent Orchestration</h1>
+        <p>A 7-agent AI system for Dubai short-term rental dynamic pricing. Every price proposal is grounded in real
+            market data — verified, guardrailed, and fully auditable.</p>
+    </div>
+
+    <!-- SECTION: OVERVIEW -->
+    <section id="overview">
+        <div class="container">
+            <div class="section-label">System Overview</div>
+            <div class="section-title">Two-Phase Architecture</div>
+            <div class="section-sub">PriceOS operates in two distinct phases: Setup (internet research) and Chat
+                (database-driven analysis). Data flows one-way — internet → database → agents → user.</div>
+
+            <div class="grid-2">
+                <div class="card" style="border-color:rgba(245,158,11,0.2);">
+                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;">
+                        <div
+                            style="width:36px;height:36px;background:rgba(245,158,11,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;">
+                            🔍</div>
+                        <div>
+                            <div style="font-weight:800;font-size:0.95rem;">Phase 1 — Market Analysis (Setup)</div>
+                            <div
+                                style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">
+                                Triggered once by user</div>
+                        </div>
+                    </div>
+                    <p style="font-size:0.83rem;color:var(--muted);line-height:1.7;">User selects a date range and
+                        property, then clicks <strong style="color:var(--text)">Market Analysis</strong>. Two
+                        internet-search agents run in parallel (Marketing Agent + Benchmark Agent), scraping Airbnb,
+                        Booking.com, and event sites. Results are saved to the database and consolidated into a <strong
+                            style="color:var(--text)">Lyzr Global Context</strong>.</p>
+                </div>
+
+                <div class="card" style="border-color:rgba(62,201,122,0.2);">
+                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;">
+                        <div
+                            style="width:36px;height:36px;background:rgba(62,201,122,0.15);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;">
+                            💬</div>
+                        <div>
+                            <div style="font-weight:800;font-size:0.95rem;">Phase 2 — Pricing Chat</div>
+                            <div
+                                style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;">
+                                Continuous conversation</div>
+                        </div>
+                    </div>
+                    <p style="font-size:0.83rem;color:var(--muted);line-height:1.7;">Chat is unlocked after Setup. The
+                        CRO Router receives user messages and reads the <strong style="color:var(--text)">Lyzr Global
+                            Context</strong> to generate pricing proposals. All 5 chat agents
+                        operate exclusively from the pre-loaded Global Context — <strong style="color:var(--text)">zero
+                            database or internet access during chat</strong>. PriceGuard validates every proposal before
+                        delivery.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION: AGENTS -->
+    <section id="agents">
+        <div class="container">
+            <div class="section-label">Agent Architecture</div>
+            <div class="section-title">7 Specialised Agents</div>
+            <div class="section-sub">Each agent has a strict, single responsibility. No agent is created or modified
+                from application code — all are managed in Lyzr Studio using their permanent Agent IDs.</div>
+
+            <!-- Setup Agents -->
+            <div style="margin-bottom:1rem;">
+                <div
+                    style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--amber);margin-bottom:0.75rem;">
+                    ⚡ Setup Agents — Internet Research (runs once per Market Analysis click)</div>
+                <div class="grid-2">
+                    <div class="agent-card internet">
+                        <div class="agent-number">Agent 6 · Marketing_Agent_ID</div>
+                        <div class="agent-name">Marketing Agent</div>
+                        <div class="agent-desc">Searches the web for Dubai events, public holidays, demand trends,
+                            competitor pricing, and weather outlook. Returns structured JSON saved to <code
+                                style="font-family:monospace;font-size:0.8em;color:var(--teal)">market_events</code>
+                            table.</div>
+                        <div class="agent-tags">
+                            <span class="tag internet">🌐 Internet</span>
+                            <span class="tag setup">Setup Only</span>
+                            <span class="tag readonly">Writes market_events</span>
+                        </div>
+                    </div>
+                    <div class="agent-card internet">
+                        <div class="agent-number">Agent 7 · LYZR_Competitor_Benchmark_Agent_ID</div>
+                        <div class="agent-name">Benchmark Agent</div>
+                        <div class="agent-desc">Scrapes Airbnb, Booking.com, Vrbo for 10–15 comparable properties.
+                            Calculates P25/P50/P75/P90 rate distribution and weekday/weekend splits. Writes to <code
+                                style="font-family:monospace;font-size:0.8em;color:var(--teal)">benchmark_data</code>
+                            table.</div>
+                        <div class="agent-tags">
+                            <span class="tag internet">🌐 Internet</span>
+                            <span class="tag setup">Setup Only</span>
+                            <span class="tag readonly">Writes benchmark_data</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Agents -->
+            <div>
+                <div
+                    style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--green);margin-bottom:0.75rem;">
+                    💬 Chat Agents — Global Context Readers (active during conversation)</div>
+                <div class="grid-2">
+                    <div class="agent-card manager">
+                        <div class="agent-number">Agent 1 · AGENT_ID (CRO Router)</div>
+                        <div class="agent-name">CRO Router</div>
+                        <div class="agent-desc">User-facing conversational agent. Classifies intent, routes to
+                            sub-agents in parallel, merges outputs, and delivers a formatted pricing response. No
+                            database access — orchestration only.</div>
+                        <div class="agent-tags">
+                            <span class="tag context">📋 Global Context</span>
+                            <span class="tag chat">Chat Phase</span>
+                        </div>
+                    </div>
+                    <div class="agent-card db">
+                        <div class="agent-number">Agent 2 · Property Analyst</div>
+                        <div class="agent-name">Property Analyst</div>
+                        <div class="agent-desc">Reads the <code
+                                style="font-family:monospace;font-size:0.8em;color:var(--accent)">inventory</code> array
+                            and <code
+                                style="font-family:monospace;font-size:0.8em;color:var(--accent)">external_signals</code>
+                            from the Global Context. Returns gap nights, restriction flags, seasonal averages, and
+                            revenue forecasts. Zero database access.</div>
+                        <div class="agent-tags">
+                            <span class="tag context">📋 Global Context</span>
+                            <span class="tag chat">Chat Phase</span>
+                        </div>
+                    </div>
+                    <div class="agent-card db">
+                        <div class="agent-number">Agent 3 · Booking Intelligence</div>
+                        <div class="agent-name">Booking Intelligence</div>
+                        <div class="agent-desc">Infers booking patterns from consecutive booked days in the <code
+                                style="font-family:monospace;font-size:0.8em;color:var(--accent)">inventory</code>
+                            array. Returns velocity, length-of-stay, revenue, event correlation, and benchmark
+                            comparison from <code
+                                style="font-family:monospace;font-size:0.8em;color:var(--accent)">external_signals</code>.
+                            Zero database access.</div>
+                        <div class="agent-tags">
+                            <span class="tag context">📋 Global Context</span>
+                            <span class="tag chat">Chat Phase</span>
+                        </div>
+                    </div>
+                    <div class="agent-card db">
+                        <div class="agent-number">Agent 4 · Market Research</div>
+                        <div class="agent-name">Market Research</div>
+                        <div class="agent-desc">Parses <code
+                                style="font-family:monospace;font-size:0.8em;color:var(--accent)">external_signals.events_analysis</code>
+                            and <code
+                                style="font-family:monospace;font-size:0.8em;color:var(--accent)">external_signals.market_analysis</code>
+                            from the Global Context. Returns event price factors, competitor P50/P75/P90 comps,
+                            positioning verdict, and recommended rates. Zero DB or internet access.</div>
+                        <div class="agent-tags">
+                            <span class="tag context">📋 Global Context</span>
+                            <span class="tag chat">Chat Phase</span>
+                        </div>
+                    </div>
+                    <div class="agent-card guard">
+                        <div class="agent-number">Agent 5 · PriceGuard</div>
+                        <div class="agent-name">PriceGuard</div>
+                        <div class="agent-desc">Called last, always. Reads <code
+                                style="font-family:monospace;font-size:0.8em;color:var(--accent)">property.price_floor</code>,
+                            <code
+                                style="font-family:monospace;font-size:0.8em;color:var(--accent)">property.price_ceiling</code>,
+                            and market rate bands (P25–P90) from <code
+                                style="font-family:monospace;font-size:0.8em;color:var(--accent)">external_signals</code>
+                            in the Global Context. Returns APPROVED / REJECTED / FLAGGED. Zero database access.
+                        </div>
+                        <div class="agent-tags">
+                            <span class="tag context">📋 Global Context</span>
+                            <span class="tag chat">Chat Phase</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION: MARKET ANALYSIS FLOW -->
+    <section id="flow">
+        <div class="container">
+            <div class="section-label">Market Analysis Flow</div>
+            <div class="section-title">What happens when user clicks "Market Analysis"</div>
+            <div class="section-sub">A complete end-to-end sequence from button click to the Pricing Analyst being
+                grounded in real data.</div>
+
+            <div class="grid-2">
+                <div class="flow">
+                    <div class="flow-step">
+                        <div class="flow-step-spine">
+                            <div class="flow-dot purple">1</div>
+                            <div class="flow-connector"></div>
+                        </div>
+                        <div class="flow-body">
+                            <div class="flow-title">User Clicks "Market Analysis"</div>
+                            <div class="flow-detail">Frontend sends <code
+                                    style="color:var(--teal)">POST /api/market-setup</code> with <code>listing_id</code>
+                                + <code>dateRange</code>.</div>
+                        </div>
+                    </div>
+
+                    <div class="flow-step">
+                        <div class="flow-step-spine">
+                            <div class="flow-dot blue">2</div>
+                            <div class="flow-connector"></div>
+                        </div>
+                        <div class="flow-body">
+                            <div class="flow-title">Next.js Proxies to Python Backend</div>
+                            <div class="flow-detail">Validated and forwarded to <code
+                                    style="color:var(--teal)">POST /api/agent/market-analysis</code>. User API key is
+                                fetched from <code>user_settings</code> table.</div>
+                        </div>
+                    </div>
+
+                    <div class="flow-step">
+                        <div class="flow-step-spine">
+                            <div class="flow-dot amber">3</div>
+                            <div class="flow-connector"></div>
+                        </div>
+                        <div class="flow-body">
+                            <div class="flow-title">Internet Research (Parallel)</div>
+                            <div class="flow-detail">Two Lyzr agents are triggered simultaneously with a minimal static
+                                message — no dynamic prompts injected.</div>
+                            <div class="flow-code">agent.run("Run your market event analysis.") # Marketing Agent
+                                agent.run("Run your competitor benchmark analysis.") # Benchmark Agent</div>
+                        </div>
+                    </div>
+
+                    <div class="flow-step">
+                        <div class="flow-step-spine">
+                            <div class="flow-dot teal">4</div>
+                            <div class="flow-connector"></div>
+                        </div>
+                        <div class="flow-body">
+                            <div class="flow-title">Save Results to Database</div>
+                            <div class="flow-detail">Agent responses are parsed and written to Neon PostgreSQL. Old
+                                records for the date range are deleted first (physical replacement pattern).</div>
+                            <div class="flow-code">DELETE FROM market_events WHERE listing_id=? AND date IN range
+                                INSERT INTO market_events (title, event_type, start_date, ...)
+
+                                DELETE FROM benchmark_data WHERE listing_id=? AND date_from=?
+                                INSERT INTO benchmark_data (p50_rate, comps, verdict, ...)</div>
+                        </div>
+                    </div>
+
+                    <div class="flow-step">
+                        <div class="flow-step-spine">
+                            <div class="flow-dot blue">5</div>
+                            <div class="flow-connector"></div>
+                        </div>
+                        <div class="flow-body">
+                            <div class="flow-title">Fetch Internal Property Data</div>
+                            <div class="flow-detail">Query the database for the selected property details and calendar
+                                inventory.</div>
+                            <div class="flow-code">SELECT * FROM listings WHERE id = listing_id
+                                SELECT * FROM inventory_master
+                                WHERE listing_id = ? AND date BETWEEN start AND end</div>
+                        </div>
+                    </div>
+
+                    <div class="flow-step">
+                        <div class="flow-step-spine">
+                            <div class="flow-dot green">6</div>
+                            <div class="flow-connector"></div>
+                        </div>
+                        <div class="flow-body">
+                            <div class="flow-title">Consolidate → Push Global Context</div>
+                            <div class="flow-detail">All data is merged into a single JSON object and pushed to the
+                                Pricing Analyst agent as a Lyzr Global Context named <code
+                                    style="color:var(--accent)">active_property_data</code>. Old context is deleted
+                                first.</div>
+                        </div>
+                    </div>
+
+                    <div class="flow-step">
+                        <div class="flow-step-spine">
+                            <div class="flow-dot purple">✓</div>
+                        </div>
+                        <div class="flow-body">
+                            <div class="flow-title">Chat Unlocked</div>
+                            <div class="flow-detail">Frontend receives success. The chat interface is now active and the
+                                Pricing Analyst is fully grounded in the latest real-world data.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right side: context JSON preview -->
+                <div>
+                    <div class="context-box">
+                        <div
+                            style="font-size:0.7rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:var(--accent);margin-bottom:0.5rem;">
+                            Lyzr Global Context — active_property_data</div>
+                        <div style="font-size:0.8rem;color:var(--muted);margin-bottom:0.75rem;">The single source of
+                            truth for all pricing agents. Updated on every Market Analysis click.</div>
+                        <div class="context-json">{
+                            <span class="json-key">"property"</span>: {
+                            <span class="json-key">"id"</span>: <span class="json-num">42</span>,
+                            <span class="json-key">"name"</span>: <span class="json-str">"Marina Heights 1BR"</span>,
+                            <span class="json-key">"area"</span>: <span class="json-str">"Dubai Marina"</span>,
+                            <span class="json-key">"base_price"</span>: <span class="json-num">550</span>,
+                            <span class="json-key">"price_floor"</span>: <span class="json-num">385</span>,
+                            <span class="json-key">"price_ceiling"</span>: <span class="json-num">1650</span>
+                            },
+                            <span class="json-key">"inventory"</span>: [
+                            { <span class="json-key">"date"</span>: <span class="json-str">"2026-03-01"</span>, <span
+                                class="json-key">"status"</span>: <span class="json-str">"booked"</span>, <span
+                                class="json-key">"price"</span>: <span class="json-num">550</span> },
+                            { <span class="json-key">"date"</span>: <span class="json-str">"2026-03-05"</span>, <span
+                                class="json-key">"status"</span>: <span class="json-str">"available"</span>, <span
+                                class="json-key">"price"</span>: <span class="json-num">550</span> }
+                            ],
+                            <span class="json-key">"external_signals"</span>: {
+                            <span class="json-key">"events_analysis"</span>: <span class="json-str">"Art Dubai (Mar
+                                6-9): high impact, +15% premium..."</span>,
+                            <span class="json-key">"market_analysis"</span>: <span class="json-str">"P50 AED 490, P75
+                                AED 620. Property at 58th percentile..."</span>
+                            }
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION: DATABASE SCHEMA -->
+    <section id="schema">
+        <div class="container">
+            <div class="section-label">Database Schema</div>
+            <div class="section-title">Neon PostgreSQL — Backend Storage (Setup Agents Only)</div>
+            <div class="section-sub">The database is written by the <strong>two Setup agents</strong> during Market
+                Analysis and read by the Python backend to build the Global Context. <strong>Chat-phase agents (1–5)
+                    never touch the database.</strong> They receive all data via the pre-loaded Lyzr Global Context
+                named <code style="font-family:monospace;color:var(--accent)">active_property_data</code>.</div>
+
+            <div class="grid-2">
+
+                <div class="db-table">
+                    <div class="db-table-head">
+                        <span class="db-table-name">listings</span>
+                        <span class="db-table-desc">Property registry</span>
+                    </div>
+                    <div class="db-cols">
+                        <div class="db-col"><span class="db-col-name pk">id</span><span class="db-col-type">serial
+                                PK</span></div>
+                        <div class="db-col"><span class="db-col-name">name, area, city</span><span
+                                class="db-col-type">text</span></div>
+                        <div class="db-col"><span class="db-col-name">bedrooms_number</span><span
+                                class="db-col-type">integer</span></div>
+                        <div class="db-col"><span class="db-col-name">price</span><span
+                                class="db-col-type">numeric(10,2)</span><span class="db-col-note">base price</span>
+                        </div>
+                        <div class="db-col"><span class="db-col-name">price_floor</span><span
+                                class="db-col-type">numeric(10,2)</span><span class="db-col-note">PriceGuard min</span>
+                        </div>
+                        <div class="db-col"><span class="db-col-name">price_ceiling</span><span
+                                class="db-col-type">numeric(10,2)</span><span class="db-col-note">PriceGuard max</span>
+                        </div>
+                        <div class="db-col"><span class="db-col-name">amenities</span><span
+                                class="db-col-type">jsonb</span></div>
+                        <div class="db-col"><span class="db-col-name">hostaway_id</span><span class="db-col-type">text
+                                unique</span></div>
+                    </div>
+                </div>
+
+                <div class="db-table">
+                    <div class="db-table-head">
+                        <span class="db-table-name">inventory_master</span>
+                        <span class="db-table-desc">Daily price calendar</span>
+                    </div>
+                    <div class="db-cols">
+                        <div class="db-col"><span class="db-col-name pk">id</span><span class="db-col-type">serial
+                                PK</span></div>
+                        <div class="db-col"><span class="db-col-name fk">listing_id</span><span
+                                class="db-col-type">integer FK</span></div>
+                        <div class="db-col"><span class="db-col-name">date</span><span class="db-col-type">date</span>
+                        </div>
+                        <div class="db-col"><span class="db-col-name">status</span><span
+                                class="db-col-type">text</span><span class="db-col-note">available/booked/blocked</span>
+                        </div>
+                        <div class="db-col"><span class="db-col-name">current_price</span><span
+                                class="db-col-type">numeric(10,2)</span></div>
+                        <div class="db-col"><span class="db-col-name">min_stay, max_stay</span><span
+                                class="db-col-type">integer</span></div>
+                        <div class="db-col"><span class="db-col-name">proposed_price</span><span
+                                class="db-col-type">numeric(10,2)</span><span class="db-col-note">AI proposal</span>
+                        </div>
+                        <div class="db-col"><span class="db-col-name">proposal_status</span><span
+                                class="db-col-type">text</span><span class="db-col-note">pending/approved</span></div>
+                        <div class="db-col"><span class="db-col-name">reasoning</span><span
+                                class="db-col-type">text</span></div>
+                    </div>
+                </div>
+
+                <div class="db-table" style="border-color:rgba(245,158,11,0.2);">
+                    <div class="db-table-head" style="border-color:rgba(245,158,11,0.15);">
+                        <span class="db-table-name" style="color:var(--amber);">market_events</span>
+                        <span class="db-table-desc">Written by Marketing Agent · Read by chat agents</span>
+                    </div>
+                    <div class="db-cols">
+                        <div class="db-col"><span class="db-col-name pk">id</span><span class="db-col-type">serial
+                                PK</span></div>
+                        <div class="db-col"><span class="db-col-name fk">listing_id</span><span
+                                class="db-col-type">integer FK</span><span class="db-col-note">null = portfolio</span>
+                        </div>
+                        <div class="db-col"><span class="db-col-name">title</span><span class="db-col-type">text</span>
+                        </div>
+                        <div class="db-col"><span class="db-col-name">event_type</span><span
+                                class="db-col-type">text</span><span
+                                class="db-col-note">event/holiday/competitor_intel/positioning/demand_outlook/market_summary</span>
+                        </div>
+                        <div class="db-col"><span class="db-col-name">start_date, end_date</span><span
+                                class="db-col-type">date</span></div>
+                        <div class="db-col"><span class="db-col-name">expected_impact</span><span
+                                class="db-col-type">text</span><span class="db-col-note">high/medium/low</span></div>
+                        <div class="db-col"><span class="db-col-name">confidence</span><span
+                                class="db-col-type">integer</span><span class="db-col-note">0-100</span></div>
+                        <div class="db-col"><span class="db-col-name">suggested_premium</span><span
+                                class="db-col-type">numeric(5,2)</span><span class="db-col-note">% uplift</span></div>
+                        <div class="db-col"><span class="db-col-name">comp_min/max/median_rate</span><span
+                                class="db-col-type">numeric</span><span class="db-col-note">competitor_intel rows</span>
+                        </div>
+                        <div class="db-col"><span class="db-col-name">source, description</span><span
+                                class="db-col-type">text</span></div>
+                        <div class="db-col"><span class="db-col-name">metadata</span><span
+                                class="db-col-type">jsonb</span></div>
+                    </div>
+                </div>
+
+                <div class="db-table" style="border-color:rgba(45,212,191,0.2);">
+                    <div class="db-table-head" style="border-color:rgba(45,212,191,0.15);">
+                        <span class="db-table-name" style="color:var(--teal);">benchmark_data</span>
+                        <span class="db-table-desc">Written by Benchmark Agent · Primary pricing anchor</span>
+                    </div>
+                    <div class="db-cols">
+                        <div class="db-col"><span class="db-col-name pk">id</span><span class="db-col-type">serial
+                                PK</span></div>
+                        <div class="db-col"><span class="db-col-name fk">listing_id</span><span
+                                class="db-col-type">integer FK</span></div>
+                        <div class="db-col"><span class="db-col-name">date_from, date_to</span><span
+                                class="db-col-type">date</span><span class="db-col-note">unique constraint</span></div>
+                        <div class="db-col"><span class="db-col-name">p25/p50/p75/p90_rate</span><span
+                                class="db-col-type">numeric(10,2)</span><span class="db-col-note">rate
+                                distribution</span></div>
+                        <div class="db-col"><span class="db-col-name">avg_weekday, avg_weekend</span><span
+                                class="db-col-type">numeric(10,2)</span></div>
+                        <div class="db-col"><span class="db-col-name">your_price, percentile</span><span
+                                class="db-col-type">numeric / int</span></div>
+                        <div class="db-col"><span class="db-col-name">verdict</span><span
+                                class="db-col-type">text</span><span
+                                class="db-col-note">UNDERPRICED/FAIR/OVERPRICED</span></div>
+                        <div class="db-col"><span class="db-col-name">recommended_weekday/weekend/event</span><span
+                                class="db-col-type">numeric(10,2)</span><span class="db-col-note">AI targets</span>
+                        </div>
+                        <div class="db-col"><span class="db-col-name">rate_trend, trend_pct</span><span
+                                class="db-col-type">text / numeric</span></div>
+                        <div class="db-col"><span class="db-col-name">comps</span><span
+                                class="db-col-type">jsonb[]</span><span class="db-col-note">individual competitor
+                                listings</span></div>
+                    </div>
+                </div>
+
+                <div class="db-table">
+                    <div class="db-table-head">
+                        <span class="db-table-name">reservations</span>
+                        <span class="db-table-desc">Synced from Hostaway PMS</span>
+                    </div>
+                    <div class="db-cols">
+                        <div class="db-col"><span class="db-col-name fk">listing_id</span><span
+                                class="db-col-type">integer FK</span></div>
+                        <div class="db-col"><span class="db-col-name">start_date, end_date</span><span
+                                class="db-col-type">date</span></div>
+                        <div class="db-col"><span class="db-col-name">channel_name</span><span
+                                class="db-col-type">text</span><span class="db-col-note">Airbnb/Booking.com</span></div>
+                        <div class="db-col"><span class="db-col-name">total_price, price_per_night</span><span
+                                class="db-col-type">numeric</span></div>
+                        <div class="db-col"><span class="db-col-name">channel_commission, cleaning_fee</span><span
+                                class="db-col-type">numeric</span></div>
+                        <div class="db-col"><span class="db-col-name">reservation_status</span><span
+                                class="db-col-type">text</span></div>
+                    </div>
+                </div>
+
+                <div class="db-table">
+                    <div class="db-table-head">
+                        <span class="db-table-name">user_settings</span>
+                        <span class="db-table-desc">Per-user API key store</span>
+                    </div>
+                    <div class="db-cols">
+                        <div class="db-col"><span class="db-col-name pk">user_id</span><span class="db-col-type">text
+                                unique</span></div>
+                        <div class="db-col"><span class="db-col-name">lyzr_api_key</span><span
+                                class="db-col-type">text</span><span class="db-col-note">encrypted at rest</span></div>
+                        <div class="db-col"><span class="db-col-name">hostaway_api_key</span><span
+                                class="db-col-type">text</span></div>
+                        <div class="db-col"><span class="db-col-name">is_approved</span><span
+                                class="db-col-type">boolean</span></div>
+                        <div class="db-col"><span class="db-col-name">preferences</span><span
+                                class="db-col-type">jsonb</span></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION: GLOBAL CONTEXT -->
+    <section id="context">
+        <div class="container">
+            <div class="section-label">Global Context Pattern</div>
+            <div class="section-title">Physical Replacement — One Context, Always Fresh</div>
+            <div class="section-sub">The Lyzr Global Context named <code
+                    style="font-family:monospace;color:var(--accent)">active_property_data</code> is the only data
+                channel. It is replaced atomically on every Market Analysis run.</div>
+
+            <div class="grid-2">
+                <div>
+                    <div style="font-size:0.8rem;color:var(--muted);margin-bottom:1rem;line-height:1.7;">The backend
+                        runs a strict 3-step context update cycle. This guarantees the Pricing Analyst never uses stale
+                        data. Context name is always fixed — no unique names per run, no accumulation.</div>
+                    <div class="rules">
+                        <div class="rule ok"><span class="rule-icon">✅</span><span class="rule-text"><strong>Step 1 —
+                                    Delete:</strong> List all Lyzr contexts. Find any named <code
+                                    style="font-family:monospace">active_property_data</code>. Delete them all.</span>
+                        </div>
+                        <div class="rule ok"><span class="rule-icon">✅</span><span class="rule-text"><strong>Step 2 —
+                                    Create:</strong> Create a fresh context named <code
+                                    style="font-family:monospace">active_property_data</code> with the full consolidated
+                                JSON.</span></div>
+                        <div class="rule ok"><span class="rule-icon">✅</span><span class="rule-text"><strong>Step 3 —
+                                    Attach:</strong> Call <code
+                                    style="font-family:monospace">agent.add_context(ctx)</code> to attach to the Pricing
+                                Analyst Studio agent.</span></div>
+                    </div>
+                </div>
+                <div class="context-box">
+                    <div
+                        style="font-size:0.7rem;font-weight:800;text-transform:uppercase;letter-spacing:0.1em;color:var(--accent);margin-bottom:0.5rem;">
+                        Python — update_context()</div>
+                    <div class="context-json" style="font-size:0.68rem;"># 1. CLEANUP — delete old context
+                        all_contexts = studio.contexts.list()
+                        for ctx in all_contexts:
+                        if ctx.name == "active_property_data":
+                        studio.contexts.delete(ctx.id)
+
+                        # 2. CREATE — fresh context with new data
+                        ctx = studio.create_context(
+                        name="active_property_data",
+                        value=json.dumps(consolidated_data)
+                        )
+
+                        # 3. ATTACH — bind to Pricing Analyst
+                        agent.add_context(ctx)</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SECTION: GUARDRAILS -->
+    <section id="rules">
+        <div class="container">
+            <div class="section-label">Engineering Guardrails</div>
+            <div class="section-title">Immutable Rules — Enforced in Code</div>
+            <div class="section-sub">These constraints are structurally enforced — not enforced by prompts. Violations
+                raise exceptions at startup, not at runtime.</div>
+
+            <div class="grid-2">
+                <div>
+                    <div
+                        style="font-size:0.75rem;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem;">
+                        ✅ What the code DOES</div>
+                    <div class="rules">
+                        <div class="rule ok"><span class="rule-icon">✅</span><span class="rule-text"><strong>Get agents
+                                    by ID only:</strong> <code
+                                    style="font-family:monospace">studio.get_agent(agent_id=...)</code></span></div>
+                        <div class="rule ok"><span class="rule-icon">✅</span><span class="rule-text"><strong>Update
+                                    Global Context only:</strong> <code
+                                    style="font-family:monospace">studio.create_context(...)</code> + <code
+                                    style="font-family:monospace">agent.add_context(...)</code></span></div>
+                        <div class="rule ok"><span class="rule-icon">✅</span><span class="rule-text"><strong>Use static
+                                    trigger messages:</strong> <code
+                                    style="font-family:monospace">agent.run("Run your analysis.")</code></span></div>
+                        <div class="rule ok"><span class="rule-icon">✅</span><span class="rule-text"><strong>Raise
+                                    ValueError on missing IDs:</strong> fails fast at startup, not silently at
+                                runtime</span></div>
+                        <div class="rule ok"><span class="rule-icon">✅</span><span class="rule-text"><strong>Read API
+                                    keys from environment:</strong> no hardcoded keys anywhere in source code</span>
+                        </div>
+                        <div class="rule ok"><span class="rule-icon">✅</span><span class="rule-text"><strong>Physical
+                                    replacement:</strong> delete old context before creating new one</span></div>
+                    </div>
+                </div>
+                <div>
+                    <div
+                        style="font-size:0.75rem;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem;">
+                        🚫 What the code NEVER does</div>
+                    <div class="rules">
+                        <div class="rule no"><span class="rule-icon">🚫</span><span class="rule-text"><strong>No agent
+                                    creation:</strong> <code
+                                    style="font-family:monospace">studio.create_agent(...)</code> — removed from all
+                                files</span></div>
+                        <div class="rule no"><span class="rule-icon">🚫</span><span class="rule-text"><strong>No prompt
+                                    injection:</strong> no f-string prompts with dates, listing IDs, or property
+                                names</span></div>
+                        <div class="rule no"><span class="rule-icon">🚫</span><span class="rule-text"><strong>No
+                                    instruction updates:</strong> agent system prompts are never set from code</span>
+                        </div>
+                        <div class="rule no"><span class="rule-icon">🚫</span><span class="rule-text"><strong>No
+                                    hardcoded API keys:</strong> all keys from <code
+                                    style="font-family:monospace">.env</code> → <code
+                                    style="font-family:monospace">settings.*</code></span></div>
+                        <div class="rule no"><span class="rule-icon">🚫</span><span class="rule-text"><strong>No context
+                                    accumulation:</strong> old context is always deleted before adding new one</span>
+                        </div>
+                        <div class="rule no"><span class="rule-icon">🚫</span><span class="rule-text"><strong>No direct
+                                    DB access from agents:</strong> Pricing Analyst reads ONLY from Global
+                                Context</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer>
+        <p><strong>PriceOS</strong> — AI-Powered Dynamic Pricing for Dubai Short-Term Rentals</p>
+        <p style="margin-top:0.3rem;">Built on Lyzr Studio · Next.js · FastAPI (Python) · Neon PostgreSQL · Hostaway PMS
+        </p>
+    </footer>
+
+</body>
+
+</html>

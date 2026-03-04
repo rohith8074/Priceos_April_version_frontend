@@ -16,8 +16,10 @@ export async function GET(req: NextRequest) {
             // Return records for this listing OR portfolio-level records (listingId IS NULL)
             conditions.push(or(eq(marketEvents.listingId, listingId), isNull(marketEvents.listingId)));
         }
-        if (dateFrom) conditions.push(gte(marketEvents.startDate, dateFrom));
-        if (dateTo) conditions.push(lte(marketEvents.endDate, dateTo));
+
+        // RANGE OVERLAP: event overlaps if event.start <= queryEnd AND event.end >= queryStart
+        if (dateFrom) conditions.push(gte(marketEvents.endDate, dateFrom));   // event ends after query starts
+        if (dateTo) conditions.push(lte(marketEvents.startDate, dateTo));     // event starts before query ends
 
         const query = db
             .select()
@@ -28,6 +30,8 @@ export async function GET(req: NextRequest) {
         const events = conditions.length > 0
             ? await query.where(and(...conditions))
             : await query;
+
+        console.log(`📡 [Events API] listingId=${listingId} range=${dateFrom}→${dateTo} → ${events.length} events returned`);
 
         return NextResponse.json({
             success: true,

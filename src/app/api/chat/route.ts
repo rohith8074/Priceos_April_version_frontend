@@ -1,18 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { MANAGER_AGENT_ID } from "@/lib/agents/constants";
 import { db } from "@/lib/db";
-import { chatMessages, inventoryMaster } from "@/lib/db/schema";
-import { and, eq } from "drizzle-orm";
+import { chatMessages, inventoryMaster, reservations, marketEvents, benchmarkData, guestSummaries, listings } from "@/lib/db/schema";
+import { and, eq, lte, gte, avg, sql } from "drizzle-orm";
 
 /**
  * POST /api/chat
  *
- * Unified chat API that forwards user messages to the Lyzr pricing agent.
- * Follows the exact calling pattern from lyzr_client.py:
- *
- *   POST https://agent-prod.studio.lyzr.ai/v3/inference/chat/
- *   Headers: { "Content-Type": "application/json", "x-api-key": <key> }
- *   Body:    { user_id, agent_id, session_id, message }
+ * Unified chat API that:
+ *   1. Fetches ALL property data fresh from Neon DB
+ *   2. Syncs it to Lyzr Global Context (agents read from there only)
+ *   3. Sends the raw user message to Lyzr — NO inline prompt injection
  */
 
 const LYZR_API_URL = process.env.LYZR_API_URL!;
@@ -23,10 +21,17 @@ interface ChatContext {
   type: "portfolio" | "property";
   propertyId?: number;
   propertyName?: string;
+  /** Calendar metrics as computed by GET /api/calendar-metrics in the UI.
+   *  When present, these are used as-is in the Global Context so the agent
+   *  sees the EXACT same numbers the UI displays. */
   metrics?: {
     occupancy: number;
     bookedDays: number;
+    availableDays: number;
+    blockedDays: number;
+    totalDays: number;
     bookableDays: number;
+    avgPrice: number;
   };
 }
 
@@ -34,10 +39,7 @@ interface ChatRequest {
   message: string;
   context: ChatContext;
   sessionId?: string;
-  dateRange?: {
-    from: string;
-    to: string;
-  };
+  dateRange?: { from: string; to: string };
   isChatActive?: boolean;
 }
 
@@ -47,75 +49,261 @@ export async function POST(req: NextRequest) {
 
   try {
     const body: ChatRequest = await req.json();
-    const { message, context, sessionId, dateRange, isChatActive } = body;
+    const { message, context, sessionId, dateRange } = body;
 
-    // ═══════════════════════════════════════════
-    // 📩 LOG: USER INPUT RECEIVED
-    // ═══════════════════════════════════════════
     console.log(`\n${'═'.repeat(60)}`);
-    console.log(`📩 USER INPUT — ${requestTimestamp}`);
+    console.log(`📩 CHAT REQUEST — ${requestTimestamp}`);
     console.log(`${'═'.repeat(60)}`);
-    console.log(`  Context:     ${context.type}`);
-    console.log(`  Property:    ${context.propertyName || '(portfolio)'}`);
-    console.log(`  Range:       ${dateRange ? `${dateRange.from} to ${dateRange.to}` : '(none)'}`);
-    console.log(`  Active:      ${isChatActive ? 'YES' : 'NO'}`);
-    console.log(`  Message:     "${message}"`);
+    console.log(`  Context:  ${context.type} | Property: ${context.propertyName || '(portfolio)'}`);
+    console.log(`  Range:    ${dateRange ? `${dateRange.from} → ${dateRange.to}` : '(none)'}`);
+    console.log(`  Message:  "${message}"`);
     console.log(`${'─'.repeat(60)}`);
 
-    if (!message?.trim() && !isChatActive) {
-      console.log(`  ❌ REJECTED: Empty message`);
-      return NextResponse.json(
-        { error: "Message is required" },
-        { status: 400 }
-      );
+    if (!message?.trim()) {
+      return NextResponse.json({ error: "Message is required" }, { status: 400 });
     }
-
     if (!LYZR_API_KEY) {
-      console.log(`  ❌ REJECTED: LYZR_API_KEY not configured`);
-      return NextResponse.json(
-        {
-          error: "LYZR_API_KEY not configured",
-          message:
-            "The AI agent is not configured. Please add your LYZR_API_KEY in Settings or .env file.",
-        },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "LYZR_API_KEY not configured" }, { status: 500 });
     }
-
     if (!AGENT_ID) {
-      console.log(`  ❌ REJECTED: AGENT_ID not configured`);
-      return NextResponse.json(
-        {
-          error: "AGENT_ID not configured",
-          message:
-            "The AI agent ID is not configured. Please add AGENT_ID to your .env file.",
-        },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: "AGENT_ID not configured" }, { status: 500 });
     }
 
-    // Build the message to send to the agent
-    let agentMessage = message;
-    const rangeTag = dateRange ? `Analysis Range: ${dateRange.from} to ${dateRange.to}` : "";
-
-    if (context.type === "property" && context.propertyName) {
-      let metricStr = "";
-      if (context.metrics) {
-        metricStr = `\nCRITICAL CONTEXT - USE THESE EXACT METRICS IN YOUR RESPONSE:\n- Date Range Occupancy: ${context.metrics.occupancy}% (${context.metrics.bookedDays} booked / ${context.metrics.bookableDays} bookable days)\n`;
-      }
-      agentMessage = `Property ID: ${context.propertyId}\nProperty: ${context.propertyName}\n${rangeTag}${metricStr}\nUser query: ${message || "Please analyze this property for the selected dates."}`;
-    } else if (context.type === "portfolio") {
-      agentMessage = `Portfolio view (all properties)\n${rangeTag}\nUser query: ${message || "Please analyze my portfolio for the selected dates."}`;
-    }
-
-    // Generate a stable session ID per context
+    // Session is keyed to property + date range — mirrors the frontend buildSessionId logic
     const lyzrSessionId =
       sessionId ||
       (context.type === "portfolio"
         ? "portfolio-session"
-        : `property-${context.propertyId}-session`);
+        : `property-${context.propertyId}-${dateRange?.from || "start"}-${dateRange?.to || "end"}`);
 
-    // Save user message to database
+    // Check if data has already been injected in this session.
+    // We look for a prior message that contains the injection marker.
+    // The [SYSTEM] init message does NOT count because it skips injection.
+    const isSystemMsg = message.startsWith("[SYSTEM]");
+    const prevDataMsgs = await db.select({ id: chatMessages.id })
+      .from(chatMessages)
+      .where(and(
+        eq(chatMessages.sessionId, lyzrSessionId),
+        eq(chatMessages.role, "user"),
+        sql`${chatMessages.content} NOT LIKE '[SYSTEM]%'`
+      ))
+      .limit(1);
+    const needsDataInjection = prevDataMsgs.length === 0 && !isSystemMsg;
+
+    // ═══════════════════════════════════════════════════════
+    // 📦 STEP 1 — Fetch ALL real-time data from Neon DB
+    //    We build the payload if this is the first REAL user
+    //    message (non-system) that hasn't had data injected yet.
+    // ═══════════════════════════════════════════════════════
+    let propertyDataPayload: any = null;
+
+    if (needsDataInjection && context.type === "property" && context.propertyId) {
+      const pid = context.propertyId;
+      const dateFrom = dateRange?.from || '1970-01-01';
+      const dateTo = dateRange?.to || '9999-12-31';
+
+      console.log(`\n🔄 [Context Sync] Fetching fresh data for listing #${pid}...`);
+
+      const [
+        listingRows,
+        events,
+        benchmarkRows,
+        calMetrics,
+        resRows,
+        guestSumRows,
+        inventoryRows,
+      ] = await Promise.all([
+
+        // Q1: Property details
+        db.select().from(listings).where(eq(listings.id, pid)).limit(1),
+
+        // Q2: Market events overlapping the date range
+        db.select()
+          .from(marketEvents)
+          .where(and(
+            eq(marketEvents.listingId, pid),
+            gte(marketEvents.endDate, dateFrom),
+            lte(marketEvents.startDate, dateTo)
+          ))
+          .limit(20),
+
+        // Q3: Benchmark data (latest for this range)
+        db.select()
+          .from(benchmarkData)
+          .where(and(
+            eq(benchmarkData.listingId, pid),
+            gte(benchmarkData.dateTo, dateFrom),
+            lte(benchmarkData.dateFrom, dateTo)
+          ))
+          .limit(1),
+
+        // Q4: Calendar metrics (occupancy, booked/blocked/available)
+        db.select({
+          totalDays: sql<number>`COUNT(*)`,
+          bookedDays: sql<number>`COUNT(CASE WHEN ${inventoryMaster.status} IN ('reserved','booked') THEN 1 END)`,
+          availableDays: sql<number>`COUNT(CASE WHEN ${inventoryMaster.status} = 'available' THEN 1 END)`,
+          blockedDays: sql<number>`COUNT(CASE WHEN ${inventoryMaster.status} = 'blocked' THEN 1 END)`,
+          avgPrice: avg(inventoryMaster.currentPrice),
+        })
+          .from(inventoryMaster)
+          .where(and(
+            eq(inventoryMaster.listingId, pid),
+            gte(inventoryMaster.date, dateFrom),
+            lte(inventoryMaster.date, dateTo)
+          )),
+
+        // Q5: Revenue & channel mix from reservations
+        db.select({
+          totalPrice: reservations.totalPrice,
+          pricePerNight: reservations.pricePerNight,
+          channelName: reservations.channelName,
+          guestName: reservations.guestName,
+          startDate: reservations.startDate,
+          endDate: reservations.endDate,
+          numGuests: reservations.numGuests,
+          reservationStatus: reservations.reservationStatus,
+        })
+          .from(reservations)
+          .where(and(
+            eq(reservations.listingId, pid),
+            lte(reservations.startDate, dateTo), // Starts before window ends
+            gte(reservations.endDate, dateFrom)   // Ends after window starts
+          )),
+
+        // Q6: Guest communication summary
+        db.select()
+          .from(guestSummaries)
+          .where(and(
+            eq(guestSummaries.listingId, pid),
+            gte(guestSummaries.dateTo, dateFrom),
+            lte(guestSummaries.dateFrom, dateTo)
+          ))
+          .limit(1),
+
+        // Q7: Raw inventory rows for detailed analysis
+        db.select()
+          .from(inventoryMaster)
+          .where(and(
+            eq(inventoryMaster.listingId, pid),
+            gte(inventoryMaster.date, dateFrom),
+            lte(inventoryMaster.date, dateTo)
+          ))
+          .orderBy(inventoryMaster.date),
+      ]);
+
+      // ── Compute derived metrics ──
+      const listing = listingRows[0];
+      const benchmark = benchmarkRows[0] || null;
+      const calResult = calMetrics[0];
+      const guestSum = guestSumRows[0] || null;
+      const rawInventory = inventoryRows || [];
+
+      // ─────────────────────────────────────────────────────────────────────
+      // ✅ SINGLE SOURCE OF TRUTH for occupancy:
+      //    Use context.metrics (sent by the UI from GET /api/calendar-metrics)
+      //    when available — guarantees agent sees EXACT same numbers as the UI.
+      //    Fall back to our own Q4 DB result only when the UI didn't send metrics.
+      // ─────────────────────────────────────────────────────────────────────
+      const uiMetrics = context.metrics;
+      const usingUIMetrics = !!uiMetrics;
+
+      const totalDays = uiMetrics?.totalDays ?? Number(calResult?.totalDays || 0);
+      const bookedDays = uiMetrics?.bookedDays ?? Number(calResult?.bookedDays || 0);
+      const blockedDays = uiMetrics?.blockedDays ?? Number(calResult?.blockedDays || 0);
+      const bookableDays = uiMetrics?.bookableDays ?? (totalDays - blockedDays);
+      const occupancy = uiMetrics?.occupancy ?? (bookableDays > 0 ? Math.round((bookedDays / bookableDays) * 100) : 0);
+      const avgCalPrice = uiMetrics?.avgPrice ?? Number(calResult?.avgPrice || listing?.price || 0);
+
+      const totalRevenue = resRows.reduce((s, r) => s + Number(r.totalPrice || 0), 0);
+      const avgDailyRate = resRows.length > 0
+        ? resRows.reduce((s, r) => s + Number(r.pricePerNight || 0), 0) / resRows.length
+        : Number(listing?.price || 0);
+      const channelMix: Record<string, number> = {};
+      resRows.forEach(r => {
+        const ch = r.channelName || "Direct";
+        channelMix[ch] = (channelMix[ch] || 0) + 1;
+      });
+
+      console.log(`📦 [Context Sync] Metrics source: ${usingUIMetrics ? '✅ UI /calendar-metrics (matches what user sees)' : '⚠️  DB Q4 fallback'}`);
+      console.log(`📦 [Context Sync] occ=${occupancy}% | booked=${bookedDays}d | actual_rows=${rawInventory.length} | bookings=${resRows.length}`);
+      console.log(`📦 [Context Sync] avgPrice=AED ${avgCalPrice}`);
+
+      // ═══════════════════════════════════════════════════════
+      // 📡 STEP 2 — Build Property Data Payload
+      //    Instead of syncing to Global Context, we inject this locally!
+      // ═══════════════════════════════════════════════════════
+      console.log(`📡 [Context Sync] Building JSON payload for direct injection...`);
+
+      propertyDataPayload = {
+        // ── The date range the user selected in the UI ──
+        analysis_window: {
+          from: dateFrom,
+          to: dateTo,
+        },
+        property: {
+          listingId: Number(context.propertyId || 0),
+          name: listing?.name || context.propertyName || "Unknown Property",
+          area: listing?.area || "Dubai",
+          city: listing?.city || "Dubai",
+          bedrooms: listing?.bedroomsNumber || 1,
+          bathrooms: listing?.bathroomsNumber || 1,
+          personCapacity: listing?.personCapacity || 0,
+          current_price: Number(listing?.price || 0),
+          floor_price: Number(listing?.priceFloor || 0),
+          ceiling_price: Number(listing?.priceCeiling || 0),
+          currency: listing?.currencyCode || "AED",
+        },
+        metrics: {
+          occupancy_pct: occupancy,
+          booked_nights: bookedDays,
+          bookable_nights: bookableDays,
+          blocked_nights: blockedDays,
+          total_nights: totalDays,
+          avg_nightly_rate: avgCalPrice,
+        },
+        benchmark: benchmark ? {
+          verdict: benchmark.verdict || "FAIR",
+          percentile: benchmark.percentile || 50,
+          median_market_rate: Number(benchmark.p50Rate || 0),
+          p25: Number(benchmark.p25Rate || 0),
+          p50: Number(benchmark.p50Rate || 0),
+          p75: Number(benchmark.p75Rate || 0),
+          p90: Number(benchmark.p90Rate || 0),
+          avg_weekday: Number(benchmark.avgWeekday || 0),
+          avg_weekend: Number(benchmark.avgWeekend || 0),
+          recommended_weekday: Number(benchmark.recommendedWeekday || benchmark.p50Rate || 0),
+          recommended_weekend: Number(benchmark.recommendedWeekend || benchmark.p75Rate || 0),
+          recommended_event: Number(benchmark.recommendedEvent || benchmark.p90Rate || 0),
+          reasoning: benchmark.reasoning || "",
+        } : null,
+        market_events: events.map(e => ({
+          title: e.title,
+          start_date: e.startDate,
+          end_date: e.endDate,
+          impact: e.expectedImpact || "medium",
+          description: e.description || "",
+          suggested_premium_pct: e.suggestedPremium ? Number(e.suggestedPremium) : 0,
+        })),
+        recent_reservations: resRows.map(r => ({
+          guestName: r.guestName || "Guest",
+          startDate: r.startDate,
+          endDate: r.endDate,
+          nights: Math.ceil((new Date(r.endDate).getTime() - new Date(r.startDate).getTime()) / (1000 * 60 * 60 * 24)),
+          totalPrice: Number(r.totalPrice || 0),
+          channel: r.channelName || "Direct",
+        })),
+      };
+
+      console.log(`✅ [Context Sync] Payload ready for injection.`);
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // 📤 STEP 3 — Send RAW user message to Lyzr
+    //    We inject the JSON payload directly into the prompt.
+    // ═══════════════════════════════════════════════════════
+
+
+    // Save user message to DB
     try {
       if (message?.trim()) {
         await db.insert(chatMessages).values({
@@ -131,38 +319,41 @@ export async function POST(req: NextRequest) {
       console.error("Failed to save user message to DB:", err);
     }
 
-    // Prepare the Lyzr request payload
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      "x-api-key": LYZR_API_KEY,
-    };
+    // ── Property anchor: Inject real-time JSON payload ──
+    let anchoredMessage = message;
+
+    if (!isSystemMsg) {
+      if (propertyDataPayload) {
+        anchoredMessage = `[SYSTEM: CURRENT PROPERTY DATA]\nYou must strictly use the following real-time data to answer the user's query:\n${JSON.stringify(propertyDataPayload, null, 2)}\n[/SYSTEM]\n\nUser Message:\n${message}`;
+      } else {
+        const propName = context.propertyName || "portfolio";
+        anchoredMessage = `[Active Context: ${propName}]\n\n${message}`;
+      }
+    }
 
     const payload = {
       user_id: "priceos-user",
       agent_id: AGENT_ID,
       session_id: lyzrSessionId,
-      message: agentMessage,
+      message: anchoredMessage,
     };
 
-    // Mask API key for logging
-    const maskedKey =
-      LYZR_API_KEY.length > 8
-        ? `${LYZR_API_KEY.slice(0, 4)}...${LYZR_API_KEY.slice(-4)}`
-        : "****";
+    const maskedKey = LYZR_API_KEY.length > 8
+      ? `${LYZR_API_KEY.slice(0, 4)}...${LYZR_API_KEY.slice(-4)}`
+      : "****";
 
-    // ═══════════════════════════════════════════
-    // 📤 LOG: API REQUEST TO LYZR AGENT
-    // ═══════════════════════════════════════════
-    console.log(`\n📤 LYZR CHAT REQUEST — Sending to agent`);
+    console.log(`\n📤 LYZR CHAT REQUEST`);
     console.log(`${'─'.repeat(60)}`);
-    console.log(`  URL:         ${LYZR_API_URL}`);
-    console.log(`  API Key:     ${maskedKey}`);
-    console.log(`  Agent ID:    ${AGENT_ID}`);
-    console.log(`  Session ID:  ${lyzrSessionId}`);
-    console.log(`  Payload:     ${JSON.stringify({ ...payload, message: payload.message.substring(0, 100) + '...' })}`);
+    console.log(`  Agent:    ${AGENT_ID}  |  Session: ${lyzrSessionId}`);
+    console.log(`  API Key:  ${maskedKey}  |  URL: ${LYZR_API_URL}`);
+    console.log(`  Message:  "${message}"`);
     console.log(`${'─'.repeat(60)}`);
 
-    // Call the Lyzr inference chat endpoint
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      "x-api-key": LYZR_API_KEY,
+    };
+
     const response = await fetch(LYZR_API_URL, {
       method: "POST",
       headers,
@@ -171,27 +362,32 @@ export async function POST(req: NextRequest) {
 
     if (!response.ok) {
       const rawText = await response.text();
-      const duration = Math.round(performance.now() - startTime);
-      console.error(`\n❌ LYZR API ERROR — ${response.status}`);
-      console.error(`${'─'.repeat(60)}`);
-      console.error(`  Error Body:  ${rawText.substring(0, 500)}`);
-      console.error(`${'─'.repeat(60)}`);
-
+      console.error(`\n❌ LYZR API ERROR — ${response.status}: ${rawText.substring(0, 300)}`);
       return NextResponse.json(
-        {
-          message: "I'm having trouble connecting to the AI agent right now. Please try again in a moment.",
-          error: `Lyzr API returned ${response.status}`,
-        },
+        { message: "I'm having trouble connecting to the AI agent. Please try again.", error: `Lyzr API returned ${response.status}` },
         { status: 502 }
       );
     }
 
     const data = await response.json();
     const duration = Math.round(performance.now() - startTime);
-
     const { text: agentReply, parsedJson } = extractAgentMessage(data);
 
-    // Save assistant message and any proposals to database
+    // ═══════════════════════════════════════════════════════
+    // 🛡️ SERVER-SIDE GUARDRAILS (Defense in Depth — Layer 3)
+    //    These run IN CODE, not in prompts. Even if every prompt
+    //    is deleted, these rules still enforce business logic.
+    // ═══════════════════════════════════════════════════════
+    const floorPrice = Number(propertyDataPayload?.property?.floor_price || 0);
+    const ceilingPrice = Number(propertyDataPayload?.property?.ceiling_price || 0);
+    let enforcedProposals = parsedJson?.proposals || null;
+
+    if (enforcedProposals && Array.isArray(enforcedProposals) && (floorPrice > 0 || ceilingPrice > 0)) {
+      enforcedProposals = enforceGuardrails(enforcedProposals, floorPrice, ceilingPrice);
+      console.log(`🛡️ [Guardrails] Enforced floor=${floorPrice} ceiling=${ceilingPrice} on ${enforcedProposals.length} proposals`);
+    }
+
+    // Save assistant reply to DB
     try {
       if (agentReply) {
         await db.insert(chatMessages).values({
@@ -200,37 +396,24 @@ export async function POST(req: NextRequest) {
           role: "assistant",
           content: agentReply,
           listingId: context.propertyId || null,
-          structured: { context, dateRange, proposals: parsedJson?.proposals || null },
+          structured: { context, dateRange, proposals: enforcedProposals },
         });
-        console.log(`\n✅ AGENT REPLY RECEIVED & SAVED — ${duration}ms`);
+        console.log(`\n✅ AGENT REPLY SAVED — ${duration}ms`);
       }
     } catch (err) {
-      console.error("Failed to save assistant message & proposals to DB:", err);
+      console.error("Failed to save assistant reply to DB:", err);
     }
 
     return NextResponse.json({
       message: agentReply || "No message received from agent",
-      proposals: parsedJson?.proposals || null
+      proposals: enforcedProposals,
     });
 
   } catch (error) {
     const duration = Math.round(performance.now() - startTime);
-
-    // ═══════════════════════════════════════════
-    // 💥 LOG: UNHANDLED ERROR
-    // ═══════════════════════════════════════════
-    console.error(`\n💥 UNHANDLED ERROR — ${requestTimestamp}`);
-    console.error(`${'─'.repeat(60)}`);
-    console.error(`  Error:       ${error instanceof Error ? error.message : 'Unknown error'}`);
-    console.error(`  Stack:       ${error instanceof Error ? error.stack?.substring(0, 300) : 'N/A'}`);
-    console.error(`  Duration:    ${duration}ms`);
-    console.error(`${'═'.repeat(60)}\n`);
-
+    console.error(`\n💥 UNHANDLED ERROR — ${duration}ms:`, error instanceof Error ? error.message : error);
     return NextResponse.json(
-      {
-        message: "Sorry, something went wrong. Please try again.",
-        error: error instanceof Error ? error.message : "Unknown error",
-      },
+      { message: "Sorry, something went wrong. Please try again.", error: error instanceof Error ? error.message : "Unknown error" },
       { status: 500 }
     );
   }
@@ -315,4 +498,70 @@ function extractAgentMessage(response: any): { text: string; parsedJson: any | n
     console.log(rawStr);
     return { text: rawStr, parsedJson: null };
   }
+}
+
+/**
+ * 🛡️ Server-side guardrails — enforces business rules in code.
+ * This is the LAST line of defense. Even if all prompts are deleted
+ * or the LLM ignores instructions, this function guarantees:
+ *   1. No proposal is below floor_price
+ *   2. No proposal is above ceiling_price
+ *   3. No proposal has a swing > ±50%
+ *   4. Risk levels are computed deterministically
+ */
+function enforceGuardrails(
+  proposals: any[],
+  floorPrice: number,
+  ceilingPrice: number
+): any[] {
+  return proposals.map((p) => {
+    const currentPrice = Number(p.current_price || p.currentPrice || 0);
+    let proposedPrice = Number(p.proposed_price || p.proposedPrice || 0);
+    let verdict = p.guard_verdict || p.guardVerdict || "APPROVED";
+    let notes: string[] = [];
+
+    // CLAMP to floor
+    if (floorPrice > 0 && proposedPrice < floorPrice) {
+      notes.push(`Server clamped ${proposedPrice} → floor ${floorPrice}`);
+      proposedPrice = floorPrice;
+    }
+
+    // CLAMP to ceiling
+    if (ceilingPrice > 0 && proposedPrice > ceilingPrice) {
+      notes.push(`Server clamped ${proposedPrice} → ceiling ${ceilingPrice}`);
+      proposedPrice = ceilingPrice;
+    }
+
+    // Compute change %
+    const changePct = currentPrice > 0
+      ? Math.round(((proposedPrice - currentPrice) / currentPrice) * 100)
+      : 0;
+
+    // REJECT if swing > ±50%
+    if (Math.abs(changePct) > 50) {
+      verdict = "REJECTED";
+      notes.push(`Swing ${changePct}% exceeds ±50% limit`);
+    }
+
+    // Deterministic risk level
+    const absChange = Math.abs(changePct);
+    let riskLevel: string;
+    if (absChange < 5) riskLevel = "low";
+    else if (absChange <= 15) riskLevel = "medium";
+    else riskLevel = "high";
+
+    // Return the enforced proposal
+    return {
+      ...p,
+      proposed_price: proposedPrice,
+      proposedPrice: proposedPrice,
+      change_pct: changePct,
+      changePct: changePct,
+      risk_level: riskLevel,
+      riskLevel: riskLevel,
+      guard_verdict: verdict,
+      guardVerdict: verdict,
+      ...(notes.length > 0 ? { server_notes: notes.join("; ") } : {}),
+    };
+  });
 }

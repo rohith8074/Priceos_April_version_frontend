@@ -187,6 +187,7 @@ export class InternetResearchAgent {
         }
 
         try {
+            console.log(`[InternetResearchAgent] Querying: "${userQuery.substring(0, 50)}..."`);
             const response = await fetch(this.baseUrl, {
                 method: "POST",
                 headers: {
@@ -216,6 +217,8 @@ export class InternetResearchAgent {
 
             // Parse the JSON response from Perplexity
             const result = this.parseResponse(content, queryType, location, startDate, endDate);
+
+            console.log(`[InternetResearchAgent] Success: Received ${result.findings.length} findings.`);
 
             // Cache the result
             researchCache.set(cacheKey, {

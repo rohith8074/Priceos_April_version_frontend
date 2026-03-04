@@ -209,6 +209,11 @@ export async function syncConversationsToDb(
       }
     );
 
+    if (convRes.status === 403) {
+      console.warn("⚠️ Hostaway API: 403 Forbidden. Your token likely lacks 'Inbox' permissions.");
+      return { synced: 0, errors: 1 };
+    }
+
     if (!convRes.ok) throw new Error(`Hostaway API returned ${convRes.status}`);
 
     const convJson = await convRes.json();

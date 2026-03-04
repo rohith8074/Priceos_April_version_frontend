@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, ExternalLink, BarChart3, RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, ExternalLink, BarChart3, RefreshCw, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { useContextStore } from "@/stores/context-store";
 
@@ -72,7 +72,7 @@ export function BenchmarkWidget({ listingId, dateFrom, dateTo, refreshKey = 0 }:
     const [comps, setComps] = useState<BenchmarkComp[]>([]);
     const [loading, setLoading] = useState(false);
     const [hasData, setHasData] = useState(false);
-    const { triggerMarketRefresh } = useContextStore();
+    const { triggerMarketRefresh, isMarketAnalysisRunning } = useContextStore();
 
     const fetchBenchmark = useCallback(async () => {
         if (!listingId) return;
@@ -105,19 +105,21 @@ export function BenchmarkWidget({ listingId, dateFrom, dateTo, refreshKey = 0 }:
         ? Number(summary.yourPrice) - Number(summary.p50Rate)
         : null;
 
+    const isPending = loading || isMarketAnalysisRunning;
+
     return (
-        <div className="border border-border/50 rounded-xl overflow-hidden bg-background text-foreground">
+        <div className="border border-border/50 rounded-xl overflow-hidden bg-background text-foreground shadow-sm">
             {/* Header */}
-            <button
+            <div
                 onClick={() => setOpen(o => !o)}
-                className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors"
+                className="w-full flex items-center justify-between px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer"
             >
                 <div className="flex items-center gap-2">
                     <BarChart3 className="h-4 w-4 text-[#f39c12]" />
                     <span className="text-[11px] font-black uppercase tracking-widest">Benchmark Intelligence</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    {hasData && (
+                    {hasData && !isPending && (
                         <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-[#f39c12]/10 text-[#f39c12] border border-[#f39c12]/30">
                             {comps.length} comps
                         </span>
@@ -130,30 +132,46 @@ export function BenchmarkWidget({ listingId, dateFrom, dateTo, refreshKey = 0 }:
                         className="p-1 rounded-full hover:bg-muted text-muted-foreground transition-colors"
                         title="Refresh from database"
                     >
-                        <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
+                        <RefreshCw className={`h-3 w-3 ${isPending ? "animate-spin" : ""}`} />
                     </button>
                     {open ? <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />}
                 </div>
-            </button>
+            </div>
 
             {open && (
                 <div className="p-3 space-y-3 animate-in slide-in-from-top-1 duration-200">
-                    {loading && (
-                        <div className="flex items-center justify-center py-6 text-muted-foreground gap-2">
-                            <div className="h-4 w-4 border-2 border-[#f39c12]/40 border-t-[#f39c12] rounded-full animate-spin" />
-                            <span className="text-xs">Loading benchmark data…</span>
+                    {isPending && (
+                        <div className="flex flex-col items-center justify-center py-10 text-muted-foreground gap-3">
+                            <div className="relative">
+                                <BarChart3 className="h-10 w-10 text-[#f39c12]/20" />
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <Loader2 className="h-5 w-5 animate-spin text-[#f39c12]" />
+                                </div>
+                            </div>
+                            <div className="text-center">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-[#f39c12]">
+                                    {isMarketAnalysisRunning ? "Running Live Analysis..." : "Fetching Intelligence..."}
+                                </p>
+                                <p className="text-[9px] opacity-60 mt-1 italic">
+                                    {isMarketAnalysisRunning ? "Analyzing competitor rates & market position" : "Connecting to database"}
+                                </p>
+                            </div>
                         </div>
                     )}
 
-                    {!loading && !hasData && (
-                        <div className="text-center py-5 text-muted-foreground">
-                            <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                            <p className="text-[11px] font-medium">No benchmark data yet</p>
-                            <p className="text-[10px] opacity-60 mt-0.5">Run Market Analysis to populate competitor rates</p>
+                    {!isPending && !hasData && (
+                        <div className="text-center py-8 text-muted-foreground">
+                            <div className="h-14 w-14 rounded-full bg-muted/30 flex items-center justify-center mx-auto mb-3">
+                                <BarChart3 className="h-7 w-7 opacity-20" />
+                            </div>
+                            <p className="text-[11px] font-black uppercase tracking-widest text-foreground/70">No benchmark data yet</p>
+                            <p className="text-[10px] opacity-60 mt-1 max-w-[200px] mx-auto leading-relaxed">
+                                Run <strong className="text-foreground">Market Analysis</strong> to populate competitor rates and positioning insights
+                            </p>
                         </div>
                     )}
 
-                    {!loading && hasData && summary && (
+                    {!isPending && hasData && summary && (
                         <>
                             {/* Verdict pill */}
                             {vc && (

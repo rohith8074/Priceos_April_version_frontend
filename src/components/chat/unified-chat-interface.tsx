@@ -74,6 +74,8 @@ import { DateRangePicker } from "./date-range-picker";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { PriceGuardrailsEditor } from "./price-guardrails-editor";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { toast } from "sonner";
 
@@ -152,8 +154,29 @@ export function UnifiedChatInterface({ properties }: Props) {
   // Generate a unique session ID
   const generateSessionId = () => `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-  const [sessionId, setSessionId] = useState(generateSessionId());
+  // Session is keyed to property + date range so each Market Analysis run gets an isolated chat
+  const buildSessionId = (pid: number | undefined, from: string, to: string) =>
+    pid ? `property-${pid}-${from}-${to}` : generateSessionId();
+
+  const [sessionId, setSessionId] = useState<string>(() =>
+    buildSessionId(
+      propertyId || undefined,
+      dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : "start",
+      dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : "end"
+    )
+  );
   const [isSettingUp, setIsSettingUp] = useState(false);
+
+  // Price guardrails — local state so UI updates immediately after save
+  const activeListing = properties.find(p => p.id === propertyId);
+  const [priceFloor, setPriceFloor] = useState<number>(Number(activeListing?.priceFloor || 0));
+  const [priceCeiling, setPriceCeiling] = useState<number>(Number(activeListing?.priceCeiling || 0));
+
+  // Keep guardrails in sync when property changes
+  useEffect(() => {
+    setPriceFloor(Number(activeListing?.priceFloor || 0));
+    setPriceCeiling(Number(activeListing?.priceCeiling || 0));
+  }, [propertyId]);
 
   // Agent vs Guest Chat Toggle
   const [chatMode, setChatMode] = useState<"agent" | "guests">("agent");
@@ -295,34 +318,34 @@ export function UnifiedChatInterface({ properties }: Props) {
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    // Build the expected session ID for this property + date range combo
+    const expectedSessionId = buildSessionId(
+      contextType === "property" && propertyId ? propertyId : undefined,
+      dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : "start",
+      dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : "end"
+    );
+
     const fetchHistory = async () => {
       setIsHistoryLoading(true);
       try {
         const propParam = contextType === "property" && propertyId ? propertyId : "null";
-        const res = await fetch(`/api/chat/history?propertyId=${propParam}`);
+        const res = await fetch(`/api/chat/history?propertyId=${propParam}&sessionId=${encodeURIComponent(expectedSessionId)}`);
 
         if (res.ok) {
           const data = await res.json();
           if (data.messages && data.messages.length > 0) {
             setMessages(data.messages);
             setIsChatActive(true);
-
-            // Try to extract the last session ID to maintain continuity
-            const lastSessionData = data.rawHistory?.[data.rawHistory.length - 1];
-            if (lastSessionData?.sessionId) {
-              setSessionId(lastSessionData.sessionId);
-            } else {
-              setSessionId(generateSessionId());
-            }
+            setSessionId(expectedSessionId);
           } else {
             setMessages([]);
             setIsChatActive(false);
-            setSessionId(generateSessionId());
+            setSessionId(expectedSessionId);
           }
         }
       } catch (err) {
         console.error("Failed to fetch chat history", err);
-        setSessionId(generateSessionId());
+        setSessionId(expectedSessionId);
         setMessages([]);
         setIsChatActive(false);
       } finally {
@@ -331,7 +354,7 @@ export function UnifiedChatInterface({ properties }: Props) {
     };
 
     fetchHistory();
-  }, [contextType, propertyId]);
+  }, [contextType, propertyId, dateRange?.from?.getTime(), dateRange?.to?.getTime()]);
 
   // Fetch calendar metrics when date range or property changes
   useEffect(() => {
@@ -373,16 +396,45 @@ export function UnifiedChatInterface({ properties }: Props) {
     fetchMetrics();
   }, [contextType, propertyId, dateRange?.from?.getTime(), dateRange?.to?.getTime(), setGlobalMetrics]);
 
+  const guardrailsNotSet = !priceFloor && !priceCeiling;
+
   const handleMarketSetup = async () => {
     if (isSettingUp || !dateRange?.from || !dateRange?.to) return;
 
-    setIsSettingUp(true);
+    // Block if guardrails are not set
+    if (guardrailsNotSet) {
+      toast.warning("Set Price Guardrails First", {
+        description: "Click the \"Set Guardrails\" button above to define your floor and ceiling price before running Market Analysis.",
+        duration: 5000,
+      });
+      return;
+    }
 
-    toast("Running Market Analysis...", {
-      description: "Agents are fetching real-time data for your selected dates...",
+    setIsSettingUp(true);
+    useContextStore.getState().setIsMarketAnalysisRunning(true);
+
+    toast("Initializing Market Analysis...", {
+      description: "Setting up research agents for your location...",
     });
 
     try {
+      // Simulate multiple toast stages for better UX since it takes a few seconds
+      setTimeout(() => {
+        if (useContextStore.getState().isMarketAnalysisRunning) {
+          toast("Searching Internet...", {
+            description: "Scanning for global events, holidays, and competitor rates...",
+          });
+        }
+      }, 3000);
+
+      setTimeout(() => {
+        if (useContextStore.getState().isMarketAnalysisRunning) {
+          toast("Benchmarking...", {
+            description: "Calculating market percentiles and price positioning...",
+          });
+        }
+      }, 7000);
+
       const response = await fetch("/api/market-setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -408,13 +460,38 @@ export function UnifiedChatInterface({ properties }: Props) {
         throw new Error(data.error || "Analysis failed");
       }
 
-      // Once setup is done, activate chat silently
+      // ── New session per date range: clear chat history and generate a fresh session ID ──
+      const newFrom = format(dateRange.from, "yyyy-MM-dd");
+      const newTo = format(dateRange.to, "yyyy-MM-dd");
+      const newSessionId = buildSessionId(propertyId || undefined, newFrom, newTo);
+
+      setMessages([]);          // clear chat history for this new session
+      setSessionId(newSessionId); // isolate Lyzr conversation
       setIsChatActive(true);
 
-      toast.success("Analysis Complete", {
-        description: `Analyzed ${data.eventsCount} market signals. Chat is now active.`,
+      console.log("🔍 Market Analysis Data Received:", {
+        eventsCount: data.eventsCount,
+        hasTrace: !!data.sqlTrace,
+        traceLength: data.sqlTrace?.length
+      });
+
+      // ── TECHNICAL PIPELINE TRACE ──
+      // Log to console for debugging, don't clutter the chat UI
+      if (data.sqlTrace && data.sqlTrace.length > 0) {
+        console.log(`🛠️ [Data Pipeline] ${data.sqlTrace.length} queries executed:`);
+        data.sqlTrace.forEach((t: any) => console.log(`  → ${t.name}: ${t.sql.substring(0, 80)}...`));
+      }
+
+      // Start with a clean chat — no trace messages
+      setMessages([]);
+
+      toast.success("Market Analysis Complete", {
+        description: `Analyzed ${data.eventsCount} market signals in ${data.duration}. Ask me anything!`,
       });
       triggerMarketRefresh();
+      // Data injection now happens automatically on the user's first real message
+      // in route.ts — no need for a separate grounding call.
+
 
     } catch (error) {
       console.error("Market Analysis Error:", error);
@@ -423,6 +500,7 @@ export function UnifiedChatInterface({ properties }: Props) {
       });
     } finally {
       setIsSettingUp(false);
+      useContextStore.getState().setIsMarketAnalysisRunning(false);
     }
   };
 
@@ -459,7 +537,11 @@ export function UnifiedChatInterface({ properties }: Props) {
             metrics: calendarMetrics ? {
               occupancy: calendarMetrics.occupancy,
               bookedDays: calendarMetrics.bookedDays,
+              availableDays: calendarMetrics.availableDays,
+              blockedDays: calendarMetrics.blockedDays,
+              totalDays: calendarMetrics.totalDays,
               bookableDays: calendarMetrics.totalDays - calendarMetrics.blockedDays,
+              avgPrice: calendarMetrics.avgPrice,
             } : undefined
           },
           dateRange: dateRange ? {
@@ -581,6 +663,20 @@ export function UnifiedChatInterface({ properties }: Props) {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Price Guardrails Editor — shown when a property is selected */}
+            {contextType === "property" && propertyId && (
+              <PriceGuardrailsEditor
+                listingId={propertyId}
+                initialFloor={priceFloor}
+                initialCeiling={priceCeiling}
+                currencyCode={activeListing?.currencyCode || "AED"}
+                highlightIfZero
+                onSaved={(floor, ceiling) => {
+                  setPriceFloor(floor);
+                  setPriceCeiling(ceiling);
+                }}
+              />
+            )}
             <Button
               variant={isSidebarOpen ? "secondary" : "ghost"}
               size="sm"
@@ -627,16 +723,29 @@ export function UnifiedChatInterface({ properties }: Props) {
 
             {chatMode === "agent" && (
               <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleMarketSetup}
-                  disabled={isLoading || isSettingUp || !dateRange?.from || !dateRange?.to}
-                  className="h-9 gap-2 bg-background hover:bg-background/80 border-border/50 font-bold shadow-sm"
-                >
-                  <Settings className={`h-4 w-4 ${isSettingUp ? "animate-spin text-amber-500" : ""}`} />
-                  <span className="hidden sm:inline">{isSettingUp ? "Processing..." : "Market Analysis"}</span>
-                </Button>
+                <TooltipProvider delayDuration={100}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span tabIndex={0} className="inline-flex">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleMarketSetup}
+                          disabled={isLoading || isSettingUp || !dateRange?.from || !dateRange?.to || guardrailsNotSet}
+                          className="h-9 gap-2 bg-background hover:bg-background/80 border-border/50 font-bold shadow-sm"
+                        >
+                          <Settings className={`h-4 w-4 ${isSettingUp ? "animate-spin text-amber-500" : ""}`} />
+                          <span className="hidden sm:inline">{isSettingUp ? "Processing..." : "Market Analysis"}</span>
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    {guardrailsNotSet && (
+                      <TooltipContent side="bottom" className="bg-amber-600 text-white font-bold text-xs px-3 py-2 max-w-[240px] text-center">
+                        ⚠️ Please set the Guardrails first, then click Market Analysis
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
 
                 <div className="hidden sm:block h-6 w-px bg-border/50 mx-1" />
 
@@ -747,13 +856,26 @@ export function UnifiedChatInterface({ properties }: Props) {
 
               <div className="border-t p-4 bg-background">
                 <form onSubmit={handleSubmit} className="flex space-x-2">
-                  <Input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder={!isChatActive ? "Select date range and click 'Market Analysis' to start..." : "Ask about pricing, events, market rates..."}
-                    disabled={isLoading || !isChatActive}
-                    className="flex-1"
-                  />
+                  <TooltipProvider delayDuration={100}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex-1">
+                          <Input
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            placeholder={guardrailsNotSet ? "Please set the Guardrails and click on Market Analysis button" : !isChatActive ? "Select date range and click 'Market Analysis' to start..." : "Ask about pricing, events, market rates..."}
+                            disabled={isLoading || !isChatActive || guardrailsNotSet}
+                            className="w-full"
+                          />
+                        </div>
+                      </TooltipTrigger>
+                      {guardrailsNotSet && (
+                        <TooltipContent side="top" className="bg-amber-600 text-white font-bold text-xs px-3 py-2 max-w-[280px] text-center">
+                          ⚠️ Please set the Guardrails first, then click Market Analysis
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  </TooltipProvider>
                   <Button type="submit" disabled={isLoading || !input.trim() || !isChatActive}>
                     {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>

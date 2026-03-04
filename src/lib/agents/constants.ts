@@ -1,8 +1,15 @@
-// PriceOS Lyzr Agents (Created: 2026-02-16)
-export const MANAGER_AGENT_ID = '6992c6ade9c656b13d173dc2'  // CRO (Chief Revenue Officer)
-export const EVENT_AGENT_ID = '6992c6ae63b7d55bbeb5ab2b'     // Event Intelligence
-export const MARKET_AGENT_ID = '6992c6b0ac205f4ba27c69c3'    // Market Scanner
-export const STRATEGY_AGENT_ID = '6992c6b11de6d4d0944ce3ac'  // Pricing Strategy
+// PriceOS Lyzr Agents (Updated: 2026-03-03 from live Lyzr Studio)
+export const CRO_ROUTER_AGENT_ID = '69998743f4d61186679a9515'     // CRO Router (orchestrator)
+export const PROPERTY_ANALYST_ID = '699987c35dbb137e7b66052e'     // Property Analyst
+export const BOOKING_INTELLIGENCE_ID = '699988262654671e44099318'  // Booking Intelligence
+export const MARKET_RESEARCH_ID = '699991985dbb137e7b660594'      // Market Research
+export const PRICE_GUARD_ID = '6999933b83d9dff0252dd86f'          // PriceGuard
+
+// Legacy exports (for backward compatibility)
+export const MANAGER_AGENT_ID = CRO_ROUTER_AGENT_ID
+export const EVENT_AGENT_ID = BOOKING_INTELLIGENCE_ID
+export const MARKET_AGENT_ID = MARKET_RESEARCH_ID
+export const STRATEGY_AGENT_ID = PRICE_GUARD_ID
 
 export const ACTIVITY_STEPS = [
   { id: 'events', label: 'Scanning events & demand signals', icon: 'Zap' },

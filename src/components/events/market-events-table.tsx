@@ -26,7 +26,14 @@ export function MarketEventsTable() {
 
     // We use the same context that the chat uses so the table updates dynamically 
     // if you switch from Portfolio to Property view.
-    const { contextType, propertyId, dateRange, marketRefreshTrigger, triggerMarketRefresh } = useContextStore();
+    const {
+        contextType,
+        propertyId,
+        dateRange,
+        marketRefreshTrigger,
+        triggerMarketRefresh,
+        isMarketAnalysisRunning
+    } = useContextStore();
 
     useEffect(() => {
         const fetchEvents = async () => {
@@ -53,11 +60,22 @@ export function MarketEventsTable() {
         fetchEvents();
     }, [contextType, propertyId, dateRange, marketRefreshTrigger]);
 
-    if (loading) {
+    if (loading || isMarketAnalysisRunning) {
         return (
-            <Card className="flex flex-col h-full border-none shadow-none bg-transparent">
-                <div className="flex-1 flex items-center justify-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <Card className="flex flex-col h-full min-h-[300px] border-dashed border-border/50 shadow-none bg-muted/5 animate-pulse">
+                <div className="flex-1 flex flex-col items-center justify-center gap-4">
+                    <div className="relative">
+                        <Loader2 className="h-10 w-10 animate-spin text-amber-500" />
+                        <Sparkles className="h-4 w-4 text-amber-500 absolute -top-1 -right-1 animate-bounce" />
+                    </div>
+                    <div className="text-center">
+                        <p className="text-sm font-black uppercase tracking-widest text-foreground">
+                            {isMarketAnalysisRunning ? "Analyzing Market..." : "Loading Signals..."}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground mt-1 font-medium italic">
+                            {isMarketAnalysisRunning ? "Agents are scanning for global events & local signals" : "Fetching latest intelligence from database"}
+                        </p>
+                    </div>
                 </div>
             </Card>
         );
@@ -65,10 +83,17 @@ export function MarketEventsTable() {
 
     if (error) {
         return (
-            <Card className="flex flex-col h-full border-red-100 shadow-none bg-red-50/50">
+            <Card className="flex flex-col h-full border-red-100 shadow-none bg-red-50/50 min-h-[200px]">
                 <div className="flex-1 flex flex-col items-center justify-center text-red-500 gap-2 p-6 text-center">
                     <AlertTriangle className="h-8 w-8 text-red-500 mb-2" />
-                    <p className="text-sm font-medium">{error}</p>
+                    <p className="text-sm font-black uppercase tracking-widest">Connection Error</p>
+                    <p className="text-xs font-medium opacity-80">{error}</p>
+                    <button
+                        onClick={() => triggerMarketRefresh()}
+                        className="mt-4 px-4 py-1.5 rounded-full bg-red-500 text-white text-[10px] font-black uppercase tracking-widest hover:bg-red-600 transition-colors"
+                    >
+                        Retry Sync
+                    </button>
                 </div>
             </Card>
         );
@@ -76,15 +101,18 @@ export function MarketEventsTable() {
 
     if (events.length === 0) {
         return (
-            <Card className="flex flex-col h-full border-dashed shadow-none bg-transparent">
-                <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-3 p-12 text-center">
-                    <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center">
-                        <CalendarIcon className="h-6 w-6 opacity-30" />
+            <Card className="flex flex-col h-full border-dashed border-border/50 shadow-none bg-muted/5 min-h-[350px]">
+                <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-5 p-12 text-center">
+                    <div className="h-16 w-16 rounded-full bg-background border border-border/50 shadow-sm flex items-center justify-center relative">
+                        <CalendarIcon className="h-7 w-7 opacity-20" />
+                        <div className="absolute -bottom-1 -right-1 bg-muted rounded-full p-1 border border-border/50">
+                            <Sparkles className="h-3 w-3 opacity-30" />
+                        </div>
                     </div>
-                    <div>
-                        <p className="font-medium text-sm text-foreground/70">No Market Signals Found</p>
-                        <p className="text-xs mt-1 max-w-[250px]">
-                            Use the "Setup" button in the chat to scan the internet for events in your date range.
+                    <div className="space-y-2">
+                        <p className="font-black text-sm text-foreground uppercase tracking-widest">No Market Signals Found</p>
+                        <p className="text-[11px] font-medium leading-relaxed max-w-[280px] mx-auto text-muted-foreground">
+                            Use the <strong className="text-foreground">"Market Analysis"</strong> button in the chat area to scan the internet for events in your date range.
                         </p>
                     </div>
                 </div>

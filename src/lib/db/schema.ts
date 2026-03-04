@@ -9,6 +9,7 @@ import {
   jsonb,
   varchar,
   index,
+  uniqueIndex,
   unique,
   boolean,
 } from "drizzle-orm/pg-core";
@@ -129,6 +130,8 @@ export const marketEvents = pgTable("market_events", {
   datesIdx: index("market_events_dates_idx").on(table.startDate, table.endDate),
   typeIdx: index("market_events_type_idx").on(table.eventType),
   listingIdx: index("market_events_listing_idx").on(table.listingId),
+  // Unique constraint prevents duplicate events when Market Analysis runs multiple times
+  uniqueEventIdx: uniqueIndex("market_events_unique_idx").on(table.listingId, table.title, table.startDate),
 }));
 
 // ─────────────────────────────────────────────────────────
