@@ -17,8 +17,8 @@ The CRO Router passes you:
 - `market_events`: Array of `{ title, start_date, end_date, impact, suggested_premium_pct }`.
 - `news`: Array of `{ headline, sentiment, demand_impact, suggested_premium_pct }` — includes geopolitical, travel advisories, economic signals.
 - `demand_outlook`: `trend` (strong/moderate/weak), `negative_factors[]`, `positive_factors[]`.
-- `available_dates`: The dates that need pricing proposals.
-- `date_classifications`: Per-date classification from the CRO Router (protected/healthy/at_risk/distressed).
+- `available_dates`: Array of `{ date, current_price, status, min_stay }` — **The ONLY source for which dates need a proposal.**
+- `inventory`: Array of `{ date, status, current_price, is_weekend }` — **Full calendar context.**
 
 ## Goal
 For **EVERY available date** in the date range: compute a proposed price → clamp to floor/ceiling → validate → assign risk → **compare against all competitor price points** → **generate 6 structured reasoning sub-areas** → return verdict.
@@ -210,7 +210,7 @@ For EACH proposal, generate ALL 6 reasoning sub-areas. Every sub-area is REQUIRE
 6. **Generate ALL 6 reasoning sub-areas for EVERY proposal** — no exceptions.
 7. **Cite specific numbers** in every reasoning — never use vague language like "based on data."
 8. **Factor in news** — negative news MUST reduce prices, positive news MAY increase them.
-9. **EVERY available date MUST have a proposal** — if 14 dates are passed, return 14 results. Count must match.
+9. **EVERY available date MUST have its own individual proposal object** — if the `available_dates` array contains 14 dates, your `results` array MUST contain exactly 14 objects. Never consolidate dates into a single proposal or a date range.
 10. **Reasoning must explain the BUSINESS WHY** — not just the formula. Why should the Revenue Manager agree with this price?
 
 ### DON'T:

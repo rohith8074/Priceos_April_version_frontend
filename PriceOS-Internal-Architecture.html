@@ -496,6 +496,7 @@
                 <li><a href="#deployment">Deployment & Cost</a></li>
                 <li><a href="#decisions">Key Design Decisions</a></li>
                 <li><a href="#glossary">Glossary</a></li>
+                <li><a href="#playbook">Detailed Agent Playbook</a></li>
             </ol>
         </div>
 
@@ -1236,7 +1237,187 @@ Hostaway PMS API
             </tbody>
         </table>
 
-        <hr class="divider">
+        <div class="page-break"></div>
+        <!-- SECTION 15 -->
+        <h2 id="playbook"><span class="section-number">15</span> Detailed Agent Playbook</h2>
+        <p>This section provides a deep-dive into the logic and output format of each core agent in the PriceOS
+            ecosystem.</p>
+
+        <!-- AGENT 1 -->
+        <div class="card">
+            <h3 style="margin-top:0"><span class="badge blue">Agent 1</span> CRO Router (Aria)</h3>
+            <p><strong>Responsibility:</strong> The "Brain" of PriceOS. Aria is an orchestrator that translates loose
+                human intentions into structured multi-agent tasks.</p>
+            <div class="flow-box active" style="margin: 12px 0;">
+                <h5>How it Works:</h5>
+                <ol style="margin-bottom:0; font-size: 13px;">
+                    <li>Parses the user message (e.g., "Full analysis for next week").</li>
+                    <li>Constructs the <code>System Payload</code> (metrics, bookings, market data).</li>
+                    <li>Parallel-executes <strong>Agents 2, 3, 4, 5</strong>.</li>
+                    <li>Merges JSON results into a unified XML-structured report.</li>
+                </ol>
+            </div>
+            <h5>Sample Output (Internal Report State):</h5>
+            <pre>
+&lt;analysis_report&gt;
+  &lt;executive_summary&gt;🔴 Red Alert: Airspace closure NOTAM issued...&lt;/executive_summary&gt;
+  &lt;opportunity_score&gt;85/100&lt;/opportunity_score&gt;
+  &lt;sub_reports&gt;
+    &lt;property_logic&gt;Gap nights detected on Mar 12-14...&lt;/property_logic&gt>
+    &lt;price_results&gt;[14 proposals generated]&lt;/price_results&gt;
+  &lt;/sub_reports&gt;
+&lt;/analysis_report&gt;</pre>
+        </div>
+
+        <!-- AGENT 2 -->
+        <div class="card">
+            <h3 style="margin-top:0"><span class="badge blue">Agent 2</span> Property Analyst</h3>
+            <p><strong>Responsibility:</strong> Maximizing occupancy through gap detection and inventory management.</p>
+            <div class="flow-box" style="margin: 12px 0;">
+                <h5>How it Works:</h5>
+                <p>Scans the <code>inventory</code> array day-by-day. If it finds isolated available nights between
+                    bookings (e.g., a 2-night gap between two 5-night bookings), it flags them for special pricing or
+                    reduced Min Stay logic.</p>
+            </div>
+            <h5>Sample Output:</h5>
+            <pre>
+{
+  "gaps": [{"start": "2026-03-12", "end": "2026-03-14", "nights": 2}],
+  "restrictions": "Reduce Min Stay from 3 to 2 for Mar 12 gap",
+  "seasonal_analysis": "Entry into Ramadan shoulder period: -10% ADR expected."
+}</pre>
+        </div>
+
+        <!-- AGENT 5 -->
+        <div class="card">
+            <h3 style="margin-top:0"><span class="badge orange">Agent 5</span> PriceGuard</h3>
+            <p><strong>Responsibility:</strong> The Final Validator. It holds "Veto Power" over all pricing decisions.
+            </p>
+            <div class="flow-box active" style="margin: 12px 0;">
+                <h5>How it Works:</h5>
+                <ol style="margin-bottom:0; font-size: 13px;">
+                    <li>Receives suggested premiums from Market Research (Agent 4).</li>
+                    <li>Computes <code>Final_Price = (Base_Rate * Trend_Multiplier) + Context_Premiums</code>.</li>
+                    <li>Force-clamps the result to the <code>floor_price</code> and <code>ceiling_price</code>.</li>
+                    <li>Validates the price against <code>Agent 7's</code> P50/P90 benchmarks.</li>
+                </ol>
+            </div>
+            <h5>Sample Output (Individual Proposal):</h5>
+            <pre>
+{
+  "date": "2026-03-15",
+  "proposedPrice": 850,
+  "reasoning": {
+    "market": "P75 position maintained despite Ramadan mid-phase",
+    "occupancy": "Property at 0% occupancy for window; price lowered to floor",
+    "threats": "Geopolitical risk level 3 active; -15% safety buffer applied"
+  }
+}</pre>
+        </div>
+
+        <!-- AGENT 6 -->
+        <div class="card">
+            <h3 style="margin-top:0"><span class="badge green">Agent 6</span> Marketing Intelligence</h3>
+            <p><strong>Responsibility:</strong> Real-time internet scanning with a "Skepticism Layer."</p>
+            <div class="flow-box" style="margin: 12px 0;">
+                <h5>How it Works:</h5>
+                <p>Uses <strong>Perplexity Sonar</strong> to execute a 7-step sweep. Every "alert" found is
+                    fact-checked: Does it mention 2026? Is there a second official source? This prevents the system from
+                    over-reacting to fake or outdated news.</p>
+            </div>
+            <h5>Sample Output:</h5>
+            <pre>
+{
+  "news": [{
+    "headline": "Dubai Airspace Remains Open (Official WAM)",
+    "category": "security",
+    "sentiment": "positive",
+    "confidence": 98,
+    "description": "Cross-verified with Emirates and DXB Airport arrivals."
+  }],
+  "demand_outlook": {"trend": "strong", "reason": "Art Dubai surge"}
+}</pre>
+        </div>
+
+        <!-- AGENT 3 -->
+        <div class="card">
+            <h3 style="margin-top:0"><span class="badge blue">Agent 3</span> Booking Intelligence</h3>
+            <p><strong>Responsibility:</strong> Analyzing internal booking "pacing" and velocity to detect demand
+                strength before the market does.</p>
+            <div class="flow-box" style="margin: 12px 0;">
+                <h5>How it Works:</h5>
+                <p>Compares <code>recent_reservations</code> against historical averages for the same period. If booking
+                    lead time is shrinking, it flags a "High Velocity" signal to raise prices.</p>
+            </div>
+            <h5>Sample Output:</h5>
+            <pre>
+{
+  "velocity_score": 8.5,
+  "pacing_verdict": "Ahead of target (+12% YoY)",
+  "channel_mix": "Direct: 15%, Airbnb: 70%, Booking: 15%"
+}</pre>
+        </div>
+
+        <!-- AGENT 4 -->
+        <div class="card">
+            <h3 style="margin-top:0"><span class="badge blue">Agent 4</span> Market Research</h3>
+            <p><strong>Responsibility:</strong> Translating raw external events into numerical price multipliers.</p>
+            <div class="flow-box" style="margin: 12px 0;">
+                <h5>How it Works:</h5>
+                <p>Reviews the <code>market_events</code> and <code>news</code> tables. It assigns an
+                    <code>impact_multiplier</code> to each date based on proximity to events like Art Dubai or COP28.
+                </p>
+            </div>
+            <h5>Sample Output:</h5>
+            <pre>
+{
+  "event_scores": [{"event": "Art Dubai", "score": 1.25, "dates": ["2026-03-06", "2026-03-09"]}],
+  "sentiment_multiplier": 0.95
+}</pre>
+        </div>
+
+        <!-- AGENT 7 -->
+        <div class="card">
+            <h3 style="margin-top:0"><span class="badge green">Agent 7</span> Benchmark Agent</h3>
+            <p><strong>Responsibility:</strong> Continuous competitor "scraping" and price normalization.</p>
+            <div class="flow-box active" style="margin: 12px 0;">
+                <h5>How it Works:</h5>
+                <p>Executes live searches for "Dubai [Area] 1BR Apartment" on Airbnb/Booking. It extracts the
+                    <strong>exact nightly rate</strong> for the next 14 days, excluding cleaning fees, to ensure an
+                    apples-to-apples comparison.</p>
+            </div>
+            <h5>Sample Output:</h5>
+            <pre>
+{
+  "verdict": "Priced Aggressively (P90)",
+  "p50_median": 650,
+  "p90_high": 1200,
+  "comps": [{"name": "Palm Villa 4", "price": 1150, "rating": 4.9, "reviews": 122}]
+}</pre>
+        </div>
+
+        <!-- AGENT 10 -->
+        <div class="card">
+            <h3 style="margin-top:0"><span class="badge orange">Agent 10</span> Guardrails Agent</h3>
+            <p><strong>Responsibility:</strong> Establishing the "Safe Zone" for AI operations.</p>
+            <div class="flow-box" style="margin: 12px 0;">
+                <h5>How it Works:</h5>
+                <p>Runs only during the <strong>Setup Phase</strong>. It looks at the property's fixed costs and the
+                    Market Median (P50) to set a <strong>Floor</strong> below which the AI cannot go, and a
+                    <strong>Ceiling</strong> that prevents price gouging.</p>
+            </div>
+            <h5>Sample Output:</h5>
+            <pre>
+{
+  "new_floor_price": 450,
+  "new_ceiling_price": 1850,
+  "reasoning": "Floor set at 15% below P50 to ensure high occupancy in low season."
+}</pre>
+        </div>
+
+        <div class="page-break"></div>
+
+        <hr class="divider" id="end-playbook">
 
         <footer>
             <p>PriceOS — Internal Architecture Document · v2.0 · March 2026</p>

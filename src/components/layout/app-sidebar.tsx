@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, MessageSquare, Activity, User } from "lucide-react";
+import { LayoutDashboard, MessageSquare, Activity, User, MessageCircle, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navigation = [
     { name: "Portfolio", href: "/dashboard", icon: LayoutDashboard },
     { name: "Agent Chat", href: "/agent-chat", icon: MessageSquare },
+    { name: "Guest Inbox", href: "/guest-chat", icon: MessageCircle },
     { name: "Pricing", href: "/pricing", icon: Activity },
-    // { name: "Database", href: "/db-viewer", icon: DatabaseIcon },
-    { name: "Users", href: "/users", icon: User },
+    { name: "Team", href: "/users", icon: Shield },
 ];
 
 export function AppSidebar() {

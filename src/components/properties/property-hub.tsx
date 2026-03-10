@@ -8,6 +8,8 @@ import { Bed, Bath, MapPin } from "lucide-react";
 import { ListingEditForm } from "@/components/properties/listing-edit-form";
 import { CalendarGrid } from "@/components/calendar/calendar-grid";
 import { SeasonalRulesTable } from "@/components/properties/seasonal-rules-table";
+import { AutopilotSettings } from "@/components/engine/autopilot-settings";
+import { RulesTable } from "@/components/engine/rules-table";
 import { ExpenseTable } from "@/components/finance/expense-table";
 import { OwnerStatementCard } from "@/components/finance/owner-statement-card";
 import { BookingsDataTable } from "@/components/bookings/bookings-data-table";
@@ -138,11 +140,10 @@ export function PropertyHub({
           />
         </TabsContent>
 
-        <TabsContent value="rules" className="mt-4">
-          <SeasonalRulesTable
-            rules={rules}
-            listingId={property.id}
-          />
+        <TabsContent value="rules" className="mt-4 space-y-8">
+          <AutopilotSettings listingId={property.id} />
+          <Separator />
+          <RulesTable listingId={property.id} />
         </TabsContent>
 
         <TabsContent value="financials" className="mt-4 space-y-6">

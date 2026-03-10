@@ -5,8 +5,10 @@ export default function middleware(request: NextRequest) {
   const { pathname, searchParams } = request.nextUrl;
 
   // Paths that are fully public (no auth required)
-  const publicPaths = ['/login', '/waitlist', '/api/auth', '/auth'];
+  const publicPaths = ['/login', '/waitlist', '/api/auth', '/auth', '/api/v1/auth'];
   const isPublicPath = publicPaths.some(path => pathname.startsWith(path));
+
+  const isV1Api = pathname.startsWith('/api/v1');
 
   // Check for Neon auth session cookies
   const sessionCookieNames = [
@@ -28,7 +30,12 @@ export default function middleware(request: NextRequest) {
     return response;
   }
 
-  // 1. If no session and trying to access private route, redirect to login
+  // 1. If v1 API, allow through (let the routes handle JWT for now)
+  if (isV1Api) {
+    return NextResponse.next();
+  }
+
+  // 2. If no session and trying to access private route, redirect to login
   if (!session && !isPublicPath) {
     return NextResponse.redirect(new URL('/login', request.url));
   }

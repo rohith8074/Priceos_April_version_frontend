@@ -12,7 +12,19 @@ import {
   uniqueIndex,
   unique,
   boolean,
+  pgEnum,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+
+// ─────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────
+export const ruleTypeEnum = pgEnum("rule_type", [
+  "SEASON",
+  "EVENT",
+  "ADMIN_BLOCK",
+  "LOS_DISCOUNT",
+]);
 
 // ─────────────────────────────────────────────────────────
 // Table 1: LISTINGS — Property Registry
@@ -37,6 +49,73 @@ export const listings = pgTable("listings", {
   priceCeiling: numeric("price_ceiling", { precision: 10, scale: 2 }).notNull().default('0'),
   ceilingReasoning: text("ceiling_reasoning"),
   guardrailsSource: text("guardrails_source").notNull().default("manual"), // 'manual' | 'ai'
+
+  // ── Autopilot Pricing Configuration ──
+  lastMinuteEnabled: boolean("last_minute_enabled").notNull().default(false),
+  lastMinuteDaysOut: integer("last_minute_days_out").notNull().default(7),
+  lastMinuteDiscountPct: numeric("last_minute_discount_pct", {
+    precision: 5,
+    scale: 2,
+  })
+    .notNull()
+    .default("15"),
+  lastMinuteMinStay: integer("last_minute_min_stay"),
+
+  farOutEnabled: boolean("far_out_enabled").notNull().default(false),
+  farOutDaysOut: integer("far_out_days_out").notNull().default(90),
+  farOutMarkupPct: numeric("far_out_markup_pct", {
+    precision: 5,
+    scale: 2,
+  })
+    .notNull()
+    .default("10"),
+  farOutMinStay: integer("far_out_min_stay"),
+
+  dowPricingEnabled: boolean("dow_pricing_enabled").notNull().default(false),
+  dowDays: integer("dow_days")
+    .array()
+    .notNull()
+    .default([5, 6]),
+  dowPriceAdjPct: numeric("dow_price_adj_pct", {
+    precision: 5,
+    scale: 2,
+  })
+    .notNull()
+    .default("20"),
+  dowMinStay: integer("dow_min_stay"),
+
+  gapPreventionEnabled: boolean("gap_prevention_enabled")
+    .notNull()
+    .default(true),
+  minFragmentThreshold: integer("min_fragment_threshold")
+    .notNull()
+    .default(3),
+
+  gapFillEnabled: boolean("gap_fill_enabled").notNull().default(false),
+  gapFillLengthMin: integer("gap_fill_length_min").notNull().default(1),
+  gapFillLengthMax: integer("gap_fill_length_max").notNull().default(3),
+  gapFillDiscountPct: numeric("gap_fill_discount_pct", {
+    precision: 5,
+    scale: 2,
+  })
+    .notNull()
+    .default("10"),
+  gapFillOverrideCico: boolean("gap_fill_override_cico")
+    .notNull()
+    .default(true),
+
+  allowedCheckinDays: integer("allowed_checkin_days")
+    .array()
+    .notNull()
+    .default([1, 1, 1, 1, 1, 1, 1]),
+  allowedCheckoutDays: integer("allowed_checkout_days")
+    .array()
+    .notNull()
+    .default([1, 1, 1, 1, 1, 1, 1]),
+  lowestMinStayAllowed: integer("lowest_min_stay_allowed")
+    .notNull()
+    .default(1),
+  defaultMaxStay: integer("default_max_stay").notNull().default(365),
 });
 
 // ─────────────────────────────────────────────────────────
@@ -53,6 +132,10 @@ export const inventoryMaster = pgTable("inventory_master", {
   minStay: integer("min_stay").notNull().default(1),
   maxStay: integer("max_stay").notNull().default(30),
   proposedPrice: numeric("proposed_price", { precision: 10, scale: 2 }),
+  proposedMinStay: integer("proposed_min_stay"),
+  proposedMaxStay: integer("proposed_max_stay"),
+  proposedClosedToArrival: boolean("proposed_closed_to_arrival"),
+  proposedClosedToDeparture: boolean("proposed_closed_to_departure"),
   changePct: integer("change_pct"),
   proposalStatus: text("proposal_status"),
   reasoning: text("reasoning"),
@@ -163,6 +246,9 @@ export const userSettings = pgTable("user_settings", {
   userId: text("user_id").notNull().unique(),
   fullName: text("full_name"),
   email: text("email"),
+  passwordHash: text("password_hash"),
+  refreshToken: text("refresh_token"),
+  role: text("role").default("user").notNull(),
   isApproved: boolean("is_approved").default(false).notNull(),
   lyzrApiKey: text("lyzr_api_key"),
   hostawayApiKey: text("hostaway_api_key"),
@@ -285,6 +371,63 @@ export const benchmarkData = pgTable("benchmark_data", {
 }));
 
 // ─────────────────────────────────────────────────────────
+// Table 11: PRICING_RULES — Rule Overrides
+// ─────────────────────────────────────────────────────────
+export const pricingRules = pgTable("pricing_rules", {
+  id: serial("id").primaryKey(),
+  listingId: integer("listing_id")
+    .notNull()
+    .references(() => listings.id, { onDelete: "cascade" }),
+  ruleType: ruleTypeEnum("rule_type").notNull(),
+  name: text("name").notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  priority: integer("priority").notNull().default(0),
+
+  // Conditions
+  startDate: date("start_date"),
+  endDate: date("end_date"),
+  daysOfWeek: integer("days_of_week").array(),
+  minNights: integer("min_nights"),
+
+  // Actions
+  priceOverride: numeric("price_override", { precision: 10, scale: 2 }),
+  priceAdjPct: numeric("price_adj_pct", { precision: 5, scale: 2 }),
+  minPriceOverride: numeric("min_price_override", {
+    precision: 10,
+    scale: 2,
+  }),
+  maxPriceOverride: numeric("max_price_override", {
+    precision: 10,
+    scale: 2,
+  }),
+  minStayOverride: integer("min_stay_override"),
+  isBlocked: boolean("is_blocked").notNull().default(false),
+  closedToArrival: boolean("closed_to_arrival").notNull().default(false),
+  closedToDeparture: boolean("closed_to_departure").notNull().default(false),
+  suspendLastMinute: boolean("suspend_last_minute").notNull().default(false),
+  suspendGapFill: boolean("suspend_gap_fill").notNull().default(false),
+
+  // Timestamps
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+// ─────────────────────────────────────────────────────────
+// Table 12: ENGINE_RUNS — Execution Logs
+// ─────────────────────────────────────────────────────────
+export const engineRuns = pgTable("engine_runs", {
+  id: serial("id").primaryKey(),
+  listingId: integer("listing_id")
+    .notNull()
+    .references(() => listings.id, { onDelete: "cascade" }),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  status: text("status").notNull(), // SUCCESS, FAILED
+  errorMessage: text("error_message"),
+  daysChanged: integer("days_changed"),
+  durationMs: integer("duration_ms"),
+});
+
+// ─────────────────────────────────────────────────────────
 // Type Exports
 // ─────────────────────────────────────────────────────────
 export type ListingRow = typeof listings.$inferSelect;
@@ -305,6 +448,10 @@ export type GuestSummaryRow = typeof guestSummaries.$inferSelect;
 export type NewGuestSummary = typeof guestSummaries.$inferInsert;
 export type BenchmarkDataRow = typeof benchmarkData.$inferSelect;
 export type NewBenchmarkData = typeof benchmarkData.$inferInsert;
+export type PricingRuleRow = typeof pricingRules.$inferSelect;
+export type NewPricingRule = typeof pricingRules.$inferInsert;
+export type EngineRunRow = typeof engineRuns.$inferSelect;
+export type NewEngineRun = typeof engineRuns.$inferInsert;
 
 // ─────────────────────────────────────────────────────────
 // Legacy Aliases (for migration period — remove after full refactor)

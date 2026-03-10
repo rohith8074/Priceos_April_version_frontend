@@ -13,6 +13,10 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
+import { AutopilotSettings } from "@/components/engine/autopilot-settings";
+import { RulesTable } from "@/components/engine/rules-table";
+import { Separator } from "@/components/ui/separator";
+import { Settings2 } from "lucide-react";
 
 interface SimulatedConversation {
     id: string;
@@ -94,22 +98,26 @@ export function SidebarTabbedView() {
         <div className="flex flex-col h-full bg-background overflow-hidden relative">
             <Tabs
                 value={activeSidebarTab}
-                onValueChange={(val) => setSidebarTab(val as "summary" | "signals" | "calendar")}
+                onValueChange={(val) => setSidebarTab(val as "summary" | "signals" | "calendar" | "rules")}
                 className="flex flex-col h-full"
             >
                 <div className="px-4 pt-4 border-b bg-muted/5 shrink-0 z-10">
-                    <TabsList className="grid w-full grid-cols-3 h-10 p-1 bg-muted/50 rounded-lg">
-                        <TabsTrigger value="summary" className="flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest">
-                            <Activity className="h-3 w-3" />
-                            <span className="hidden sm:inline">Summary</span>
+                    <TabsList className="grid w-full grid-cols-4 h-11 p-1 bg-muted/50 rounded-lg">
+                        <TabsTrigger value="summary" className="flex flex-col items-center justify-center gap-0.5 px-0 text-[8px] sm:text-[9px] font-black uppercase tracking-wider">
+                            <Activity className="h-3.5 w-3.5" />
+                            <span className="truncate w-full text-center">Summary</span>
                         </TabsTrigger>
-                        <TabsTrigger value="signals" className="flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest">
-                            <Sparkles className="h-3 w-3" />
-                            <span className="hidden sm:inline">Signals</span>
+                        <TabsTrigger value="signals" className="flex flex-col items-center justify-center gap-0.5 px-0 text-[8px] sm:text-[9px] font-black uppercase tracking-wider">
+                            <Sparkles className="h-3.5 w-3.5" />
+                            <span className="truncate w-full text-center">Signals</span>
                         </TabsTrigger>
-                        <TabsTrigger value="calendar" className="flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest">
-                            <Calendar className="h-3 w-3" />
-                            <span className="hidden sm:inline">Calendar</span>
+                        <TabsTrigger value="calendar" className="flex flex-col items-center justify-center gap-0.5 px-0 text-[8px] sm:text-[9px] font-black uppercase tracking-wider">
+                            <Calendar className="h-3.5 w-3.5" />
+                            <span className="truncate w-full text-center">Calendar</span>
+                        </TabsTrigger>
+                        <TabsTrigger value="rules" className="flex flex-col items-center justify-center gap-0.5 px-0 text-[8px] sm:text-[9px] font-black uppercase tracking-wider">
+                            <Settings2 className="h-3.5 w-3.5" />
+                            <span className="truncate w-full text-center">Rules</span>
                         </TabsTrigger>
                     </TabsList>
                 </div>
@@ -362,6 +370,22 @@ export function SidebarTabbedView() {
                                 <Calendar className="h-12 w-12 mb-4 opacity-10" />
                                 <p className="text-sm font-medium">Calendar Data Unavailable</p>
                                 <p className="text-xs mt-1">Select a property and date range to view availability.</p>
+                            </div>
+                        )}
+                    </TabsContent>
+
+                    <TabsContent value="rules" className="h-full m-0 p-0 overflow-auto focus-visible:ring-0">
+                        {showData ? (
+                            <div className="p-4 space-y-6">
+                                <AutopilotSettings listingId={propertyId!} />
+                                <Separator />
+                                <RulesTable listingId={propertyId!} />
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center h-full text-center p-8 text-muted-foreground">
+                                <Settings2 className="h-12 w-12 mb-4 opacity-10" />
+                                <p className="text-sm font-medium">Pricing Rules Unavailable</p>
+                                <p className="text-xs mt-1">Select a property to view and manage dynamic pricing rules.</p>
                             </div>
                         )}
                     </TabsContent>

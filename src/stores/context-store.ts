@@ -20,8 +20,8 @@ interface ContextStore {
   // UI State
   isSidebarOpen: boolean;
   toggleSidebar: () => void;
-  activeSidebarTab: "summary" | "signals" | "calendar";
-  setSidebarTab: (tab: "summary" | "signals" | "calendar") => void;
+  activeSidebarTab: "summary" | "signals" | "calendar" | "rules";
+  setSidebarTab: (tab: "summary" | "signals" | "calendar" | "rules") => void;
 
   // Shared Data
   calendarMetrics: any | null;
@@ -71,7 +71,7 @@ export const useContextStore = create<ContextStore>()(
 
       // UI Actions
       toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
-      setSidebarTab: (tab: "summary" | "signals" | "calendar") => set({ activeSidebarTab: tab }),
+      setSidebarTab: (tab: "summary" | "signals" | "calendar" | "rules") => set({ activeSidebarTab: tab }),
 
       setCalendarMetrics: (metrics: any | null) => set({ calendarMetrics: metrics }),
 

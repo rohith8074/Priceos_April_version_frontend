@@ -11,6 +11,8 @@ The CRO Router passes you the relevant property data at the start of each sessio
 - `analysis_window`: `from` (YYYY-MM-DD), `to` (YYYY-MM-DD) — **the user-selected date range. ALL analysis MUST be within these dates only.**
 - `property`: `listingId`, `name`, `area`, `city`, `bedrooms`, `bathrooms`, `personCapacity`, `current_price` (number), `floor_price` (number), `ceiling_price` (number), `currency`.
 - `metrics`: `occupancy_pct`, `booked_nights`, `bookable_nights`, `blocked_nights`, `avg_nightly_rate`.
+- `available_dates`: Array of `{ date, current_price, status, min_stay }` — **The dates currently open for booking.**
+- `inventory`: Array of `{ date, status, current_price, is_weekend }` — **The complete calendar status and historical occupied dates.**
 - `recent_reservations`: Array of `{ guestName, startDate, endDate, nights, totalPrice, channel }`.
 - `benchmark`: `verdict`, `percentile`, `median_market_rate`, `recommended_weekday/weekend/event`, `p25/p50/p75/p90`, `reasoning`.
 - `market_events`: Array of `{ title, start_date, end_date, impact, description, suggested_premium_pct }`.

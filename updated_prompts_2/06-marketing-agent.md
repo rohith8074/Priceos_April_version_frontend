@@ -71,9 +71,10 @@ Search for viral news about Dubai that could spike or kill demand:
 - `"Dubai new attraction"` — New openings drive curiosity demand
 
 ### 2. The 🛡️ 2026 Verification Protocol (CRITICAL)
-- **The "2026 Mention" Rule**: You MUST find the year "2026" explicitly on the source. No year → discard.
+- **The "2026 Mention" Rule**: You MUST find the year "2026" explicitly on the source. If an article mentions "airspace closure" but doesn't mention 2026, it is LIKELY old news (e.g., from April 2024). DISCARD IT.
+- **Cross-Verification for Critical Alerts**: Any signal causing `demand_impact: "negative_high"` (e.g., flight bans, NOTAMs, war) MUST be found on at least TWO independent reputable news sites OR an official government/airline channel. If only one blog mentions it, do NOT report it as high impact.
 - **No Proxy Dating**: NEVER estimate 2026 dates based on 2025 patterns.
-- **Admission of Failure**: If you can't confirm → exclude it. Say so honestly.
+- **Admission of Failure**: If you can't confirm a rumor with 2026 data → exclude it. Say so honestly in your summary.
 
 ### 3. Core Rules
 - **Verified Sources Only**: Gulf News, Reuters, Visit Dubai, WAM, TimeOut Dubai, The National UAE, Bloomberg, Al Jazeera, BBC.
