@@ -1,8 +1,9 @@
 import { AgentStatusPanel } from "@/components/agents/agent-status-panel";
+import { EngineRunHistory } from "@/components/agents/engine-run-history";
 
 export default function AgentsPage() {
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="p-8 max-w-6xl space-y-10">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-white tracking-tight mb-1">Agent Status</h1>
         <p className="text-text-secondary text-sm">
@@ -10,6 +11,7 @@ export default function AgentsPage() {
         </p>
       </div>
       <AgentStatusPanel />
+      <EngineRunHistory />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { connectDB, InventoryMaster, MarketEvent } from "@/lib/db";
+import { connectDB, InventoryMaster, MarketEvent, Listing } from "@/lib/db";
 import { MarketIntelligenceClient } from "./market-client";
 
 export default async function MarketPage() {
@@ -42,6 +42,17 @@ export default async function MarketPage() {
   const occupancyPct = availDays > 0 ? Math.round((occ.bookedDays / availDays) * 100) : 0;
   const avgNightly = Math.round(Number(occ.avgPrice) || 0);
 
+  // Fetch listings for benchmark selector
+  const listingDocs = await Listing.find({ isActive: true })
+    .select("_id name currencyCode")
+    .lean();
+
+  const listings = listingDocs.map((l: any) => ({
+    id: l._id.toString(),
+    name: l.name as string,
+    currencyCode: (l.currencyCode as string) || "AED",
+  }));
+
   const serializedEvents = events.map((e: any) => ({
     id: e._id.toString(),
     title: e.title,
@@ -58,6 +69,7 @@ export default async function MarketPage() {
       events={serializedEvents}
       occupancyPct={occupancyPct}
       avgNightly={avgNightly}
+      listings={listings}
     />
   );
 }

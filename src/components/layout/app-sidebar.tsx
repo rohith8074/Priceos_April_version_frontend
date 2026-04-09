@@ -7,9 +7,6 @@ import {
   TrendingUp,
   Globe,
   MessageSquare,
-  Database,
-  Cpu,
-  Activity,
   Lightbulb,
   Settings,
   HelpCircle,
@@ -19,6 +16,7 @@ import {
   Bot,
   Users,
   MessagesSquare,
+  GitMerge,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -29,16 +27,14 @@ const BUSINESS_GROUP = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Pricing", href: "/pricing", icon: TrendingUp },
   { name: "Market", href: "/market", icon: Globe },
+  { name: "Insights", href: "/insights", icon: Lightbulb, showBadge: true },
   { name: "Agent Chat", href: "/agent-chat", icon: MessagesSquare },
-  { name: "Guest Inbox", href: "/guest-chat", icon: MessageSquare },
+  { name: "Guest Inbox", href: "/guest-chat", icon: MessageSquare, showGuestBadge: true },
 ];
 
 const PIPELINE_GROUP = [
   { name: "Agents", href: "/agents", icon: Bot, showAgentBadge: true },
-  { name: "Sources", href: "/sync?tab=sources", icon: Database },
-  { name: "Detectors", href: "/sync?tab=detectors", icon: Cpu },
-  { name: "Signals", href: "/sync?tab=signals", icon: Activity },
-  { name: "Insights", href: "/insights", icon: Lightbulb, showBadge: true },
+  { name: "Sync", href: "/sync", icon: GitMerge },
 ];
 
 export function AppSidebar() {
@@ -50,11 +46,11 @@ export function AppSidebar() {
   const [pendingProposals, setPendingProposals] = useState(0);
   const [pendingInsightsCount, setPendingInsightsCount] = useState(0);
   const [warningAgents, setWarningAgents] = useState(0);
+  const [needsReplyCount, setNeedsReplyCount] = useState(0);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  useEffect(() => { setMounted(true); }, []);
 
+  // Agent + insights counts
   useEffect(() => {
     fetch("/api/agents/status")
       .then((r) => r.ok ? r.json() : null)
@@ -69,9 +65,23 @@ export function AppSidebar() {
       .catch(() => {});
   }, []);
 
+  // Guest inbox unread count from Hostaway conversations
+  useEffect(() => {
+    fetch("/api/hostaway/conversations/cached")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        if (!data) return;
+        // Count conversations that need reply
+        const count = (data.conversations ?? []).filter(
+          (c: any) => c.unread || c.needsReply
+        ).length;
+        setNeedsReplyCount(count);
+      })
+      .catch(() => {});
+  }, []);
+
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
-
     if (href.includes("?")) {
       const [path, query] = href.split("?");
       if (pathname !== path) return false;
@@ -81,7 +91,6 @@ export function AppSidebar() {
       }
       return true;
     }
-
     return pathname.startsWith(href);
   };
 
@@ -91,17 +100,20 @@ export function AppSidebar() {
     icon: Icon,
     showBadge,
     showAgentBadge,
+    showGuestBadge,
   }: {
     name: string;
     href: string;
     icon: any;
     showBadge?: boolean;
     showAgentBadge?: boolean;
+    showGuestBadge?: boolean;
   }) => {
     const active = isActive(href);
 
     const insightsBadgeCount = showBadge ? pendingInsightsCount + pendingProposals : 0;
     const agentBadgeCount = showAgentBadge ? warningAgents : 0;
+    const guestBadgeCount = showGuestBadge ? needsReplyCount : 0;
 
     return (
       <Link
@@ -116,8 +128,9 @@ export function AppSidebar() {
         {active && (
           <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-amber rounded-r-full" />
         )}
-        <Icon className={cn("h-4 w-4", active ? "text-amber" : "text-text-tertiary group-hover:text-text-secondary")} />
+        <Icon className={cn("h-4 w-4 shrink-0", active ? "text-amber" : "text-text-tertiary group-hover:text-text-secondary")} />
         <span className="flex-1 truncate">{name}</span>
+
         {insightsBadgeCount > 0 && (
           <Badge className="bg-amber text-black hover:bg-amber/90 px-1.5 py-0 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold border-none">
             {insightsBadgeCount}
@@ -126,6 +139,11 @@ export function AppSidebar() {
         {agentBadgeCount > 0 && (
           <Badge className="bg-red-500/80 text-white hover:bg-red-500/70 px-1.5 py-0 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold border-none">
             {agentBadgeCount}
+          </Badge>
+        )}
+        {guestBadgeCount > 0 && (
+          <Badge className="bg-blue-500/80 text-white px-1.5 py-0 min-w-[18px] h-[18px] flex items-center justify-center text-[10px] font-bold border-none">
+            {guestBadgeCount}
           </Badge>
         )}
       </Link>
@@ -142,9 +160,9 @@ export function AppSidebar() {
         </div>
       </div>
 
-      {/* Navigation Groups */}
+      {/* Navigation */}
       <div className="flex flex-1 flex-col gap-6 py-4 overflow-y-auto custom-scrollbar">
-        {/* GROUP 1 — BUSINESS */}
+        {/* BUSINESS */}
         <div className="flex flex-col gap-1">
           <div className="px-6 mb-1">
             <span className="text-2xs font-bold uppercase tracking-widest text-text-disabled">Business</span>
@@ -154,7 +172,7 @@ export function AppSidebar() {
           ))}
         </div>
 
-        {/* GROUP 2 — PIPELINE */}
+        {/* PIPELINE */}
         <div className="flex flex-col gap-1">
           <div className="px-6 mb-1">
             <span className="text-2xs font-bold uppercase tracking-widest text-text-disabled">Pipeline</span>
@@ -165,7 +183,7 @@ export function AppSidebar() {
         </div>
       </div>
 
-      {/* Bottom Section */}
+      {/* Bottom */}
       <div className="pt-4 pb-6 flex flex-col gap-1 border-t border-border-subtle">
         <NavItem name="User Management" href="/users" icon={Users} />
         <NavItem name="Settings" href="/settings" icon={Settings} />
@@ -177,9 +195,7 @@ export function AppSidebar() {
           <span>How it works</span>
         </button>
         <button
-          onClick={() => {
-            router.push("/api/auth/logout");
-          }}
+          onClick={() => router.push("/api/auth/logout")}
           className="group flex items-center gap-3 px-3 py-2 text-body text-text-secondary hover:bg-surface-2 hover:text-text-primary transition-colors duration-200 rounded-md mx-2"
         >
           <LogOut className="h-4 w-4 text-text-tertiary group-hover:text-text-secondary" />

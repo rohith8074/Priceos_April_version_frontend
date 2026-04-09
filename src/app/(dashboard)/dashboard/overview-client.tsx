@@ -775,6 +775,14 @@ export function OverviewClient({
         </CardContent>
       </Card>
 
+      {/* Floating Ask AI button */}
+      <Link
+        href="/agent-chat"
+        className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-full bg-amber-500 text-black px-5 py-3 shadow-lg hover:bg-amber-400 transition-all duration-200 hover:shadow-amber-500/30 hover:shadow-xl group font-semibold text-sm"
+      >
+        <Bot className="h-4 w-4 shrink-0" />
+        <span>Ask AI</span>
+      </Link>
     </div>
   );
 }

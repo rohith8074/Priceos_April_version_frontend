@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { BenchmarkPanel } from "@/components/market/benchmark-panel";
 
 interface MarketEvent {
   id: string;
@@ -31,6 +32,7 @@ interface Props {
   events: MarketEvent[];
   occupancyPct: number;
   avgNightly: number;
+  listings: { id: string; name: string; currencyCode: string }[];
 }
 
 const IMPACT_STYLES: Record<string, string> = {
@@ -53,9 +55,10 @@ function daysUntil(dateStr: string) {
   return `In ${days}d`;
 }
 
-export function MarketIntelligenceClient({ events, occupancyPct, avgNightly }: Props) {
+export function MarketIntelligenceClient({ events, occupancyPct, avgNightly, listings }: Props) {
   const [scanning, setScanning] = useState(false);
   const [lastScan, setLastScan] = useState<string | null>(null);
+  const [selectedListingId, setSelectedListingId] = useState<string>(listings[0]?.id ?? "");
 
   const handleRunAnalysis = async () => {
     setScanning(true);
@@ -256,6 +259,36 @@ export function MarketIntelligenceClient({ events, occupancyPct, avgNightly }: P
                 Run Market Analysis to get the latest event data and trigger pricing proposals.
               </p>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Competitor Benchmark Panel */}
+      {listings.length > 0 && (
+        <div className="rounded-xl border border-white/5 bg-white/[0.02] overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+            <div>
+              <h2 className="text-sm font-semibold text-text-primary">Competitor Benchmark</h2>
+              <p className="text-xs text-text-tertiary mt-0.5">Rate positioning vs. comp set</p>
+            </div>
+            {listings.length > 1 && (
+              <select
+                value={selectedListingId}
+                onChange={(e) => setSelectedListingId(e.target.value)}
+                className="text-xs bg-white/[0.04] border border-white/10 rounded-lg px-3 py-1.5 text-text-primary focus:outline-none focus:ring-1 focus:ring-amber/40"
+              >
+                {listings.map((l) => (
+                  <option key={l.id} value={l.id}>{l.name}</option>
+                ))}
+              </select>
+            )}
+          </div>
+          <div className="p-5">
+            <BenchmarkPanel
+              listingId={selectedListingId}
+              listingName={listings.find((l) => l.id === selectedListingId)?.name ?? ""}
+              currency={listings.find((l) => l.id === selectedListingId)?.currencyCode ?? "AED"}
+            />
           </div>
         </div>
       )}

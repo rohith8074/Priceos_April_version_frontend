@@ -47,6 +47,11 @@ export default async function PricingPage() {
             proposedPrice: proposed > 0 ? String(proposed) : null,
             changePct,
             reasoning: row.reasoning ?? null,
+            minStay: row.minStay ?? null,
+            maxStay: row.maxStay ?? null,
+            closedToArrival: row.closedToArrival ?? false,
+            closedToDeparture: row.closedToDeparture ?? false,
+            proposalStatus: row.proposalStatus ?? "pending",
             listingName:
                 listingNameMap.get(row.listingId.toString()) || "Unknown Property",
         };
