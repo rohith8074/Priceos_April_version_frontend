@@ -55,13 +55,14 @@ export default async function MarketPage() {
 
   const serializedEvents = events.map((e: any) => ({
     id: e._id.toString(),
-    title: e.title,
-    startDate: e.startDate,
-    endDate: e.endDate,
-    impact: e.impact || "medium",
-    suggestedPremiumPct: e.suggestedPremiumPct || 0,
-    description: e.description || "",
-    category: e.category || "event",
+    title: (e.title || e.name) as string,
+    startDate: e.startDate as string,
+    endDate: e.endDate as string,
+    impact: (e.impact || e.impactLevel || "medium") as "high" | "medium" | "low",
+    suggestedPremiumPct: (e.suggestedPremiumPct ?? e.upliftPct ?? 0) as number,
+    description: (e.description || "") as string,
+    category: (e.category || e.source || "event") as string,
+    area: (e.area || (e.areas && e.areas[0]) || "") as string,
   }));
 
   return (

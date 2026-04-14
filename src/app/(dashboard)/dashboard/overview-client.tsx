@@ -24,6 +24,7 @@ import {
   Pie
 } from 'recharts';
 import { addDays, format, isWithinInterval, parseISO } from 'date-fns';
+import { DashboardChatPopup } from "@/components/chat/dashboard-chat-popup";
 
 interface PropertyMetric {
   id: string;
@@ -64,6 +65,7 @@ export function OverviewClient({
   const [searchTerm, setSearchTerm] = useState("");
   const [calendarStartDate, setCalendarStartDate] = useState(new Date());
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   // Agent status strip
   const [agentStatus, setAgentStatus] = useState<{
@@ -210,7 +212,8 @@ export function OverviewClient({
   };
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto w-full p-8 bg-background text-foreground dark:bg-black relative">
+    <TooltipProvider>
+      <div className="flex flex-col h-full overflow-y-auto w-full p-8 bg-background text-foreground dark:bg-black relative">
       {/* Ambient background glow for glassmorphism */}
       <div className="fixed top-[-10%] left-[-10%] w-[40vw] h-[40vh] rounded-full bg-amber-500/20 dark:bg-amber-500/10 blur-[120px] pointer-events-none z-0" />
       <div className="fixed bottom-[-10%] right-[-10%] w-[40vw] h-[40vh] rounded-full bg-emerald-500/20 dark:bg-emerald-500/10 blur-[120px] pointer-events-none z-0" />
@@ -228,6 +231,7 @@ export function OverviewClient({
           <Button
             onClick={handleSync}
             disabled={isSyncing}
+            id="tour-sync-button"
             variant="outline"
             className="gap-2 bg-background/50 backdrop-blur-sm border-amber-500/20 hover:border-amber-500/50 hover:bg-amber-500/10 text-amber-600 dark:text-amber-500"
           >
@@ -245,6 +249,22 @@ export function OverviewClient({
             />
           </div>
         </div>
+      
+      {/* Focus Mode indicator */}
+      {filteredProperties.length === 1 && searchTerm && (
+        <div className="z-10 relative mb-6 animate-in fade-in slide-in-from-top-4 duration-500">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber/10 border border-amber/20 text-amber text-xs font-bold uppercase tracking-widest shadow-lg shadow-amber/5">
+            <Bot className="h-3.5 w-3.5" />
+            Focus Mode: {filteredProperties[0].name}
+            <button 
+              onClick={() => setSearchTerm("")} 
+              className="ml-2 p-0.5 hover:bg-amber/20 rounded-full transition-colors"
+            >
+              <RefreshCw className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+      )}
       </div>
 
       {/* ── Agent Status Strip ───────────────────────────────────────── */}
@@ -290,85 +310,123 @@ export function OverviewClient({
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 mb-8">
-        <Card className="bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl border-border dark:border-white/5 shadow-xl dark:shadow-2xl overflow-hidden relative group hover:border-amber-500/20 transition-all duration-500">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-amber-500/10 transition-colors" />
-          <CardHeader className="flex flex-row items-center justify-between pb-2 z-10 relative">
-            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest text-[10px]">Total Properties</CardTitle>
-            <div className="h-8 w-8 rounded-lg bg-muted/50 dark:bg-black/40 border border-border dark:border-white/10 flex items-center justify-center">
-              <Building2 className="h-4 w-4 text-amber-500" />
-            </div>
-          </CardHeader>
-          <CardContent className="z-10 relative">
-            <div className="text-3xl font-light text-foreground dark:text-white">{filteredTotalProperties}</div>
-            <p className="text-xs text-emerald-600 dark:text-emerald-500/80 mt-1 font-medium flex items-center gap-1">
-              <TrendingUp className="w-3 h-3" /> Active in portfolio
-            </p>
-          </CardContent>
-        </Card>
+        <UITooltip>
+          <TooltipTrigger asChild>
+            <Card className="bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl border-border dark:border-white/5 shadow-xl dark:shadow-2xl overflow-hidden relative group hover:border-amber-500/20 transition-all duration-500 cursor-help">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-amber-500/10 transition-colors" />
+              <CardHeader className="flex flex-row items-center justify-between pb-2 z-10 relative">
+                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest text-[10px]">Total Properties</CardTitle>
+                <div className="h-8 w-8 rounded-lg bg-muted/50 dark:bg-black/40 border border-border dark:border-white/10 flex items-center justify-center">
+                  <Building2 className="h-4 w-4 text-amber-500" />
+                </div>
+              </CardHeader>
+              <CardContent className="z-10 relative">
+                <div className="text-3xl font-light text-foreground dark:text-white">{filteredTotalProperties}</div>
+                <p className="text-xs text-emerald-600 dark:text-emerald-500/80 mt-1 font-medium flex items-center gap-1">
+                  <TrendingUp className="w-3 h-3" /> Active in portfolio
+                </p>
+              </CardContent>
+            </Card>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="dark:bg-black border border-white/20 p-2 text-xs">
+            Total number of active property units synced from your PMS (Hostaway).
+          </TooltipContent>
+        </UITooltip>
 
-        <Card className="bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl border-border dark:border-white/5 shadow-xl dark:shadow-2xl overflow-hidden relative group hover:border-emerald-500/20 transition-all duration-500">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-emerald-500/10 transition-colors" />
-          <CardHeader className="flex flex-row items-center justify-between pb-2 z-10 relative">
-            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest text-[10px]">Avg Occupancy (30D)</CardTitle>
-            <div className="h-8 w-8 rounded-lg bg-muted/50 dark:bg-black/40 border border-border dark:border-white/10 flex items-center justify-center">
-              <CalendarCheck className="h-4 w-4 text-emerald-500" />
-            </div>
-          </CardHeader>
-          <CardContent className="z-10 relative">
-            <div className="text-3xl font-light text-foreground dark:text-white">{filteredAvgOccupancy}%</div>
-            <p className="text-xs text-emerald-600 dark:text-emerald-500/80 mt-1 font-medium flex items-center gap-1">
-              <TrendingUp className="w-3 h-3" /> Across all properties
-            </p>
-          </CardContent>
-        </Card>
+        <UITooltip>
+          <TooltipTrigger asChild>
+            <Card className="bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl border-border dark:border-white/5 shadow-xl dark:shadow-2xl overflow-hidden relative group hover:border-emerald-500/20 transition-all duration-500 cursor-help">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-emerald-500/10 transition-colors" />
+              <CardHeader className="flex flex-row items-center justify-between pb-2 z-10 relative">
+                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest text-[10px]">Avg Occupancy (30D)</CardTitle>
+                <div className="h-8 w-8 rounded-lg bg-muted/50 dark:bg-black/40 border border-border dark:border-white/10 flex items-center justify-center">
+                  <CalendarCheck className="h-4 w-4 text-emerald-500" />
+                </div>
+              </CardHeader>
+              <CardContent className="z-10 relative">
+                <div className="text-3xl font-light text-foreground dark:text-white">{filteredAvgOccupancy}%</div>
+                <p className="text-xs text-emerald-600 dark:text-emerald-500/80 mt-1 font-medium flex items-center gap-1">
+                  <TrendingUp className="w-3 h-3" /> Across all properties
+                </p>
+              </CardContent>
+            </Card>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="dark:bg-black border border-white/20 p-2 text-xs">
+            Projected occupancy for the next 30 days based on confirmed bookings.
+          </TooltipContent>
+        </UITooltip>
 
-        <Card className="bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl border-border dark:border-white/5 shadow-xl dark:shadow-2xl overflow-hidden relative group hover:border-violet-500/20 transition-all duration-500">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-violet-500/10 transition-colors" />
-          <CardHeader className="flex flex-row items-center justify-between pb-2 z-10 relative">
-            <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest text-[10px]">Avg Daily Rate</CardTitle>
-            <div className="h-8 w-8 rounded-lg bg-muted/50 dark:bg-black/40 border border-border dark:border-white/10 flex items-center justify-center">
-              <TrendingUp className="h-4 w-4 text-violet-500 dark:text-violet-400" />
-            </div>
-          </CardHeader>
-          <CardContent className="z-10 relative">
-            <div className="text-3xl font-light text-foreground dark:text-white">{filteredAvgPrice} <span className="text-lg font-light text-muted-foreground">AED</span></div>
-            <p className="text-xs text-emerald-600 dark:text-emerald-500/80 mt-1 font-medium flex items-center gap-1">
-              <TrendingUp className="w-3 h-3" /> Overall booked rate
-            </p>
-          </CardContent>
-        </Card>
+        <UITooltip>
+          <TooltipTrigger asChild>
+            <Card className="bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl border-border dark:border-white/5 shadow-xl dark:shadow-2xl overflow-hidden relative group hover:border-violet-500/20 transition-all duration-500 cursor-help">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-violet-500/5 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-violet-500/10 transition-colors" />
+              <CardHeader className="flex flex-row items-center justify-between pb-2 z-10 relative">
+                <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-widest text-[10px]">Avg Daily Rate</CardTitle>
+                <div className="h-8 w-8 rounded-lg bg-muted/50 dark:bg-black/40 border border-border dark:border-white/10 flex items-center justify-center">
+                  <TrendingUp className="h-4 w-4 text-violet-500 dark:text-violet-400" />
+                </div>
+              </CardHeader>
+              <CardContent className="z-10 relative">
+                <div className="text-3xl font-light text-foreground dark:text-white">{filteredAvgPrice} <span className="text-lg font-light text-muted-foreground">AED</span></div>
+                <p className="text-xs text-emerald-600 dark:text-emerald-500/80 mt-1 font-medium flex items-center gap-1">
+                  <TrendingUp className="w-3 h-3" /> Overall booked rate
+                </p>
+              </CardContent>
+            </Card>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="dark:bg-black border border-white/20 p-2 text-xs">
+            Average nightly rate across all upcoming bookings in the next 30 days.
+          </TooltipContent>
+        </UITooltip>
 
-        <Card className="bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl border-border dark:border-white/5 shadow-xl dark:shadow-2xl overflow-hidden relative group border-t-amber-500">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl -mr-16 -mt-16" />
-          <CardHeader className="flex flex-row items-center justify-between pb-2 z-10 relative">
-            <CardTitle className="text-sm font-medium text-amber-600 dark:text-amber-500/80 uppercase tracking-widest text-[10px]">Projected Revenue</CardTitle>
-            <div className="h-8 w-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-              <DollarSign className="h-4 w-4 text-amber-600 dark:text-amber-500" />
-            </div>
-          </CardHeader>
-          <CardContent className="z-10 relative">
-            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-500 to-amber-700 dark:from-amber-200 dark:to-amber-500">{filteredTotalRevenue.toLocaleString()} <span className="text-lg font-medium text-amber-500/50">AED</span></div>
-            <p className="text-xs text-amber-600 dark:text-amber-500/80 mt-1 font-medium flex items-center gap-1">
-              <TrendingUp className="w-3 h-3" /> Estimated 30-day gross
-            </p>
-          </CardContent>
-        </Card>
+        <UITooltip>
+          <TooltipTrigger asChild>
+            <Card 
+              id="tour-kpi-revenue"
+              className="bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl border-border dark:border-white/5 shadow-xl dark:shadow-2xl overflow-hidden relative group border-t-amber-500 cursor-help"
+            >
+              <div className="absolute top-0 right-0 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl -mr-16 -mt-16" />
+              <CardHeader className="flex flex-row items-center justify-between pb-2 z-10 relative">
+                <CardTitle className="text-sm font-medium text-amber-600 dark:text-amber-500/80 uppercase tracking-widest text-[10px]">Projected Revenue</CardTitle>
+                <div className="h-8 w-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                  <DollarSign className="h-4 w-4 text-amber-600 dark:text-amber-500" />
+                </div>
+              </CardHeader>
+              <CardContent className="z-10 relative">
+                <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-500 to-amber-700 dark:from-amber-200 dark:to-amber-500">{filteredTotalRevenue.toLocaleString()} <span className="text-lg font-medium text-amber-500/50">AED</span></div>
+                <p className="text-xs text-amber-600 dark:text-amber-500/80 mt-1 font-medium flex items-center gap-1">
+                  <TrendingUp className="w-3 h-3" /> Estimated 30-day gross
+                </p>
+              </CardContent>
+            </Card>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="dark:bg-black border border-white/20 p-2 text-xs">
+            Estimated gross revenue for the next 30 days (Confirmed Bookings + Projected yield).
+          </TooltipContent>
+        </UITooltip>
 
-        <Card className="bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl border-border dark:border-white/5 shadow-xl dark:shadow-2xl overflow-hidden relative group border-t-emerald-500">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl -mr-16 -mt-16" />
-          <CardHeader className="flex flex-row items-center justify-between pb-2 z-10 relative">
-            <CardTitle className="text-sm font-medium text-emerald-600 dark:text-emerald-500/80 uppercase tracking-widest text-[10px]">Lifetime Earnings</CardTitle>
-            <div className="h-8 w-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-              <DollarSign className="h-4 w-4 text-emerald-600 dark:text-emerald-500" />
-            </div>
-          </CardHeader>
-          <CardContent className="z-10 relative">
-            <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-500 to-emerald-700 dark:from-emerald-200 dark:to-emerald-500">{(totalHistoricalRevenue).toLocaleString()} <span className="text-lg font-medium text-emerald-500/50">AED</span></div>
-            <p className="text-xs text-emerald-600 dark:text-emerald-500/80 mt-1 font-medium flex items-center gap-1">
-              <TrendingUp className="w-3 h-3" /> All-time booked revenue
-            </p>
-          </CardContent>
-        </Card>
+        <UITooltip>
+          <TooltipTrigger asChild>
+            <Card className="bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl border-border dark:border-white/5 shadow-xl dark:shadow-2xl overflow-hidden relative group border-t-emerald-500 cursor-help">
+              <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl -mr-16 -mt-16" />
+              <CardHeader className="flex flex-row items-center justify-between pb-2 z-10 relative">
+                <CardTitle className="text-sm font-medium text-emerald-600 dark:text-emerald-500/80 uppercase tracking-widest text-[10px]">Lifetime Earnings</CardTitle>
+                <div className="h-8 w-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                  <DollarSign className="h-4 w-4 text-emerald-600 dark:text-emerald-500" />
+                </div>
+              </CardHeader>
+              <CardContent className="z-10 relative">
+                <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-500 to-emerald-700 dark:from-emerald-200 dark:to-emerald-500">{(totalHistoricalRevenue).toLocaleString()} <span className="text-lg font-medium text-emerald-500/50">AED</span></div>
+                <p className="text-xs text-emerald-600 dark:text-emerald-500/80 mt-1 font-medium flex items-center gap-1">
+                  <TrendingUp className="w-3 h-3" /> All-time booked revenue
+                </p>
+              </CardContent>
+            </Card>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" className="dark:bg-black border border-white/20 p-2 text-xs">
+            Total historical revenue generated across the entire portfolio life-cycle.
+          </TooltipContent>
+        </UITooltip>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 mb-8">
@@ -775,14 +833,20 @@ export function OverviewClient({
         </CardContent>
       </Card>
 
-      {/* Floating Ask AI button */}
-      <Link
-        href="/agent-chat"
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 rounded-full bg-amber-500 text-black px-5 py-3 shadow-lg hover:bg-amber-400 transition-all duration-200 hover:shadow-amber-500/30 hover:shadow-xl group font-semibold text-sm"
+      {/* Floating Ask Agent button */}
+      <Button
+        onClick={() => setIsChatOpen(true)}
+        className="fixed bottom-6 right-24 z-50 flex items-center gap-2.5 rounded-full bg-amber text-black px-5 py-3 shadow-lg hover:bg-amber-dim transition-all duration-200 hover:shadow-amber-500/30 hover:shadow-xl group font-semibold text-sm h-auto border-none"
       >
         <Bot className="h-4 w-4 shrink-0" />
-        <span>Ask AI</span>
-      </Link>
+        <span>Ask Agent</span>
+      </Button>
+
+      <DashboardChatPopup 
+        isOpen={isChatOpen} 
+        onOpenChange={setIsChatOpen} 
+      />
     </div>
+    </TooltipProvider>
   );
 }

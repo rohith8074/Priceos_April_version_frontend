@@ -45,6 +45,7 @@ export async function POST(req: Request) {
             orgId: org._id.toString(),
             email: org.email,
             role: org.role,
+            isApproved: !!org.isApproved
         });
 
         return apiSuccess({ accessToken });

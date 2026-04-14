@@ -1,565 +1,1650 @@
 "use client";
 
-import { useState } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Slider } from "@/components/ui/slider";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Calendar,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Shield,
   Sun,
   Clock,
   Layers,
   TrendingDown,
   AlignLeft,
-  Info,
   Plus,
   Trash2,
+  Loader2,
+  Save,
+  Info,
+  CheckCircle2,
+  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
-// ── Season Profiles ──────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
-const DEFAULT_SEASONS = [
-  { name: "Peak Winter", from: "12-01", to: "03-31", adjustment: 30, type: "percent" as const },
-  { name: "Summer Trough", from: "06-01", to: "08-31", adjustment: -40, type: "percent" as const },
-  { name: "Shoulder", from: "09-01", to: "11-30", adjustment: 0, type: "percent" as const },
-];
-
-function SeasonProfiles() {
-  const [seasons, setSeasons] = useState(DEFAULT_SEASONS);
-
-  const updateSeason = (i: number, key: string, value: unknown) =>
-    setSeasons((prev) => prev.map((s, idx) => (idx === i ? { ...s, [key]: value } : s)));
-
-  const removeSeason = (i: number) =>
-    setSeasons((prev) => prev.filter((_, idx) => idx !== i));
-
-  const addSeason = () =>
-    setSeasons((prev) => [
-      ...prev,
-      { name: "New Season", from: "01-01", to: "12-31", adjustment: 0, type: "percent" as const },
-    ]);
-
-  const handleSave = () => toast.success("Season profiles saved.");
-
-  return (
-    <div className="space-y-4">
-      <p className="text-xs text-text-tertiary">
-        Define named seasons with a % adjustment from your base price. The most specific rule wins.
-      </p>
-
-      <div className="space-y-3">
-        {seasons.map((s, i) => (
-          <div
-            key={i}
-            className="rounded-lg border border-white/5 bg-white/[0.02] p-4 flex flex-wrap gap-4 items-end"
-          >
-            <div className="flex-1 min-w-[140px]">
-              <Label className="text-xs text-text-tertiary mb-1 block">Season Name</Label>
-              <Input
-                value={s.name}
-                onChange={(e) => updateSeason(i, "name", e.target.value)}
-                className="h-8 text-sm bg-white/5 border-white/10"
-              />
-            </div>
-            <div className="w-28">
-              <Label className="text-xs text-text-tertiary mb-1 block">From (MM-DD)</Label>
-              <Input
-                value={s.from}
-                onChange={(e) => updateSeason(i, "from", e.target.value)}
-                placeholder="12-01"
-                className="h-8 text-sm bg-white/5 border-white/10 font-mono"
-              />
-            </div>
-            <div className="w-28">
-              <Label className="text-xs text-text-tertiary mb-1 block">To (MM-DD)</Label>
-              <Input
-                value={s.to}
-                onChange={(e) => updateSeason(i, "to", e.target.value)}
-                placeholder="03-31"
-                className="h-8 text-sm bg-white/5 border-white/10 font-mono"
-              />
-            </div>
-            <div className="w-36">
-              <Label className="text-xs text-text-tertiary mb-1 block">
-                Adjustment: <span className={cn("font-bold", s.adjustment > 0 ? "text-green-400" : s.adjustment < 0 ? "text-red-400" : "text-text-secondary")}>{s.adjustment > 0 ? "+" : ""}{s.adjustment}%</span>
-              </Label>
-              <Slider
-                min={-60}
-                max={100}
-                step={5}
-                value={[s.adjustment]}
-                onValueChange={([v]) => updateSeason(i, "adjustment", v)}
-                className="mt-2"
-              />
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-text-disabled hover:text-red-400 shrink-0"
-              onClick={() => removeSeason(i)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        ))}
-      </div>
-
-      <div className="flex items-center gap-3">
-        <Button variant="outline" size="sm" onClick={addSeason} className="gap-1.5 h-8 text-xs border-white/10">
-          <Plus className="h-3.5 w-3.5" /> Add Season
-        </Button>
-        <Button size="sm" onClick={handleSave} className="bg-amber text-black hover:bg-amber/90 h-8 text-xs">
-          Save Seasons
-        </Button>
-      </div>
-    </div>
-  );
+interface Listing {
+  id: string;
+  name: string;
+  currencyCode?: string;
 }
 
-// ── Day of Week ───────────────────────────────────────────────────────────────
+interface EngineConfig {
+  priceFloor: number;
+  priceCeiling: number;
+  lowestMinStayAllowed: number;
+  defaultMaxStay: number;
+  // Weekend minimum pricing (KB Tier 2 #8)
+  weekendMinPrice: number;
+  weekendDays: number[];
+  lastMinuteEnabled: boolean;
+  lastMinuteDaysOut: number;
+  lastMinuteDiscountPct: number;
+  lastMinuteMinStay: number | null;
+  // Gradual last-minute ramp curve (KB Tier 1 #3)
+  lastMinuteRampEnabled: boolean;
+  lastMinuteRampDays: number;
+  lastMinuteMaxDiscountPct: number;
+  lastMinuteMinDiscountPct: number;
+  farOutEnabled: boolean;
+  farOutDaysOut: number;
+  farOutMarkupPct: number;
+  farOutMinStay: number | null;
+  dowPricingEnabled: boolean;
+  dowDays: number[];
+  dowPriceAdjPct: number;
+  dowMinStay: number | null;
+  gapPreventionEnabled: boolean;
+  minFragmentThreshold: number;
+  gapFillEnabled: boolean;
+  gapFillLengthMin: number;
+  gapFillLengthMax: number;
+  gapFillDiscountPct: number;
+  gapFillOverrideCico: boolean;
+  allowedCheckinDays: number[];
+  allowedCheckoutDays: number[];
+  // Occupancy-based adjustments (KB Tier 1 #4 — Revenue 9/10)
+  occupancyEnabled: boolean;
+  occupancyTargetPct: number;
+  occupancyHighThresholdPct: number;
+  occupancyHighAdjPct: number;
+  occupancyLowThresholdPct: number;
+  occupancyLowAdjPct: number;
+  occupancyLookbackDays: number;
+}
 
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const DEFAULT_DOW = [0, 0, 0, 0, 10, 15, 10]; // % adjustment per day
+interface PricingRule {
+  _id: string;
+  ruleType: "SEASON" | "EVENT" | "ADMIN_BLOCK" | "LOS_DISCOUNT";
+  name: string;
+  enabled: boolean;
+  priority: number;
+  startDate?: string;
+  endDate?: string;
+  daysOfWeek?: number[];
+  minNights?: number;
+  priceOverride?: number;
+  priceAdjPct?: number;
+  minStayOverride?: number;
+  isBlocked?: boolean;
+  closedToArrival?: boolean;
+  closedToDeparture?: boolean;
+  suspendLastMinute?: boolean;
+  suspendGapFill?: boolean;
+}
 
-function DayOfWeekTab() {
-  const [adjustments, setAdjustments] = useState(DEFAULT_DOW);
-  const [weekendDef, setWeekendDef] = useState<"fri_sat" | "sat_sun" | "thu_fri">("fri_sat");
+const DEFAULT_CONFIG: EngineConfig = {
+  priceFloor: 0,
+  priceCeiling: 0,
+  lowestMinStayAllowed: 1,
+  defaultMaxStay: 30,
+  weekendMinPrice: 0,
+  weekendDays: [4, 5],
+  lastMinuteEnabled: false,
+  lastMinuteDaysOut: 7,
+  lastMinuteDiscountPct: 15,
+  lastMinuteMinStay: null,
+  lastMinuteRampEnabled: false,
+  lastMinuteRampDays: 15,
+  lastMinuteMaxDiscountPct: 30,
+  lastMinuteMinDiscountPct: 5,
+  farOutEnabled: false,
+  farOutDaysOut: 90,
+  farOutMarkupPct: 10,
+  farOutMinStay: null,
+  dowPricingEnabled: false,
+  dowDays: [4, 5],
+  dowPriceAdjPct: 15,
+  dowMinStay: null,
+  gapPreventionEnabled: true,
+  minFragmentThreshold: 3,
+  gapFillEnabled: false,
+  gapFillLengthMin: 1,
+  gapFillLengthMax: 4,
+  gapFillDiscountPct: 10,
+  gapFillOverrideCico: false,
+  allowedCheckinDays: [1, 1, 1, 1, 1, 1, 1],
+  allowedCheckoutDays: [1, 1, 1, 1, 1, 1, 1],
+  occupancyEnabled: false,
+  occupancyTargetPct: 75,
+  occupancyHighThresholdPct: 85,
+  occupancyHighAdjPct: 15,
+  occupancyLowThresholdPct: 50,
+  occupancyLowAdjPct: -10,
+  occupancyLookbackDays: 30,
+};
 
-  const updateDay = (i: number, v: number) =>
-    setAdjustments((prev) => prev.map((a, idx) => (idx === i ? v : a)));
+const DOW_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-  const isWeekend = (i: number) => {
-    if (weekendDef === "fri_sat") return i === 4 || i === 5;
-    if (weekendDef === "sat_sun") return i === 5 || i === 6;
-    return i === 3 || i === 4;
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+async function patchConfig(listingId: string, patch: Partial<EngineConfig>) {
+  const res = await fetch(`/api/listings/${listingId}/engine-config`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error("Failed to save");
+}
+
+async function createRule(listingId: string, rule: Omit<PricingRule, "_id">) {
+  const res = await fetch(`/api/listings/${listingId}/rules`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(rule),
+  });
+  if (!res.ok) throw new Error("Failed to create rule");
+  return res.json();
+}
+
+async function toggleRule(listingId: string, ruleId: string, enabled: boolean) {
+  const res = await fetch(`/api/listings/${listingId}/rules/${ruleId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled }),
+  });
+  if (!res.ok) throw new Error("Failed to update rule");
+}
+
+async function deleteRule(listingId: string, ruleId: string) {
+  const res = await fetch(`/api/listings/${listingId}/rules/${ruleId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to delete rule");
+}
+
+// ── Guardrails Tab ────────────────────────────────────────────────────────────
+
+function GuardrailsTab({
+  listingId,
+  config,
+  onConfigChange,
+  currency = "AED",
+}: {
+  listingId: string;
+  config: EngineConfig;
+  onConfigChange: (patch: Partial<EngineConfig>) => void;
+  currency?: string;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await patchConfig(listingId, {
+        priceFloor: config.priceFloor,
+        priceCeiling: config.priceCeiling,
+        lowestMinStayAllowed: config.lowestMinStayAllowed,
+        defaultMaxStay: config.defaultMaxStay,
+        allowedCheckinDays: config.allowedCheckinDays,
+        allowedCheckoutDays: config.allowedCheckoutDays,
+        weekendMinPrice: config.weekendMinPrice,
+        weekendDays: config.weekendDays,
+      });
+      toast.success("Guardrails saved to database.");
+    } catch {
+      toast.error("Failed to save guardrails.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleWeekendDay = (i: number) => {
+    const current = config.weekendDays ?? [];
+    const next = current.includes(i) ? current.filter((d) => d !== i) : [...current, i];
+    onConfigChange({ weekendDays: next });
   };
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-4">
-        <Label className="text-xs text-text-tertiary shrink-0">Weekend Definition:</Label>
-        <div className="flex gap-2">
-          {(["fri_sat", "sat_sun", "thu_fri"] as const).map((opt) => (
-            <button
-              key={opt}
-              onClick={() => setWeekendDef(opt)}
-              className={cn(
-                "text-xs px-3 py-1 rounded-full border transition-colors",
-                weekendDef === opt
-                  ? "bg-amber text-black border-amber"
-                  : "border-white/10 text-text-secondary hover:border-white/20"
-              )}
-            >
-              {opt === "fri_sat" ? "Fri / Sat (UAE)" : opt === "sat_sun" ? "Sat / Sun (Global)" : "Thu / Fri (Legacy)"}
-            </button>
-          ))}
+    <div className="space-y-6">
+      <p className="text-xs text-text-tertiary">
+        Hard boundaries enforced at Pass 4 of the waterfall. Nothing overrides these.
+      </p>
+
+      {/* Price Boundaries */}
+      <div className="rounded-lg border border-white/5 bg-white/[0.02] p-4 space-y-4">
+        <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Price Boundaries</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label className="text-xs text-text-tertiary mb-1.5 block">Floor Price ({currency})</Label>
+            <Input
+              type="number"
+              value={config.priceFloor || ""}
+              onChange={(e) => onConfigChange({ priceFloor: Number(e.target.value) })}
+              placeholder="e.g. 300"
+              className="h-9 bg-white/5 border-white/10 text-sm"
+            />
+            <p className="text-[10px] text-text-disabled mt-1">Minimum price — engine never goes below this</p>
+          </div>
+          <div>
+            <Label className="text-xs text-text-tertiary mb-1.5 block">Ceiling Price ({currency})</Label>
+            <Input
+              type="number"
+              value={config.priceCeiling || ""}
+              onChange={(e) => onConfigChange({ priceCeiling: Number(e.target.value) })}
+              placeholder="e.g. 3000"
+              className="h-9 bg-white/5 border-white/10 text-sm"
+            />
+            <p className="text-[10px] text-text-disabled mt-1">Maximum price — engine never exceeds this</p>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-2">
-        {DAYS.map((day, i) => (
-          <div key={day} className="flex flex-col items-center gap-2">
-            <span
-              className={cn(
-                "text-[11px] font-medium px-2 py-0.5 rounded-full",
-                isWeekend(i) ? "bg-amber/10 text-amber" : "text-text-tertiary"
-              )}
-            >
-              {day}
-            </span>
-            <div className="h-32 flex flex-col items-center justify-end gap-2 w-full">
-              <span
-                className={cn(
-                  "text-xs font-bold",
-                  adjustments[i] > 0 ? "text-green-400" : adjustments[i] < 0 ? "text-red-400" : "text-text-disabled"
-                )}
-              >
-                {adjustments[i] > 0 ? "+" : ""}{adjustments[i]}%
-              </span>
-              <div className="relative h-24 w-full flex items-center justify-center">
-                <Slider
-                  min={-30}
-                  max={50}
-                  step={5}
-                  value={[adjustments[i]]}
-                  onValueChange={([v]) => updateDay(i, v)}
-                  orientation="vertical"
-                  className="h-24"
-                />
-              </div>
-            </div>
-            <div
-              className={cn(
-                "w-full h-1 rounded-full",
-                isWeekend(i) ? "bg-amber/30" : "bg-white/5"
-              )}
+      {/* Stay Limits */}
+      <div className="rounded-lg border border-white/5 bg-white/[0.02] p-4 space-y-4">
+        <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Stay Limits</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label className="text-xs text-text-tertiary mb-1.5 block">Absolute Min Stay (nights)</Label>
+            <Input
+              type="number"
+              min={1}
+              value={config.lowestMinStayAllowed || ""}
+              onChange={(e) => onConfigChange({ lowestMinStayAllowed: Number(e.target.value) })}
+              className="h-9 bg-white/5 border-white/10 text-sm"
+            />
+            <p className="text-[10px] text-text-disabled mt-1">Gap rules can never lower min stay below this</p>
+          </div>
+          <div>
+            <Label className="text-xs text-text-tertiary mb-1.5 block">Default Max Stay (nights)</Label>
+            <Input
+              type="number"
+              min={1}
+              value={config.defaultMaxStay || ""}
+              onChange={(e) => onConfigChange({ defaultMaxStay: Number(e.target.value) })}
+              className="h-9 bg-white/5 border-white/10 text-sm"
             />
           </div>
-        ))}
+        </div>
+      </div>
+
+      {/* Check-in / Check-out Days */}
+      <div className="rounded-lg border border-white/5 bg-white/[0.02] p-4 space-y-4">
+        <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Allowed Check-in / Check-out Days</h3>
+        <p className="text-[11px] text-text-tertiary">Toggle which days of the week guests can check in or check out.</p>
+        <div className="space-y-3">
+          {(["Check-in", "Check-out"] as const).map((label) => {
+            const key = label === "Check-in" ? "allowedCheckinDays" : "allowedCheckoutDays";
+            const days = config[key] ?? [1, 1, 1, 1, 1, 1, 1];
+            return (
+              <div key={label}>
+                <p className="text-xs text-text-tertiary mb-2">{label}</p>
+                <div className="flex gap-2 flex-wrap">
+                  {DOW_LABELS.map((day, i) => (
+                    <button
+                      key={day}
+                      onClick={() => {
+                        const next = [...days];
+                        next[i] = next[i] === 1 ? 0 : 1;
+                        onConfigChange({ [key]: next });
+                      }}
+                      className={cn(
+                        "text-xs px-3 py-1.5 rounded-full border transition-colors",
+                        days[i] === 1
+                          ? "bg-amber/10 border-amber/30 text-amber"
+                          : "border-white/10 text-text-disabled hover:border-white/20"
+                      )}
+                    >
+                      {day}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Weekend Minimum Pricing — KB Tier 2 #8 */}
+      <div className="rounded-lg border border-white/5 bg-white/[0.02] p-4 space-y-4">
+        <div>
+          <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Weekend Minimum Price</h3>
+          <p className="text-[11px] text-text-tertiary mt-0.5">KB Tier 2 #8 — Floor price applied only on selected weekend nights (e.g. Thu/Fri in Dubai)</p>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label className="text-xs text-text-tertiary mb-1.5 block">Weekend Floor Price ({currency})</Label>
+            <Input
+              type="number"
+              min={0}
+              value={config.weekendMinPrice || ""}
+              onChange={(e) => onConfigChange({ weekendMinPrice: Number(e.target.value) })}
+              placeholder="e.g. 600"
+              className="h-9 bg-white/5 border-white/10 text-sm"
+            />
+            <p className="text-[10px] text-text-disabled mt-1">Set 0 to disable weekend minimum</p>
+          </div>
+          <div>
+            <Label className="text-xs text-text-tertiary mb-2 block">Weekend Days</Label>
+            <div className="flex gap-2 flex-wrap">
+              {DOW_LABELS.map((day, i) => (
+                <button
+                  key={day}
+                  onClick={() => toggleWeekendDay(i)}
+                  className={cn(
+                    "text-xs px-3 py-1.5 rounded-full border transition-colors",
+                    (config.weekendDays ?? []).includes(i)
+                      ? "bg-amber/10 border-amber/30 text-amber"
+                      : "border-white/10 text-text-disabled hover:border-white/20"
+                  )}
+                >
+                  {day}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
 
       <Button
         size="sm"
-        onClick={() => toast.success("Day-of-week adjustments saved.")}
-        className="bg-amber text-black hover:bg-amber/90 h-8 text-xs"
+        onClick={handleSave}
+        disabled={saving}
+        className="bg-amber text-black hover:bg-amber/90 h-9 text-xs gap-2"
       >
-        Save Day-of-Week
+        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+        Save Guardrails
       </Button>
     </div>
   );
 }
 
-// ── Last-Minute Curve ─────────────────────────────────────────────────────────
+// ── Seasons Tab ───────────────────────────────────────────────────────────────
 
-function LastMinuteTab() {
-  const [enabled, setEnabled] = useState(true);
-  const [maxDiscount, setMaxDiscount] = useState(30);
-  const [rampDays, setRampDays] = useState(15);
+function SeasonsTab({
+  listingId,
+  rules,
+  onRulesChange,
+}: {
+  listingId: string;
+  rules: PricingRule[];
+  onRulesChange: () => void;
+}) {
+  const seasonRules = rules.filter((r) => r.ruleType === "SEASON");
+  const [newName, setNewName] = useState("");
+  const [newFrom, setNewFrom] = useState("");
+  const [newTo, setNewTo] = useState("");
+  const [newAdj, setNewAdj] = useState(0);
+  const [newMinStay, setNewMinStay] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Preview curve: linear ramp from maxDiscount% at day 1 to 5% at rampDays
-  const curvePoints = Array.from({ length: rampDays }, (_, i) => {
-    const day = i + 1;
-    const pct = Math.round(maxDiscount - ((maxDiscount - 5) / (rampDays - 1)) * i);
-    return { day, pct };
-  });
+  const handleAdd = async () => {
+    if (!newName || !newFrom || !newTo) {
+      toast.error("Name, start and end dates are required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await createRule(listingId, {
+        ruleType: "SEASON",
+        name: newName,
+        enabled: true,
+        priority: 10,
+        startDate: newFrom,
+        endDate: newTo,
+        priceAdjPct: newAdj,
+        minStayOverride: newMinStay ? Number(newMinStay) : undefined,
+        isBlocked: false,
+        closedToArrival: false,
+        closedToDeparture: false,
+        suspendLastMinute: false,
+        suspendGapFill: false,
+      });
+      toast.success(`Season "${newName}" saved to database.`);
+      setNewName(""); setNewFrom(""); setNewTo(""); setNewAdj(0); setNewMinStay("");
+      onRulesChange();
+    } catch {
+      toast.error("Failed to create season rule.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggle = async (rule: PricingRule) => {
+    try {
+      await toggleRule(listingId, rule._id, !rule.enabled);
+      toast.success(`"${rule.name}" ${!rule.enabled ? "enabled" : "disabled"}.`);
+      onRulesChange();
+    } catch {
+      toast.error("Failed to update rule.");
+    }
+  };
+
+  const handleDelete = async (rule: PricingRule) => {
+    setDeletingId(rule._id);
+    try {
+      await deleteRule(listingId, rule._id);
+      toast.success(`Season "${rule.name}" deleted.`);
+      onRulesChange();
+    } catch {
+      toast.error("Failed to delete rule.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <Switch checked={enabled} onCheckedChange={setEnabled} />
-        <Label className="text-sm text-text-primary">Enable last-minute discount curve</Label>
+    <div className="space-y-4">
+      <p className="text-xs text-text-tertiary">
+        Seasonal rules apply a price adjustment across a date range. Stored in MongoDB as SEASON rules.
+      </p>
+
+      {/* Existing rules */}
+      {seasonRules.length > 0 && (
+        <div className="space-y-2">
+          {seasonRules.map((rule) => (
+            <div
+              key={rule._id}
+              className="rounded-lg border border-white/5 bg-white/[0.02] p-4 flex items-center gap-4 flex-wrap"
+            >
+              <Switch
+                checked={rule.enabled}
+                onCheckedChange={() => handleToggle(rule)}
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-text-primary">{rule.name}</p>
+                <p className="text-[11px] text-text-tertiary">
+                  {rule.startDate} → {rule.endDate}
+                  {rule.minStayOverride ? ` · ${rule.minStayOverride}N min` : ""}
+                </p>
+              </div>
+              <Badge
+                className={cn(
+                  "text-[10px] border",
+                  (rule.priceAdjPct ?? 0) > 0
+                    ? "bg-green-500/10 text-green-400 border-green-500/20"
+                    : (rule.priceAdjPct ?? 0) < 0
+                    ? "bg-red-500/10 text-red-400 border-red-500/20"
+                    : "bg-white/5 text-text-tertiary border-white/10"
+                )}
+              >
+                {(rule.priceAdjPct ?? 0) > 0 ? "+" : ""}{rule.priceAdjPct ?? 0}%
+              </Badge>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={deletingId === rule._id}
+                onClick={() => handleDelete(rule)}
+                className="h-7 w-7 text-text-disabled hover:text-red-400 shrink-0"
+              >
+                {deletingId === rule._id
+                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  : <Trash2 className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {seasonRules.length === 0 && (
+        <p className="text-xs text-text-disabled py-2">No season rules yet. Add one below.</p>
+      )}
+
+      {/* Add new */}
+      <div className="rounded-lg border border-dashed border-white/10 p-4 space-y-4">
+        <p className="text-xs font-medium text-text-secondary">Add Season Rule</p>
+        <div className="flex flex-wrap gap-3 items-end">
+          <div className="flex-1 min-w-[140px]">
+            <Label className="text-xs text-text-tertiary mb-1 block">Season Name</Label>
+            <Input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="e.g. Peak Winter"
+              className="h-8 text-sm bg-white/5 border-white/10"
+            />
+          </div>
+          <div className="w-32">
+            <Label className="text-xs text-text-tertiary mb-1 block">Start Date</Label>
+            <Input
+              type="date"
+              value={newFrom}
+              onChange={(e) => setNewFrom(e.target.value)}
+              className="h-8 text-sm bg-white/5 border-white/10"
+            />
+          </div>
+          <div className="w-32">
+            <Label className="text-xs text-text-tertiary mb-1 block">End Date</Label>
+            <Input
+              type="date"
+              value={newTo}
+              onChange={(e) => setNewTo(e.target.value)}
+              className="h-8 text-sm bg-white/5 border-white/10"
+            />
+          </div>
+          <div className="w-44">
+            <Label className="text-xs text-text-tertiary mb-1 block">
+              Price Adjustment: <span className={cn("font-bold", newAdj > 0 ? "text-green-400" : newAdj < 0 ? "text-red-400" : "text-text-disabled")}>{newAdj > 0 ? "+" : ""}{newAdj}%</span>
+            </Label>
+            <Slider min={-60} max={100} step={5} value={[newAdj]} onValueChange={([v]) => setNewAdj(v)} className="mt-2" />
+          </div>
+          <div className="w-24">
+            <Label className="text-xs text-text-tertiary mb-1 block">Min Stay</Label>
+            <Input
+              type="number"
+              value={newMinStay}
+              onChange={(e) => setNewMinStay(e.target.value)}
+              placeholder="optional"
+              className="h-8 text-sm bg-white/5 border-white/10"
+            />
+          </div>
+        </div>
+        <Button
+          size="sm"
+          onClick={handleAdd}
+          disabled={saving}
+          className="bg-amber text-black hover:bg-amber/90 h-8 text-xs gap-1.5"
+        >
+          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+          Add Season
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ── Lead Time Tab (DOW + Last-Minute + Far-Out) ───────────────────────────────
+
+function LeadTimeTab({
+  listingId,
+  config,
+  onConfigChange,
+}: {
+  listingId: string;
+  config: EngineConfig;
+  onConfigChange: (patch: Partial<EngineConfig>) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await patchConfig(listingId, {
+        dowPricingEnabled: config.dowPricingEnabled,
+        dowDays: config.dowDays,
+        dowPriceAdjPct: config.dowPriceAdjPct,
+        dowMinStay: config.dowMinStay,
+        lastMinuteEnabled: config.lastMinuteEnabled,
+        lastMinuteDaysOut: config.lastMinuteDaysOut,
+        lastMinuteDiscountPct: config.lastMinuteDiscountPct,
+        lastMinuteMinStay: config.lastMinuteMinStay,
+        lastMinuteRampEnabled: config.lastMinuteRampEnabled,
+        lastMinuteRampDays: config.lastMinuteRampDays,
+        lastMinuteMaxDiscountPct: config.lastMinuteMaxDiscountPct,
+        lastMinuteMinDiscountPct: config.lastMinuteMinDiscountPct,
+        farOutEnabled: config.farOutEnabled,
+        farOutDaysOut: config.farOutDaysOut,
+        farOutMarkupPct: config.farOutMarkupPct,
+        farOutMinStay: config.farOutMinStay,
+      });
+      toast.success("Lead time rules saved to database.");
+    } catch {
+      toast.error("Failed to save.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleDowDay = (i: number) => {
+    const current = config.dowDays ?? [];
+    const next = current.includes(i) ? current.filter((d) => d !== i) : [...current, i];
+    onConfigChange({ dowDays: next });
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Day of Week */}
+      <div className="rounded-lg border border-white/5 bg-white/[0.02] p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Day-of-Week Premium</h3>
+            <p className="text-[11px] text-text-tertiary mt-0.5">Apply a markup on selected days (e.g. Fri/Sat weekends)</p>
+          </div>
+          <Switch
+            checked={config.dowPricingEnabled}
+            onCheckedChange={(v) => onConfigChange({ dowPricingEnabled: v })}
+          />
+        </div>
+        {config.dowPricingEnabled && (
+          <div className="space-y-4">
+            <div>
+              <p className="text-xs text-text-tertiary mb-2">Premium Days</p>
+              <div className="flex gap-2 flex-wrap">
+                {DOW_LABELS.map((day, i) => (
+                  <button
+                    key={day}
+                    onClick={() => toggleDowDay(i)}
+                    className={cn(
+                      "text-xs px-3 py-1.5 rounded-full border transition-colors",
+                      (config.dowDays ?? []).includes(i)
+                        ? "bg-amber/10 border-amber/30 text-amber"
+                        : "border-white/10 text-text-disabled hover:border-white/20"
+                    )}
+                  >
+                    {day}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs text-text-tertiary mb-1 block">
+                  Markup: <span className="font-bold text-green-400">+{config.dowPriceAdjPct}%</span>
+                </Label>
+                <Slider
+                  min={0} max={50} step={5}
+                  value={[config.dowPriceAdjPct]}
+                  onValueChange={([v]) => onConfigChange({ dowPriceAdjPct: v })}
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-text-tertiary mb-1.5 block">Min Stay Override</Label>
+                <Input
+                  type="number" min={1}
+                  value={config.dowMinStay ?? ""}
+                  onChange={(e) => onConfigChange({ dowMinStay: e.target.value ? Number(e.target.value) : null })}
+                  placeholder="none"
+                  className="h-8 text-sm bg-white/5 border-white/10"
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {enabled && (
-        <>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <div>
-              <Label className="text-xs text-text-tertiary mb-2 block">
-                Max Discount at Day 1: <span className="font-bold text-red-400">-{maxDiscount}%</span>
-              </Label>
-              <Slider min={5} max={60} step={5} value={[maxDiscount]} onValueChange={([v]) => setMaxDiscount(v)} />
-            </div>
-            <div>
-              <Label className="text-xs text-text-tertiary mb-2 block">
-                Ramp Period: <span className="font-bold text-text-primary">{rampDays} days</span>
-              </Label>
-              <Slider min={3} max={30} step={1} value={[rampDays]} onValueChange={([v]) => setRampDays(v)} />
-            </div>
-          </div>
-
-          {/* Preview table */}
+      {/* Last-Minute */}
+      <div className="rounded-lg border border-white/5 bg-white/[0.02] p-4 space-y-4">
+        <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs text-text-tertiary mb-2">Discount curve preview:</p>
-            <div className="flex gap-px overflow-x-auto pb-2">
-              {curvePoints.map(({ day, pct }) => (
-                <div key={day} className="flex flex-col items-center gap-1 min-w-[28px]">
-                  <span className="text-[9px] text-red-400 font-bold">-{pct}%</span>
-                  <div
-                    className="w-5 bg-red-500/30 rounded-t"
-                    style={{ height: `${Math.round((pct / 60) * 48)}px` }}
-                  />
-                  <span className="text-[9px] text-text-disabled">{day}d</span>
+            <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Last-Minute Discount</h3>
+            <p className="text-[11px] text-text-tertiary mt-0.5">Discount for bookings within X days of check-in</p>
+          </div>
+          <Switch
+            checked={config.lastMinuteEnabled}
+            onCheckedChange={(v) => onConfigChange({ lastMinuteEnabled: v })}
+          />
+        </div>
+        {config.lastMinuteEnabled && (
+          <div className="space-y-4">
+            {/* Mode toggle: flat vs gradual ramp */}
+            <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
+              <Switch
+                checked={config.lastMinuteRampEnabled}
+                onCheckedChange={(v) => onConfigChange({ lastMinuteRampEnabled: v })}
+              />
+              <span>
+                <span className="font-medium">Gradual Ramp Curve</span>
+                <span className="text-text-disabled ml-1">(KB Tier 1 #3 — tapers from max% at day 1 to min% at day N)</span>
+              </span>
+            </label>
+
+            {config.lastMinuteRampEnabled ? (
+              /* Ramp mode */
+              <div className="space-y-4 pl-1 border-l-2 border-amber/20">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-xs text-text-tertiary mb-1 block">
+                      Max Discount (day 1): <span className="font-bold text-red-400">-{config.lastMinuteMaxDiscountPct}%</span>
+                    </Label>
+                    <Slider
+                      min={5} max={60} step={5}
+                      value={[config.lastMinuteMaxDiscountPct]}
+                      onValueChange={([v]) => onConfigChange({ lastMinuteMaxDiscountPct: v })}
+                    />
+                    <p className="text-[10px] text-text-disabled mt-1">Deepest discount applied on day of check-in</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-text-tertiary mb-1 block">
+                      Min Discount (day N): <span className="font-bold text-amber">-{config.lastMinuteMinDiscountPct}%</span>
+                    </Label>
+                    <Slider
+                      min={1} max={30} step={1}
+                      value={[config.lastMinuteMinDiscountPct]}
+                      onValueChange={([v]) => onConfigChange({ lastMinuteMinDiscountPct: v })}
+                    />
+                    <p className="text-[10px] text-text-disabled mt-1">Discount starts tapering from this day</p>
+                  </div>
                 </div>
-              ))}
+                <div className="w-64">
+                  <Label className="text-xs text-text-tertiary mb-1 block">
+                    Ramp Window: <span className="font-bold text-text-primary">{config.lastMinuteRampDays} days</span>
+                  </Label>
+                  <Slider
+                    min={3} max={30} step={1}
+                    value={[config.lastMinuteRampDays]}
+                    onValueChange={([v]) => onConfigChange({ lastMinuteRampDays: v })}
+                  />
+                  <p className="text-[10px] text-text-disabled mt-1">
+                    Curve spans day 1 ({config.lastMinuteMaxDiscountPct}%) → day {config.lastMinuteRampDays} ({config.lastMinuteMinDiscountPct}%)
+                  </p>
+                </div>
+              </div>
+            ) : (
+              /* Flat mode */
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-text-tertiary mb-1 block">
+                    Discount: <span className="font-bold text-red-400">-{config.lastMinuteDiscountPct}%</span>
+                  </Label>
+                  <Slider
+                    min={5} max={60} step={5}
+                    value={[config.lastMinuteDiscountPct]}
+                    onValueChange={([v]) => onConfigChange({ lastMinuteDiscountPct: v })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-text-tertiary mb-1 block">
+                    Trigger Window: <span className="font-bold text-text-primary">{config.lastMinuteDaysOut} days out</span>
+                  </Label>
+                  <Slider
+                    min={1} max={30} step={1}
+                    value={[config.lastMinuteDaysOut]}
+                    onValueChange={([v]) => onConfigChange({ lastMinuteDaysOut: v })}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Far-Out */}
+      <div className="rounded-lg border border-white/5 bg-white/[0.02] p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Far-Out Premium</h3>
+            <p className="text-[11px] text-text-tertiary mt-0.5">Markup for bookings made far in advance</p>
+          </div>
+          <Switch
+            checked={config.farOutEnabled}
+            onCheckedChange={(v) => onConfigChange({ farOutEnabled: v })}
+          />
+        </div>
+        {config.farOutEnabled && (
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs text-text-tertiary mb-1 block">
+                Markup: <span className="font-bold text-green-400">+{config.farOutMarkupPct}%</span>
+              </Label>
+              <Slider
+                min={0} max={40} step={5}
+                value={[config.farOutMarkupPct]}
+                onValueChange={([v]) => onConfigChange({ farOutMarkupPct: v })}
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-text-tertiary mb-1 block">
+                Trigger: bookings <span className="font-bold text-text-primary">{config.farOutDaysOut}+ days out</span>
+              </Label>
+              <Slider
+                min={30} max={180} step={10}
+                value={[config.farOutDaysOut]}
+                onValueChange={([v]) => onConfigChange({ farOutDaysOut: v })}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <Button
+        size="sm"
+        onClick={handleSave}
+        disabled={saving}
+        className="bg-amber text-black hover:bg-amber/90 h-9 text-xs gap-2"
+      >
+        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+        Save Lead Time Rules
+      </Button>
+    </div>
+  );
+}
+
+// ── Gap Logic Tab ─────────────────────────────────────────────────────────────
+
+function GapLogicTab({
+  listingId,
+  config,
+  onConfigChange,
+}: {
+  listingId: string;
+  config: EngineConfig;
+  onConfigChange: (patch: Partial<EngineConfig>) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await patchConfig(listingId, {
+        gapPreventionEnabled: config.gapPreventionEnabled,
+        minFragmentThreshold: config.minFragmentThreshold,
+        gapFillEnabled: config.gapFillEnabled,
+        gapFillLengthMin: config.gapFillLengthMin,
+        gapFillLengthMax: config.gapFillLengthMax,
+        gapFillDiscountPct: config.gapFillDiscountPct,
+        gapFillOverrideCico: config.gapFillOverrideCico,
+      });
+      toast.success("Gap logic saved to database.");
+    } catch {
+      toast.error("Failed to save.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Gap Prevention */}
+      <div className="rounded-lg border border-white/5 bg-white/[0.02] p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Gap Prevention (Tetris Logic)</h3>
+            <p className="text-[11px] text-text-tertiary mt-0.5">Raise min stay to prevent unbookable fragments between reservations</p>
+          </div>
+          <Switch
+            checked={config.gapPreventionEnabled}
+            onCheckedChange={(v) => onConfigChange({ gapPreventionEnabled: v })}
+          />
+        </div>
+        {config.gapPreventionEnabled && (
+          <div className="w-56">
+            <Label className="text-xs text-text-tertiary mb-1 block">
+              Min Viable Fragment: <span className="font-bold text-text-primary">{config.minFragmentThreshold} nights</span>
+            </Label>
+            <Slider
+              min={1} max={7} step={1}
+              value={[config.minFragmentThreshold]}
+              onValueChange={([v]) => onConfigChange({ minFragmentThreshold: v })}
+            />
+            <p className="text-[10px] text-text-disabled mt-1">
+              Gaps shorter than this are blocked to prevent orphan days
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Gap Fill Discounts */}
+      <div className="rounded-lg border border-white/5 bg-white/[0.02] p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Gap Fill Discounts</h3>
+            <p className="text-[11px] text-text-tertiary mt-0.5">Discount short windows between bookings to encourage occupancy</p>
+          </div>
+          <Switch
+            checked={config.gapFillEnabled}
+            onCheckedChange={(v) => onConfigChange({ gapFillEnabled: v })}
+          />
+        </div>
+        {config.gapFillEnabled && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs text-text-tertiary mb-1 block">
+                  Gap Size: <span className="font-bold text-text-primary">{config.gapFillLengthMin}–{config.gapFillLengthMax} nights</span>
+                </Label>
+                <div className="flex gap-2 items-center">
+                  <Input
+                    type="number" min={1}
+                    value={config.gapFillLengthMin}
+                    onChange={(e) => onConfigChange({ gapFillLengthMin: Number(e.target.value) })}
+                    className="h-8 w-20 text-sm bg-white/5 border-white/10"
+                  />
+                  <span className="text-text-disabled text-xs">to</span>
+                  <Input
+                    type="number" min={1}
+                    value={config.gapFillLengthMax}
+                    onChange={(e) => onConfigChange({ gapFillLengthMax: Number(e.target.value) })}
+                    className="h-8 w-20 text-sm bg-white/5 border-white/10"
+                  />
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs text-text-tertiary mb-1 block">
+                  Discount: <span className="font-bold text-amber">-{config.gapFillDiscountPct}%</span>
+                </Label>
+                <Slider
+                  min={0} max={30} step={1}
+                  value={[config.gapFillDiscountPct]}
+                  onValueChange={([v]) => onConfigChange({ gapFillDiscountPct: v })}
+                />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
+              <Switch
+                checked={config.gapFillOverrideCico}
+                onCheckedChange={(v) => onConfigChange({ gapFillOverrideCico: v })}
+              />
+              Override check-in/out restrictions to fill gaps
+            </label>
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-start gap-2 text-xs text-text-tertiary bg-white/[0.02] border border-white/5 rounded-lg p-3">
+        <Info className="h-3.5 w-3.5 mt-0.5 text-blue-400 shrink-0" />
+        Gap fill discounts are bounded by your floor price. The waterfall applies gap logic at Pass 3 (Inventory layer).
+      </div>
+
+      <Button
+        size="sm"
+        onClick={handleSave}
+        disabled={saving}
+        className="bg-amber text-black hover:bg-amber/90 h-9 text-xs gap-2"
+      >
+        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+        Save Gap Logic
+      </Button>
+    </div>
+  );
+}
+
+// ── LOS Discounts Tab ─────────────────────────────────────────────────────────
+
+function LOSTab({
+  listingId,
+  rules,
+  onRulesChange,
+}: {
+  listingId: string;
+  rules: PricingRule[];
+  onRulesChange: () => void;
+}) {
+  const losRules = rules.filter((r) => r.ruleType === "LOS_DISCOUNT");
+  const [newNights, setNewNights] = useState("7");
+  const [newDiscount, setNewDiscount] = useState(10);
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleAdd = async () => {
+    if (!newNights) return;
+    setSaving(true);
+    try {
+      await createRule(listingId, {
+        ruleType: "LOS_DISCOUNT",
+        name: `${newNights}+ Night Discount`,
+        enabled: true,
+        priority: 5,
+        minNights: Number(newNights),
+        priceAdjPct: -Math.abs(newDiscount),
+        isBlocked: false,
+        closedToArrival: false,
+        closedToDeparture: false,
+        suspendLastMinute: false,
+        suspendGapFill: false,
+      });
+      toast.success(`LOS discount for ${newNights}+ nights saved to database.`);
+      setNewNights("7"); setNewDiscount(10);
+      onRulesChange();
+    } catch {
+      toast.error("Failed to save LOS rule.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (rule: PricingRule) => {
+    setDeletingId(rule._id);
+    try {
+      await deleteRule(listingId, rule._id);
+      toast.success("LOS rule deleted.");
+      onRulesChange();
+    } catch {
+      toast.error("Failed to delete.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleToggle = async (rule: PricingRule) => {
+    try {
+      await toggleRule(listingId, rule._id, !rule.enabled);
+      onRulesChange();
+    } catch {
+      toast.error("Failed to update.");
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-text-tertiary">
+        Length-of-stay discounts reward longer bookings. Evaluated as "≥ N nights → apply discount".
+      </p>
+
+      {losRules.length > 0 && (
+        <div className="space-y-2">
+          {losRules.sort((a, b) => (a.minNights ?? 0) - (b.minNights ?? 0)).map((rule) => (
+            <div
+              key={rule._id}
+              className="rounded-lg border border-white/5 bg-white/[0.02] p-4 flex items-center gap-4"
+            >
+              <Switch checked={rule.enabled} onCheckedChange={() => handleToggle(rule)} />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-text-primary">{rule.name}</p>
+                <p className="text-[11px] text-text-tertiary">{rule.minNights}+ nights minimum</p>
+              </div>
+              <Badge className="bg-green-500/10 text-green-400 border border-green-500/20 text-[10px]">
+                {rule.priceAdjPct}%
+              </Badge>
+              <Button
+                variant="ghost" size="icon"
+                disabled={deletingId === rule._id}
+                onClick={() => handleDelete(rule)}
+                className="h-7 w-7 text-text-disabled hover:text-red-400"
+              >
+                {deletingId === rule._id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="rounded-lg border border-dashed border-white/10 p-4 space-y-3">
+        <p className="text-xs font-medium text-text-secondary">Add LOS Tier</p>
+        <div className="flex items-end gap-3 flex-wrap">
+          <div className="w-28">
+            <Label className="text-xs text-text-tertiary mb-1 block">Min Nights</Label>
+            <Input
+              type="number" min={2}
+              value={newNights}
+              onChange={(e) => setNewNights(e.target.value)}
+              className="h-8 text-sm bg-white/5 border-white/10"
+            />
+          </div>
+          <div className="w-52">
+            <Label className="text-xs text-text-tertiary mb-1 block">
+              Discount: <span className="font-bold text-green-400">-{newDiscount}%</span>
+            </Label>
+            <Slider min={1} max={30} step={1} value={[newDiscount]} onValueChange={([v]) => setNewDiscount(v)} />
+          </div>
+          <Button
+            size="sm"
+            onClick={handleAdd}
+            disabled={saving}
+            className="bg-amber text-black hover:bg-amber/90 h-8 text-xs gap-1.5"
+          >
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+            Add Tier
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Date Overrides Tab ────────────────────────────────────────────────────────
+
+function DateOverridesTab({
+  listingId,
+  rules,
+  onRulesChange,
+  currency = "AED",
+}: {
+  listingId: string;
+  rules: PricingRule[];
+  onRulesChange: () => void;
+  currency?: string;
+}) {
+  const overrideRules = rules.filter((r) => r.ruleType === "ADMIN_BLOCK" || r.ruleType === "EVENT");
+  const [newDate, setNewDate] = useState("");
+  const [newLabel, setNewLabel] = useState("");
+  const [newPrice, setNewPrice] = useState("");
+  const [newMinStay, setNewMinStay] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleAdd = async () => {
+    if (!newDate || !newLabel) {
+      toast.error("Date and label are required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await createRule(listingId, {
+        ruleType: "ADMIN_BLOCK",
+        name: newLabel,
+        enabled: true,
+        priority: 100,
+        startDate: newDate,
+        endDate: newDate,
+        priceOverride: newPrice ? Number(newPrice) : undefined,
+        minStayOverride: newMinStay ? Number(newMinStay) : undefined,
+        isBlocked: false,
+        closedToArrival: false,
+        closedToDeparture: false,
+        suspendLastMinute: true,
+        suspendGapFill: false,
+      });
+      toast.success(`Override for "${newLabel}" saved to database.`);
+      setNewDate(""); setNewLabel(""); setNewPrice(""); setNewMinStay("");
+      onRulesChange();
+    } catch {
+      toast.error("Failed to save override.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (rule: PricingRule) => {
+    setDeletingId(rule._id);
+    try {
+      await deleteRule(listingId, rule._id);
+      toast.success("Override deleted.");
+      onRulesChange();
+    } catch {
+      toast.error("Failed to delete.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-text-tertiary">
+        Date overrides take the highest priority (Pass 1). Use for events like F1, NYE, Eid.
+        Suspends last-minute discounts automatically.
+      </p>
+
+      {overrideRules.length > 0 && (
+        <div className="space-y-2">
+          {overrideRules.sort((a, b) => (a.startDate ?? "").localeCompare(b.startDate ?? "")).map((rule) => (
+            <div
+              key={rule._id}
+              className="rounded-lg border border-white/5 bg-white/[0.02] p-3 flex items-center gap-4"
+            >
+              <div className="font-mono text-xs text-text-secondary w-24 shrink-0">{rule.startDate}</div>
+              <div className="flex-1 text-sm text-text-primary">{rule.name}</div>
+              {rule.priceOverride && (
+                <Badge className="bg-green-500/10 text-green-400 border border-green-500/20 text-[10px]">
+                  {currency} {rule.priceOverride.toLocaleString("en-US")}
+                </Badge>
+              )}
+              {rule.minStayOverride && (
+                <Badge className="bg-white/5 text-text-tertiary border border-white/10 text-[10px]">
+                  {rule.minStayOverride}N min
+                </Badge>
+              )}
+              <Button
+                variant="ghost" size="icon"
+                disabled={deletingId === rule._id}
+                onClick={() => handleDelete(rule)}
+                className="h-7 w-7 text-text-disabled hover:text-red-400"
+              >
+                {deletingId === rule._id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="rounded-lg border border-dashed border-white/10 p-4 space-y-3">
+        <p className="text-xs font-medium text-text-secondary">Add Date Override</p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <Label className="text-xs text-text-tertiary mb-1 block">Date</Label>
+            <Input
+              type="date"
+              value={newDate}
+              onChange={(e) => setNewDate(e.target.value)}
+              className="h-8 text-sm bg-white/5 border-white/10 w-36"
+            />
+          </div>
+          <div className="flex-1 min-w-[140px]">
+            <Label className="text-xs text-text-tertiary mb-1 block">Label / Event Name</Label>
+            <Input
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.target.value)}
+              placeholder="e.g. Formula 1 Grand Prix"
+              className="h-8 text-sm bg-white/5 border-white/10"
+            />
+          </div>
+          <div className="w-28">
+            <Label className="text-xs text-text-tertiary mb-1 block">Fixed Price ({currency})</Label>
+            <Input
+              value={newPrice}
+              onChange={(e) => setNewPrice(e.target.value)}
+              placeholder="optional"
+              className="h-8 text-sm bg-white/5 border-white/10"
+            />
+          </div>
+          <div className="w-24">
+            <Label className="text-xs text-text-tertiary mb-1 block">Min Stay</Label>
+            <Input
+              type="number"
+              value={newMinStay}
+              onChange={(e) => setNewMinStay(e.target.value)}
+              placeholder="optional"
+              className="h-8 text-sm bg-white/5 border-white/10"
+            />
+          </div>
+          <Button
+            size="sm"
+            onClick={handleAdd}
+            disabled={saving}
+            className="bg-amber text-black hover:bg-amber/90 h-8 text-xs gap-1.5"
+          >
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+            Add Override
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Occupancy Tab (KB Tier 1 #4 — Revenue 9/10) ──────────────────────────────
+
+function OccupancyTab({
+  listingId,
+  config,
+  onConfigChange,
+}: {
+  listingId: string;
+  config: EngineConfig;
+  onConfigChange: (patch: Partial<EngineConfig>) => void;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await patchConfig(listingId, {
+        occupancyEnabled: config.occupancyEnabled,
+        occupancyTargetPct: config.occupancyTargetPct,
+        occupancyHighThresholdPct: config.occupancyHighThresholdPct,
+        occupancyHighAdjPct: config.occupancyHighAdjPct,
+        occupancyLowThresholdPct: config.occupancyLowThresholdPct,
+        occupancyLowAdjPct: config.occupancyLowAdjPct,
+        occupancyLookbackDays: config.occupancyLookbackDays,
+      });
+      toast.success("Occupancy rules saved to database.");
+    } catch {
+      toast.error("Failed to save occupancy rules.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start gap-2 text-xs bg-amber/5 border border-amber/20 rounded-lg p-3">
+        <Info className="h-3.5 w-3.5 mt-0.5 text-amber shrink-0" />
+        <span className="text-text-secondary">
+          <span className="font-semibold text-amber">KB Tier 1 #4 — Revenue 9/10.</span>{" "}
+          The single most powerful revenue lever for multi-unit operators. Adjusts prices dynamically
+          based on how booked the property already is relative to a target occupancy rate.
+        </span>
+      </div>
+
+      {/* Master toggle */}
+      <div className="rounded-lg border border-white/5 bg-white/[0.02] p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Occupancy-Based Pricing</h3>
+            <p className="text-[11px] text-text-tertiary mt-0.5">
+              Raise prices when ahead of target, discount when behind
+            </p>
+          </div>
+          <Switch
+            checked={config.occupancyEnabled}
+            onCheckedChange={(v) => onConfigChange({ occupancyEnabled: v })}
+          />
+        </div>
+      </div>
+
+      {config.occupancyEnabled && (
+        <>
+          {/* Target + Lookback */}
+          <div className="rounded-lg border border-white/5 bg-white/[0.02] p-4 space-y-4">
+            <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Target Settings</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs text-text-tertiary mb-1 block">
+                  Target Occupancy: <span className="font-bold text-text-primary">{config.occupancyTargetPct}%</span>
+                </Label>
+                <Slider
+                  min={40} max={95} step={5}
+                  value={[config.occupancyTargetPct]}
+                  onValueChange={([v]) => onConfigChange({ occupancyTargetPct: v })}
+                />
+                <p className="text-[10px] text-text-disabled mt-1">Ideal occupancy rate to maintain</p>
+              </div>
+              <div>
+                <Label className="text-xs text-text-tertiary mb-1 block">
+                  Lookback Window: <span className="font-bold text-text-primary">{config.occupancyLookbackDays} days</span>
+                </Label>
+                <Slider
+                  min={7} max={90} step={7}
+                  value={[config.occupancyLookbackDays]}
+                  onValueChange={([v]) => onConfigChange({ occupancyLookbackDays: v })}
+                />
+                <p className="text-[10px] text-text-disabled mt-1">Historical window for occupancy calculation</p>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-start gap-2 text-xs text-text-tertiary bg-white/[0.02] border border-white/5 rounded-lg p-3">
-            <Info className="h-3.5 w-3.5 mt-0.5 text-blue-400 shrink-0" />
-            Discount never goes below your floor price. For dates within {rampDays} days, the AI applies a
-            -5% to -{maxDiscount}% sliding discount to fill vacancies.
+          {/* High occupancy threshold */}
+          <div className="rounded-lg border border-green-500/10 bg-green-500/[0.03] p-4 space-y-4">
+            <div>
+              <h3 className="text-xs font-semibold text-green-400 uppercase tracking-wider">High Occupancy — Price Up</h3>
+              <p className="text-[11px] text-text-tertiary mt-0.5">
+                When occupancy exceeds the threshold, raise prices to capture demand
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs text-text-tertiary mb-1 block">
+                  Threshold: <span className="font-bold text-green-400">{config.occupancyHighThresholdPct}%</span> occupancy
+                </Label>
+                <Slider
+                  min={60} max={95} step={5}
+                  value={[config.occupancyHighThresholdPct]}
+                  onValueChange={([v]) => onConfigChange({ occupancyHighThresholdPct: v })}
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-text-tertiary mb-1 block">
+                  Price Increase: <span className="font-bold text-green-400">+{config.occupancyHighAdjPct}%</span>
+                </Label>
+                <Slider
+                  min={5} max={50} step={5}
+                  value={[config.occupancyHighAdjPct]}
+                  onValueChange={([v]) => onConfigChange({ occupancyHighAdjPct: v })}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Low occupancy threshold */}
+          <div className="rounded-lg border border-red-500/10 bg-red-500/[0.03] p-4 space-y-4">
+            <div>
+              <h3 className="text-xs font-semibold text-red-400 uppercase tracking-wider">Low Occupancy — Price Down</h3>
+              <p className="text-[11px] text-text-tertiary mt-0.5">
+                When occupancy falls below the threshold, discount to stimulate bookings
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label className="text-xs text-text-tertiary mb-1 block">
+                  Threshold: <span className="font-bold text-red-400">{config.occupancyLowThresholdPct}%</span> occupancy
+                </Label>
+                <Slider
+                  min={20} max={70} step={5}
+                  value={[config.occupancyLowThresholdPct]}
+                  onValueChange={([v]) => onConfigChange({ occupancyLowThresholdPct: v })}
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-text-tertiary mb-1 block">
+                  Price Decrease: <span className="font-bold text-red-400">{config.occupancyLowAdjPct}%</span>
+                </Label>
+                <Slider
+                  min={-50} max={-5} step={5}
+                  value={[config.occupancyLowAdjPct]}
+                  onValueChange={([v]) => onConfigChange({ occupancyLowAdjPct: v })}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Visual summary */}
+          <div className="rounded-lg border border-white/5 bg-white/[0.02] p-4">
+            <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-3">Logic Summary</h3>
+            <div className="space-y-2 text-xs text-text-tertiary font-mono">
+              <div className="flex items-center gap-2">
+                <span className="text-green-400">▲</span>
+                <span>occupancy &gt; <strong className="text-green-400">{config.occupancyHighThresholdPct}%</strong> → raise price by <strong className="text-green-400">+{config.occupancyHighAdjPct}%</strong></span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-text-disabled">●</span>
+                <span><strong>{config.occupancyLowThresholdPct}%</strong> ≤ occupancy ≤ <strong>{config.occupancyHighThresholdPct}%</strong> → hold price (target zone)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-red-400">▼</span>
+                <span>occupancy &lt; <strong className="text-red-400">{config.occupancyLowThresholdPct}%</strong> → lower price by <strong className="text-red-400">{config.occupancyLowAdjPct}%</strong></span>
+              </div>
+            </div>
+            <p className="text-[10px] text-text-disabled mt-3">
+              Calculated over past {config.occupancyLookbackDays} days · Applied at Pass 2 (Strategy) of the waterfall · Bounded by floor/ceiling guardrails
+            </p>
           </div>
         </>
       )}
 
       <Button
         size="sm"
-        onClick={() => toast.success("Last-minute curve saved.")}
-        className="bg-amber text-black hover:bg-amber/90 h-8 text-xs"
+        onClick={handleSave}
+        disabled={saving}
+        className="bg-amber text-black hover:bg-amber/90 h-9 text-xs gap-2"
       >
-        Save Curve
+        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+        Save Occupancy Rules
       </Button>
-    </div>
-  );
-}
-
-// ── Gap Fill Rules ────────────────────────────────────────────────────────────
-
-const DEFAULT_GAP_RULES = [
-  { nights: "1", discountPct: 10, label: "1-night orphan" },
-  { nights: "2", discountPct: 15, label: "2-night micro-gap" },
-  { nights: "3-4", discountPct: 5, label: "3-4 night gap" },
-];
-
-function GapFillTab() {
-  const [rules, setRules] = useState(DEFAULT_GAP_RULES);
-
-  const updateRule = (i: number, key: string, value: unknown) =>
-    setRules((prev) => prev.map((r, idx) => (idx === i ? { ...r, [key]: value } : r)));
-
-  return (
-    <div className="space-y-4">
-      <p className="text-xs text-text-tertiary">
-        Gap fill rules apply discount to short available windows between existing bookings.
-        The AI prefers LOS relaxation over discounting — discounts are a fallback.
-      </p>
-
-      <div className="space-y-3">
-        {rules.map((rule, i) => (
-          <div
-            key={i}
-            className="rounded-lg border border-white/5 bg-white/[0.02] p-4 flex items-center gap-4 flex-wrap"
-          >
-            <div className="flex-1 min-w-[120px]">
-              <Label className="text-xs text-text-tertiary mb-1 block">Gap Size (nights)</Label>
-              <Input
-                value={rule.nights}
-                onChange={(e) => updateRule(i, "nights", e.target.value)}
-                placeholder="1"
-                className="h-8 text-sm bg-white/5 border-white/10 font-mono w-24"
-              />
-            </div>
-            <div className="w-52">
-              <Label className="text-xs text-text-tertiary mb-1 block">
-                Discount: <span className="font-bold text-amber">-{rule.discountPct}%</span>
-              </Label>
-              <Slider
-                min={0}
-                max={25}
-                step={1}
-                value={[rule.discountPct]}
-                onValueChange={([v]) => updateRule(i, "discountPct", v)}
-              />
-            </div>
-            <div className="text-xs text-text-disabled">{rule.label}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="flex items-start gap-2 text-xs text-text-tertiary bg-white/[0.02] border border-white/5 rounded-lg p-3">
-        <Info className="h-3.5 w-3.5 mt-0.5 text-blue-400 shrink-0" />
-        Gap fill discounts are capped by your market guardrail profile (UAE/GCC: 20% max;
-        Europe: 15%; US Leisure: 25%). Auto-revert after 48h if no booking received.
-      </div>
-
-      <Button
-        size="sm"
-        onClick={() => toast.success("Gap fill rules saved.")}
-        className="bg-amber text-black hover:bg-amber/90 h-8 text-xs"
-      >
-        Save Gap Rules
-      </Button>
-    </div>
-  );
-}
-
-// ── LOS Discounts ─────────────────────────────────────────────────────────────
-
-function LOSDiscountsTab() {
-  const [tiers, setTiers] = useState([
-    { nights: 7, discountPct: 10, enabled: true },
-    { nights: 14, discountPct: 15, enabled: true },
-    { nights: 28, discountPct: 20, enabled: false },
-  ]);
-
-  const updateTier = (i: number, key: string, value: unknown) =>
-    setTiers((prev) => prev.map((t, idx) => (idx === i ? { ...t, [key]: value } : t)));
-
-  return (
-    <div className="space-y-4">
-      <p className="text-xs text-text-tertiary">
-        Length-of-stay discounts encourage longer bookings. Applied as a % off total nightly rate.
-      </p>
-
-      <div className="space-y-3">
-        {tiers.map((tier, i) => (
-          <div
-            key={i}
-            className="rounded-lg border border-white/5 bg-white/[0.02] p-4 flex items-center gap-4 flex-wrap"
-          >
-            <Switch
-              checked={tier.enabled}
-              onCheckedChange={(v) => updateTier(i, "enabled", v)}
-            />
-            <div className="flex-1 min-w-[120px]">
-              <Label className="text-xs text-text-tertiary">{tier.nights}-night stay</Label>
-              <p className="text-[10px] text-text-disabled">Minimum stay duration to qualify</p>
-            </div>
-            <div className="w-52">
-              <Label className="text-xs text-text-tertiary mb-1 block">
-                Discount: <span className={cn("font-bold", tier.enabled ? "text-green-400" : "text-text-disabled")}>
-                  {tier.enabled ? `-${tier.discountPct}%` : "disabled"}
-                </span>
-              </Label>
-              <Slider
-                min={0}
-                max={30}
-                step={1}
-                disabled={!tier.enabled}
-                value={[tier.discountPct]}
-                onValueChange={([v]) => updateTier(i, "discountPct", v)}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <Button
-        size="sm"
-        onClick={() => toast.success("LOS discounts saved.")}
-        className="bg-amber text-black hover:bg-amber/90 h-8 text-xs"
-      >
-        Save LOS Discounts
-      </Button>
-    </div>
-  );
-}
-
-// ── Date Overrides ────────────────────────────────────────────────────────────
-
-const SAMPLE_OVERRIDES = [
-  { date: "2026-12-31", label: "New Year's Eve", fixedPrice: 1800, minStay: 3 },
-  { date: "2026-12-25", label: "Christmas", fixedPrice: 1200, minStay: 2 },
-];
-
-function DateOverridesTab() {
-  const [overrides, setOverrides] = useState(SAMPLE_OVERRIDES);
-  const [newDate, setNewDate] = useState("");
-  const [newLabel, setNewLabel] = useState("");
-  const [newPrice, setNewPrice] = useState("");
-
-  const addOverride = () => {
-    if (!newDate) return;
-    setOverrides((prev) => [
-      ...prev,
-      { date: newDate, label: newLabel || newDate, fixedPrice: Number(newPrice) || 0, minStay: 1 },
-    ]);
-    setNewDate("");
-    setNewLabel("");
-    setNewPrice("");
-    toast.success(`Override added for ${newDate}`);
-  };
-
-  const removeOverride = (i: number) =>
-    setOverrides((prev) => prev.filter((_, idx) => idx !== i));
-
-  return (
-    <div className="space-y-4">
-      <p className="text-xs text-text-tertiary">
-        Manual overrides take precedence over all other rules. Use for special events (F1, NYE, Eid).
-      </p>
-
-      <div className="space-y-2">
-        {overrides.map((o, i) => (
-          <div
-            key={i}
-            className="rounded-lg border border-white/5 bg-white/[0.02] p-3 flex items-center gap-4"
-          >
-            <div className="font-mono text-xs text-text-secondary w-24 shrink-0">{o.date}</div>
-            <div className="flex-1 text-sm text-text-primary">{o.label}</div>
-            <Badge className="bg-green-500/10 text-green-400 border-green-500/20 text-[10px]">
-              AED {o.fixedPrice.toLocaleString("en-US")}
-            </Badge>
-            <Badge className="bg-white/5 text-text-tertiary border-white/10 text-[10px]">
-              {o.minStay}N min
-            </Badge>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-text-disabled hover:text-red-400"
-              onClick={() => removeOverride(i)}
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </div>
-        ))}
-      </div>
-
-      {/* Add override */}
-      <div className="rounded-lg border border-dashed border-white/10 p-4 flex flex-wrap items-end gap-3">
-        <div>
-          <Label className="text-xs text-text-tertiary mb-1 block">Date</Label>
-          <Input
-            type="date"
-            value={newDate}
-            onChange={(e) => setNewDate(e.target.value)}
-            className="h-8 text-sm bg-white/5 border-white/10 w-36"
-          />
-        </div>
-        <div className="flex-1 min-w-[120px]">
-          <Label className="text-xs text-text-tertiary mb-1 block">Label</Label>
-          <Input
-            value={newLabel}
-            onChange={(e) => setNewLabel(e.target.value)}
-            placeholder="e.g. Formula 1"
-            className="h-8 text-sm bg-white/5 border-white/10"
-          />
-        </div>
-        <div className="w-28">
-          <Label className="text-xs text-text-tertiary mb-1 block">Fixed Price</Label>
-          <Input
-            value={newPrice}
-            onChange={(e) => setNewPrice(e.target.value)}
-            placeholder="AED"
-            className="h-8 text-sm bg-white/5 border-white/10"
-          />
-        </div>
-        <Button size="sm" onClick={addOverride} className="bg-amber text-black hover:bg-amber/90 h-8 text-xs gap-1.5">
-          <Plus className="h-3.5 w-3.5" /> Add Override
-        </Button>
-      </div>
     </div>
   );
 }
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-const RULE_TABS = [
-  { value: "seasons", label: "Seasons", icon: Sun },
-  { value: "dow", label: "Day of Week", icon: Calendar },
-  { value: "lastminute", label: "Last-Minute", icon: Clock },
-  { value: "gapfill", label: "Gap Fill", icon: Layers },
-  { value: "los", label: "LOS Discounts", icon: TrendingDown },
-  { value: "overrides", label: "Date Overrides", icon: AlignLeft },
+const STUDIO_TABS = [
+  { value: "guardrails", label: "Guardrails", icon: Shield, tooltip: "Global floor/ceiling prices and stay limits. These always win last." },
+  { value: "seasons", label: "Seasons", icon: Sun, tooltip: "Broad date-range price adjustments (e.g. Summer/Winter)." },
+  { value: "leadtime", label: "Lead Time", icon: Clock, tooltip: "Last-minute discounts, far-out premiums, and day-of-week logic." },
+  { value: "gap", label: "Gap Logic", icon: Layers, tooltip: "Inventory rules for orphan nights and short gaps between bookings." },
+  { value: "los", label: "LOS Discounts", icon: TrendingDown, tooltip: "Length of Stay discounts (e.g. 7+ nights, 30+ nights)." },
+  { value: "overrides", label: "Date Overrides", icon: AlignLeft, tooltip: "High-priority overrides for specific events or manual blocks." },
+  { value: "occupancy", label: "Occupancy", icon: Activity, tooltip: "Automated price adjustments based on rolling property occupancy %." },
 ];
 
-export function PricingRulesStudio() {
+interface Props {
+  listings: Listing[];
+}
+
+export function PricingRulesStudio({ listings }: Props) {
+  const [selectedListingId, setSelectedListingId] = useState<string>(
+    listings[0]?.id ?? ""
+  );
+  const [config, setConfig] = useState<EngineConfig>(DEFAULT_CONFIG);
+  const [rules, setRules] = useState<PricingRule[]>([]);
+  const selectedCurrency = listings.find((l) => l.id === selectedListingId)?.currencyCode || "AED";
+  const [loading, setLoading] = useState(false);
+
+  const loadData = useCallback(async (listingId: string) => {
+    if (!listingId) return;
+    setLoading(true);
+    try {
+      const [cfgRes, rulesRes] = await Promise.all([
+        fetch(`/api/listings/${listingId}/engine-config`),
+        fetch(`/api/listings/${listingId}/rules`),
+      ]);
+      if (cfgRes.ok) {
+        const data = await cfgRes.json();
+        setConfig({ ...DEFAULT_CONFIG, ...data });
+      }
+      if (rulesRes.ok) {
+        const data = await rulesRes.json();
+        setRules(data);
+      }
+    } catch {
+      toast.error("Failed to load listing configuration.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (selectedListingId) loadData(selectedListingId);
+  }, [selectedListingId, loadData]);
+
+  const handleConfigChange = (patch: Partial<EngineConfig>) => {
+    setConfig((prev) => ({ ...prev, ...patch }));
+  };
+
+  const handleRulesChange = () => {
+    loadData(selectedListingId);
+  };
+
+  if (listings.length === 0) {
+    return (
+      <div className="rounded-xl border border-white/5 bg-white/[0.02] p-12 text-center">
+        <p className="text-text-secondary text-sm">No active listings found.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-xl border border-white/5 bg-white/[0.02] overflow-hidden">
-      <div className="px-5 py-4 border-b border-white/5">
-        <h2 className="text-sm font-semibold text-text-primary">Pricing Rules Studio</h2>
-        <p className="text-xs text-text-tertiary mt-0.5">
-          Configure the 10-layer pricing formula. Rules are applied in order — guardrails always win.
-        </p>
+      {/* Header with listing selector */}
+      <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-sm font-semibold text-text-primary">Pricing Rules Studio</h2>
+          <p className="text-xs text-text-tertiary mt-0.5">
+            4-pass waterfall engine — guardrails always win. Changes save directly to MongoDB.
+          </p>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          {loading && <Loader2 className="h-4 w-4 animate-spin text-text-tertiary" />}
+          {!loading && selectedListingId && (
+            <span className="flex items-center gap-1 text-xs text-green-400">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Loaded
+            </span>
+          )}
+          <Select value={selectedListingId} onValueChange={setSelectedListingId}>
+            <SelectTrigger className="w-56 h-8 text-xs bg-white/5 border-white/10">
+              <SelectValue placeholder="Select property…" />
+            </SelectTrigger>
+            <SelectContent>
+              {listings.map((l) => (
+                <SelectItem key={l.id} value={l.id} className="text-xs">
+                  {l.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      <Tabs defaultValue="seasons" className="p-5">
-        <TabsList className="flex flex-wrap gap-1 h-auto bg-white/5 p-1 rounded-lg mb-5">
-          {RULE_TABS.map(({ value, label, icon: Icon }) => (
-            <TabsTrigger
-              key={value}
-              value={value}
-              className="gap-1.5 text-xs data-[state=active]:bg-amber data-[state=active]:text-black"
+      {loading ? (
+        <div className="flex items-center justify-center py-20 gap-3">
+          <Loader2 className="h-6 w-6 animate-spin text-text-tertiary" />
+          <span className="text-text-tertiary text-sm">Loading configuration…</span>
+        </div>
+      ) : (
+        <Tabs defaultValue="guardrails" className="p-5">
+          <TooltipProvider>
+            <TabsList 
+              id="tour-pricing-rules"
+              className="flex flex-wrap gap-1 h-auto bg-white/5 p-1 rounded-lg mb-5"
             >
-              <Icon className="h-3.5 w-3.5" />
-              {label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+              {STUDIO_TABS.map(({ value, label, icon: Icon, tooltip }) => (
+                <Tooltip key={value}>
+                  <TooltipTrigger asChild>
+                    <TabsTrigger
+                      value={value}
+                      className="gap-1.5 text-xs data-[state=active]:bg-amber data-[state=active]:text-black"
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                      {label}
+                    </TabsTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-[10px] p-2 dark:bg-black border border-white/20">
+                    {tooltip}
+                  </TooltipContent>
+                </Tooltip>
+              ))}
+            </TabsList>
+          </TooltipProvider>
 
-        <TabsContent value="seasons"><SeasonProfiles /></TabsContent>
-        <TabsContent value="dow"><DayOfWeekTab /></TabsContent>
-        <TabsContent value="lastminute"><LastMinuteTab /></TabsContent>
-        <TabsContent value="gapfill"><GapFillTab /></TabsContent>
-        <TabsContent value="los"><LOSDiscountsTab /></TabsContent>
-        <TabsContent value="overrides"><DateOverridesTab /></TabsContent>
-      </Tabs>
+          <TabsContent value="guardrails">
+            <GuardrailsTab
+              listingId={selectedListingId}
+              config={config}
+              onConfigChange={handleConfigChange}
+              currency={selectedCurrency}
+            />
+          </TabsContent>
+          <TabsContent value="seasons">
+            <SeasonsTab
+              listingId={selectedListingId}
+              rules={rules}
+              onRulesChange={handleRulesChange}
+            />
+          </TabsContent>
+          <TabsContent value="leadtime">
+            <LeadTimeTab
+              listingId={selectedListingId}
+              config={config}
+              onConfigChange={handleConfigChange}
+            />
+          </TabsContent>
+          <TabsContent value="gap">
+            <GapLogicTab
+              listingId={selectedListingId}
+              config={config}
+              onConfigChange={handleConfigChange}
+            />
+          </TabsContent>
+          <TabsContent value="los">
+            <LOSTab
+              listingId={selectedListingId}
+              rules={rules}
+              onRulesChange={handleRulesChange}
+            />
+          </TabsContent>
+          <TabsContent value="overrides">
+            <DateOverridesTab
+              listingId={selectedListingId}
+              rules={rules}
+              onRulesChange={handleRulesChange}
+              currency={selectedCurrency}
+            />
+          </TabsContent>
+          <TabsContent value="occupancy">
+            <OccupancyTab
+              listingId={selectedListingId}
+              config={config}
+              onConfigChange={handleConfigChange}
+            />
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 }

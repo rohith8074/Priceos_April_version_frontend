@@ -66,7 +66,13 @@ export async function POST(req: Request) {
 
         const orgId = org._id.toString();
         console.log(`🎫 [Auth/Login] Generating tokens for: ${orgId}`);
-        const accessToken = signAccessToken({ userId: orgId, orgId, email: org.email, role: org.role });
+        const accessToken = signAccessToken({ 
+            userId: orgId, 
+            orgId, 
+            email: org.email, 
+            role: org.role,
+            isApproved: !!org.isApproved 
+        });
         const refreshToken = signRefreshToken(orgId);
 
         await Organization.findByIdAndUpdate(org._id, { $set: { refreshToken } });

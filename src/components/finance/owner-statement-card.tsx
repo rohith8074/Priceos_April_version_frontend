@@ -12,8 +12,8 @@ interface OwnerStatementCardProps {
   properties: Listing[];
 }
 
-function formatCurrency(amount: number): string {
-  return `${amount.toLocaleString()} AED`;
+function formatCurrency(amount: number, currencyCode = "AED"): string {
+  return `${amount.toLocaleString("en-US")} ${currencyCode}`;
 }
 
 function formatMonth(month: string): string {
@@ -86,13 +86,13 @@ export function OwnerStatementCard({ statements, properties }: OwnerStatementCar
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Revenue</span>
                   <span className="font-medium text-green-600 dark:text-green-400">
-                    {formatCurrency(stmt.totalRevenue)}
+                    {formatCurrency(stmt.totalRevenue, (property as any)?.currencyCode)}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Expenses</span>
                   <span className="font-medium text-red-600 dark:text-red-400">
-                    {formatCurrency(stmt.totalExpenses)}
+                    {formatCurrency(stmt.totalExpenses, (property as any)?.currencyCode)}
                   </span>
                 </div>
                 <div className="border-t pt-2 flex justify-between text-sm">
@@ -105,7 +105,7 @@ export function OwnerStatementCard({ statements, properties }: OwnerStatementCar
                     }`}
                   >
                     {isPositive ? "+" : ""}
-                    {formatCurrency(stmt.netIncome)}
+                    {formatCurrency(stmt.netIncome, (property as any)?.currencyCode)}
                   </span>
                 </div>
               </div>

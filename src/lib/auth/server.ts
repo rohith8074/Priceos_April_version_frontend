@@ -8,6 +8,7 @@ export interface SessionPayload {
   orgId: string;  // same as userId
   email: string;
   role: string;
+  isApproved: boolean;
 }
 
 /**

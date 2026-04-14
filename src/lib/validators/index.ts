@@ -48,6 +48,7 @@ export const suggestReplySchema = z.object({
         .max(5000, "Message cannot exceed 5000 characters"),
     guestName: z.string().optional().default("Guest"),
     propertyName: z.string().optional().default("Our Property"),
+    listingId: z.string().optional(), // MongoDB ObjectId string — used to fetch property policies
 });
 
 /** GET /v1/guests/summary — query params */

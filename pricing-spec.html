@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PriceOS Pricing Engine Specification</title>
+    <style>
+        :root {
+            --primary: #fbbf24;
+            --secondary: #10b981;
+            --accent: #8b5cf6;
+            --bg: #09090b;
+            --surface: #18181b;
+            --border: rgba(255, 255, 255, 0.1);
+            --text: #f4f4f5;
+            --text-muted: #a1a1aa;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, inherit;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            margin: 0;
+            padding: 40px;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            letter-spacing: -0.025em;
+            margin-bottom: 0.5rem;
+            color: var(--primary);
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            color: var(--text-muted);
+            margin-bottom: 3rem;
+        }
+
+        .pass-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 99px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+
+        .pass-1 { background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .pass-2 { background: rgba(168, 85, 247, 0.2); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+        .pass-3 { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .pass-4 { background: rgba(251, 191, 36, 0.2); color: #fbbf24; border: 1px solid rgba(251, 191, 36, 0.3); }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 2rem;
+            background: var(--surface);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        th {
+            text-align: left;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 20px 16px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: top;
+            font-size: 0.95rem;
+        }
+
+        .rule-name {
+            font-weight: 700;
+            color: white;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .rule-desc {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .strategy-tag {
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            margin-right: 4px;
+        }
+
+        .highlight-amber { color: var(--primary); font-weight: 600; }
+        .highlight-emerald { color: var(--secondary); font-weight: 600; }
+
+        .waterfall-graphic {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4rem;
+            gap: 20px;
+        }
+
+        .waterfall-step {
+            flex: 1;
+            padding: 20px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            text-align: center;
+        }
+
+        .waterfall-step h3 {
+            font-size: 0.9rem;
+            margin: 10px 0;
+            color: white;
+        }
+
+        .engine-note {
+            margin-top: 4rem;
+            padding: 24px;
+            background: rgba(251, 191, 36, 0.05);
+            border-left: 4px solid var(--primary);
+            border-radius: 0 8px 8px 0;
+        }
+
+        .engine-note h4 {
+            margin-top: 0;
+            color: var(--primary);
+            font-size: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Pricing Strategy Specification</h1>
+        <p class="subtitle">Alignment of Global Revenue Rules and 4-Pass Waterfall Logic</p>
+
+        <div class="waterfall-graphic">
+            <div class="waterfall-step">
+                <span class="pass-badge pass-1">Pass 1</span>
+                <h3>Foundations</h3>
+                <p class="rule-desc">Market Base & Events</p>
+            </div>
+            <div class="waterfall-step">
+                <span class="pass-badge pass-2">Pass 2</span>
+                <h3>Strategic</h3>
+                <p class="rule-desc">Seasons & Lead Time</p>
+            </div>
+            <div class="waterfall-step">
+                <span class="pass-badge pass-3">Pass 3</span>
+                <h3>Inventory</h3>
+                <p class="rule-desc">Occupancy & Gaps</p>
+            </div>
+            <div class="waterfall-step">
+                <span class="pass-badge pass-4">Pass 4</span>
+                <h3>Integrity</h3>
+                <p class="rule-desc">Floor/Ceiling Bounds</p>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th width="25%">Rule Category</th>
+                    <th width="35%">Implementation Logic</th>
+                    <th width="40%">Impact & Priority</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <span class="pass-badge pass-1">Foundation</span>
+                        <span class="rule-name">Market Events</span>
+                    </td>
+                    <td class="rule-desc">
+                        Scans Ticketmaster/Eventbrite signals. Applies <span class="highlight-emerald">+15% to +50%</span> premiums based on impact score.
+                    </td>
+                    <td>
+                        Highest priority pricing signal. Forms the "Tentpole" for revenue surge during festivals/holidays.
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <span class="pass-badge pass-2">Strategic</span>
+                        <span class="rule-name">Seasonal Profiles</span>
+                    </td>
+                    <td class="rule-desc">
+                        Date-range based adjustments (e.g., Summer/Winter). Percentage adjustment to base rate.
+                    </td>
+                    <td>
+                        Predictable base shift. Aligned with historic neighborhood demand curves.
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <span class="pass-badge pass-2">Strategic</span>
+                        <span class="rule-name">Last-Minute Ramp</span>
+                    </td>
+                    <td class="rule-desc">
+                        <span class="highlight-amber">Gradual Curve</span> tapering from e.g., 30% discount at Day 1 to 5% at Day 15.
+                    </td>
+                    <td>
+                        Protects occupancy by filling inventory as check-in approaches. Curbs revenue loss on orphan nights.
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <span class="pass-badge pass-3">Inventory</span>
+                        <span class="rule-name">Occupancy Trigger</span>
+                    </td>
+                    <td class="rule-desc">
+                        Adjusts price based on property-level pacing. Tries to hit <span class="highlight-emerald">85% target</span> before shifting to premium rates.
+                    </td>
+                    <td>
+                        Aggressive pacing logic. Surges rates when "The Machine" detects high booking velocity.
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <span class="pass-badge pass-3">Inventory</span>
+                        <span class="rule-name">Gap Filling</span>
+                    </td>
+                    <td class="rule-desc">
+                        Identifies 1-3 night gaps between bookings. Automates <span class="highlight-amber">10-20% discounts</span> specifically for those dates.
+                    </td>
+                    <td>
+                        Yield optimizer. Recovers revenue that would typically be lost due to strict min-stay constraints.
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        <span class="pass-badge pass-4">Integrity</span>
+                        <span class="rule-name">Price Guardrails</span>
+                    </td>
+                    <td class="rule-desc">
+                        Absolute <span class="highlight-amber">Floor & Ceiling</span> prices. Applied at the final pass.
+                    </td>
+                    <td>
+                        Safety Net. No matter how high the surge or deep the discount, engine never violates these bounds.
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="engine-note">
+            <h4>🧠 Alignment Note</h4>
+            <p class="rule-desc">
+                Current codebase logic strictly follows the <strong>Waterfall Principle</strong>: Rules in Pass 4 (Integrity) overwrite results from all previous passes. For example, if a 40% Last-Minute discount would push the price to 250 AED, but the Floor Price is set to 300 AED, the final proposal will be 300 AED.
+            </p>
+        </div>
+    </div>
+</body>
+</html>

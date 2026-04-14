@@ -7,7 +7,7 @@ import mongoose from "mongoose";
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { message, propertyIds } = body;
+        const { message, propertyIds, sessionId: clientSessionId } = body;
 
         await connectDB();
         const session = await getSession();
@@ -15,10 +15,12 @@ export async function POST(req: NextRequest) {
             ? new mongoose.Types.ObjectId(session.orgId)
             : new mongoose.Types.ObjectId();
 
+        const sessionId = clientSessionId || "global";
+
         // Save user message
         await ChatMessage.create({
             orgId,
-            sessionId: "global",
+            sessionId,
             role: "user",
             content: message,
             context: { type: "portfolio" },
@@ -128,7 +130,7 @@ export async function POST(req: NextRequest) {
 
         await ChatMessage.create({
             orgId,
-            sessionId: "global",
+            sessionId,
             role: "assistant",
             content: responseMessage,
             context: { type: "portfolio" },

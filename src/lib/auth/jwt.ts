@@ -11,6 +11,7 @@ export interface TokenPayload {
   orgId: string;
   email: string;
   role: string;
+  isApproved: boolean;
 }
 
 /**

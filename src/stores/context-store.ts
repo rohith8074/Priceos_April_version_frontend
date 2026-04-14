@@ -8,13 +8,14 @@ interface ContextStore {
   contextType: "portfolio" | "property";
   propertyId: string | null;
   propertyName: string | null;
+  propertyCurrency: string;
 
   // Date Range
   dateRange: DateRange | undefined;
 
   // Actions
   setPortfolioContext: () => void;
-  setPropertyContext: (id: string, name: string) => void;
+  setPropertyContext: (id: string, name: string, currency?: string) => void;
   setDateRange: (range: DateRange | undefined) => void;
 
   // UI State
@@ -55,6 +56,7 @@ export const useContextStore = create<ContextStore>()(
       contextType: "portfolio",
       propertyId: null,
       propertyName: null,
+      propertyCurrency: "AED",
       activeSidebarTab: "summary",
       calendarMetrics: null,
       conversationSummary: null,
@@ -92,14 +94,16 @@ export const useContextStore = create<ContextStore>()(
           contextType: "portfolio",
           propertyId: null,
           propertyName: null,
+          propertyCurrency: "AED",
         }),
 
       // Switch to specific property
-      setPropertyContext: (id: string, name: string) =>
+      setPropertyContext: (id: string, name: string, currency?: string) =>
         set({
           contextType: "property",
           propertyId: id,
           propertyName: name,
+          propertyCurrency: currency || "AED",
         }),
     }),
     {

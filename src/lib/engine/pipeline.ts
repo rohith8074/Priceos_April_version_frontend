@@ -54,6 +54,23 @@ export async function runPipeline(
             throw new Error(`Listing ${listingId} not found`);
         }
 
+        // Compute rolling occupancy % for the configured lookback window
+        const lookbackDays: number = listing.occupancyLookbackDays ?? 30;
+        let currentOccupancyPct = 0;
+        if (listing.occupancyEnabled) {
+            const lookbackStart = addDays(new Date(), -lookbackDays);
+            const lookbackStartStr = dateStr(lookbackStart);
+            const todayStr = dateStr(new Date());
+            const lookbackDocs = await InventoryMaster.find({
+                listingId: lid,
+                date: { $gte: lookbackStartStr, $lte: todayStr },
+            }).select("status").lean();
+            if (lookbackDocs.length > 0) {
+                const bookedCount = lookbackDocs.filter((d) => d.status !== "available").length;
+                currentOccupancyPct = (bookedCount / lookbackDocs.length) * 100;
+            }
+        }
+
         const config: ListingConfig = {
             basePrice: toNum(listing.price),
             absoluteMinPrice: toNum(listing.priceFloor),
@@ -67,6 +84,10 @@ export async function runPipeline(
             lastMinuteDaysOut: listing.lastMinuteDaysOut,
             lastMinuteDiscountPct: toNum(listing.lastMinuteDiscountPct),
             lastMinuteMinStay: listing.lastMinuteMinStay ?? null,
+            lastMinuteRampEnabled: listing.lastMinuteRampEnabled ?? false,
+            lastMinuteRampDays: listing.lastMinuteRampDays ?? 7,
+            lastMinuteMaxDiscountPct: toNum(listing.lastMinuteMaxDiscountPct ?? 0),
+            lastMinuteMinDiscountPct: toNum(listing.lastMinuteMinDiscountPct ?? 0),
             farOutEnabled: listing.farOutEnabled,
             farOutDaysOut: listing.farOutDaysOut,
             farOutMarkupPct: toNum(listing.farOutMarkupPct),
@@ -82,6 +103,15 @@ export async function runPipeline(
             gapFillLengthMax: listing.gapFillLengthMax,
             gapFillDiscountPct: toNum(listing.gapFillDiscountPct),
             gapFillOverrideCico: listing.gapFillOverrideCico,
+            occupancyEnabled: listing.occupancyEnabled ?? false,
+            currentOccupancyPct,
+            occupancyTargetPct: listing.occupancyTargetPct ?? 80,
+            occupancyHighThresholdPct: listing.occupancyHighThresholdPct ?? 85,
+            occupancyHighAdjPct: toNum(listing.occupancyHighAdjPct ?? 8),
+            occupancyLowThresholdPct: listing.occupancyLowThresholdPct ?? 60,
+            occupancyLowAdjPct: toNum(listing.occupancyLowAdjPct ?? -10),
+            weekendMinPrice: toNum(listing.weekendMinPrice ?? 0),
+            weekendDays: listing.weekendDays ?? [3, 4], // Thu/Fri Dubai default
         };
 
         const ruleRows = await PricingRule.find({

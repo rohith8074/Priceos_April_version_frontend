@@ -13,11 +13,12 @@ const TABS = [
 
 type TabId = typeof TABS[number]["id"];
 
-export function PricingPageTabs({
-  initialProposals,
-}: {
+interface Props {
   initialProposals: ProposalData[];
-}) {
+  listings: { id: string; name: string }[];
+}
+
+export function PricingPageTabs({ initialProposals, listings }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>("proposals");
 
   return (
@@ -26,8 +27,8 @@ export function PricingPageTabs({
       <div className="px-8 pt-8 pb-0 shrink-0">
         <h1 className="text-3xl font-bold mb-1">Pricing Command Center</h1>
         <p className="text-muted-foreground text-sm max-w-2xl mb-6">
-          Review and approve pending price changes proposed by the AI engines, and configure
-          the rules that drive pricing decisions.
+          Review and approve AI-generated price proposals, then configure the rules driving
+          every pricing decision.
         </p>
 
         {/* Tab Bar */}
@@ -59,7 +60,7 @@ export function PricingPageTabs({
         )}
         {activeTab === "rules" && (
           <div className="p-8 pt-6">
-            <PricingRulesStudio />
+            <PricingRulesStudio listings={listings} />
           </div>
         )}
       </div>

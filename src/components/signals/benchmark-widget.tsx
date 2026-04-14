@@ -46,6 +46,7 @@ interface BenchmarkWidgetProps {
     dateFrom: string | null;
     dateTo: string | null;
     refreshKey?: number;
+    currency?: string;
 }
 
 const verdictConfig: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -61,12 +62,12 @@ function TrendIcon({ trend }: { trend: string | null }) {
     return <Minus className="h-3 w-3 text-muted-foreground" />;
 }
 
-function AedVal({ val }: { val: string | null }) {
+function CurrencyVal({ val, currency }: { val: string | null; currency: string }) {
     if (!val) return <span className="text-muted-foreground/40">—</span>;
-    return <span className="font-bold">AED {Number(val).toFixed(0)}</span>;
+    return <span className="font-bold">{currency} {Number(val).toFixed(0)}</span>;
 }
 
-export function BenchmarkWidget({ listingId, dateFrom, dateTo, refreshKey = 0 }: BenchmarkWidgetProps) {
+export function BenchmarkWidget({ listingId, dateFrom, dateTo, refreshKey = 0, currency = "AED" }: BenchmarkWidgetProps) {
     const [open, setOpen] = useState(true);
     const [compsOpen, setCompsOpen] = useState(false);
     const [summary, setSummary] = useState<BenchmarkSummary | null>(null);
@@ -194,13 +195,13 @@ export function BenchmarkWidget({ listingId, dateFrom, dateTo, refreshKey = 0 }:
                                 </div>
                             )}
 
-                            {/* AED gap */}
+                            {/* Currency gap */}
                             {aedGapNum !== null && (
                                 <div className="flex items-center gap-1.5 text-[11px] px-1">
                                     <TrendIcon trend={aedGapNum > 0 ? "rising" : aedGapNum < 0 ? "falling" : null} />
                                     <span className="text-muted-foreground">vs market median:</span>
                                     <span className={`font-bold ${aedGapNum > 0 ? "text-amber-500" : aedGapNum < 0 ? "text-emerald-500" : "text-foreground"}`}>
-                                        {aedGapNum > 0 ? "+" : ""}{aedGapNum.toFixed(0)} AED
+                                        {aedGapNum > 0 ? "+" : ""}{aedGapNum.toFixed(0)} {currency}
                                     </span>
                                 </div>
                             )}
@@ -227,11 +228,11 @@ export function BenchmarkWidget({ listingId, dateFrom, dateTo, refreshKey = 0 }:
                             <div className="grid grid-cols-2 gap-2">
                                 <div className="bg-muted/20 rounded-lg p-2 border border-border/30 text-center">
                                     <span className="text-[8px] font-black uppercase text-muted-foreground tracking-wider">Avg Weekday</span>
-                                    <p className="text-[13px] font-black mt-0.5"><AedVal val={summary.avgWeekday} /></p>
+                                    <p className="text-[13px] font-black mt-0.5"><CurrencyVal val={summary.avgWeekday} currency={currency} /></p>
                                 </div>
                                 <div className="bg-muted/20 rounded-lg p-2 border border-border/30 text-center">
                                     <span className="text-[8px] font-black uppercase text-muted-foreground tracking-wider">Avg Weekend</span>
-                                    <p className="text-[13px] font-black mt-0.5"><AedVal val={summary.avgWeekend} /></p>
+                                    <p className="text-[13px] font-black mt-0.5"><CurrencyVal val={summary.avgWeekend} currency={currency} /></p>
                                 </div>
                             </div>
 
@@ -246,7 +247,7 @@ export function BenchmarkWidget({ listingId, dateFrom, dateTo, refreshKey = 0 }:
                                     ].map(({ label, val }) => (
                                         <div key={label} className="flex items-center justify-between text-[11px]">
                                             <span className="text-muted-foreground font-medium">{label}</span>
-                                            <AedVal val={val} />
+                                            <CurrencyVal val={val} currency={currency} />
                                         </div>
                                     ))}
                                 </div>
@@ -322,7 +323,7 @@ export function BenchmarkWidget({ listingId, dateFrom, dateTo, refreshKey = 0 }:
                                                     </div>
                                                     <div className="flex flex-col items-end shrink-0">
                                                         <span className="text-[12px] font-black text-[#f39c12]">
-                                                            {comp.avgRate ? `AED ${Math.round(Number(comp.avgRate))}` : "—"}
+                                                            {comp.avgRate ? `${currency} ${Math.round(Number(comp.avgRate))}` : "—"}
                                                         </span>
                                                         <span className="text-[8px] text-muted-foreground uppercase font-medium">avg/night</span>
                                                     </div>

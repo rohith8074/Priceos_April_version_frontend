@@ -147,7 +147,7 @@ export function ReservationTable({ reservations, properties }: ReservationTableP
                     </td>
                     <td className="px-4 py-3 text-right">{r.nights}</td>
                     <td className="px-4 py-3 text-right font-medium">
-                      {r.totalPrice.toLocaleString("en-US")} AED
+                      {r.totalPrice.toLocaleString("en-US")} {property?.currencyCode || "AED"}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <Badge variant={statusVariants[r.status] ?? "secondary"}>
@@ -161,7 +161,7 @@ export function ReservationTable({ reservations, properties }: ReservationTableP
                         className="h-8 w-8"
                         onClick={() =>
                           open(
-                            `Is reservation #${r.id} for ${r.guestName} at ${property?.name} priced well? Dates: ${r.arrivalDate} to ${r.departureDate}, Total: ${r.totalPrice} AED for ${r.nights} nights.`
+                            `Is reservation #${r.id} for ${r.guestName} at ${property?.name} priced well? Dates: ${r.arrivalDate} to ${r.departureDate}, Total: ${r.totalPrice} ${property?.currencyCode || "AED"} for ${r.nights} nights.`
                           )
                         }
                       >

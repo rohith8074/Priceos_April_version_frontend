@@ -100,14 +100,25 @@ const TABS = [
 function SourcesTab() {
   const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(true);
+  const [runningIds, setRunningIds] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
+  const fetchSources = () => {
     fetch("/api/sync/sources")
       .then((r) => r.json())
       .then((d) => setSources(d.sources ?? []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { fetchSources(); }, []);
+
+  // Poll every 4 s while any source is in running state
+  useEffect(() => {
+    const hasRunning = sources.some((s) => s.lastRunStatus === "running");
+    if (!hasRunning && runningIds.size === 0) return;
+    const timer = setInterval(fetchSources, 4000);
+    return () => clearInterval(timer);
+  }, [sources, runningIds]);
 
   const handleRun = async (sourceId: string) => {
     const res = await fetch("/api/sync/run", {
@@ -117,6 +128,18 @@ function SourcesTab() {
     });
     if (res.ok) {
       toast.success(`${sourceId} sync triggered.`);
+      setRunningIds((prev) => new Set(prev).add(sourceId));
+      // Start polling; clear from set once source shows non-running
+      const poll = setInterval(async () => {
+        const r = await fetch("/api/sync/sources").then((x) => x.json());
+        const updated: Source[] = r.sources ?? [];
+        setSources(updated);
+        const src = updated.find((s) => s.sourceId === sourceId);
+        if (src && src.lastRunStatus !== "running") {
+          setRunningIds((prev) => { const n = new Set(prev); n.delete(sourceId); return n; });
+          clearInterval(poll);
+        }
+      }, 3000);
     } else {
       toast.error("Failed to trigger sync.");
     }
@@ -163,10 +186,13 @@ function SourcesTab() {
               <Button
                 size="sm"
                 onClick={() => handleRun(s.sourceId)}
+                disabled={runningIds.has(s.sourceId) || s.lastRunStatus === "running"}
                 className="h-8 px-3 text-xs bg-white/5 hover:bg-white/10 text-text-secondary border border-white/10 gap-1.5 shrink-0"
               >
-                <Play className="h-3 w-3" />
-                Run
+                {(runningIds.has(s.sourceId) || s.lastRunStatus === "running")
+                  ? <RefreshCw className="h-3 w-3 animate-spin" />
+                  : <Play className="h-3 w-3" />}
+                {(runningIds.has(s.sourceId) || s.lastRunStatus === "running") ? "Running…" : "Run"}
               </Button>
             </div>
           </div>
@@ -376,7 +402,9 @@ function EmptyState({ icon: Icon, title, subtitle }: { icon: any; title: string;
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function SyncPage() {
+import { Suspense } from "react";
+
+function SyncPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const tab = (searchParams.get("tab") || "sources") as "sources" | "detectors" | "signals";
@@ -417,5 +445,13 @@ export default function SyncPage() {
       {tab === "detectors" && <DetectorsTab />}
       {tab === "signals" && <EngineRunsTab />}
     </div>
+  );
+}
+
+export default function SyncPage() {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <SyncPageContent />
+    </Suspense>
   );
 }

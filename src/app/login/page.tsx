@@ -36,6 +36,11 @@ function SignInForm() {
                 setLoading(false);
                 return;
             }
+            // If account is pending approval, redirect to pending page
+            if (data.pending) {
+                router.push("/pending-approval");
+                return;
+            }
             router.push("/dashboard");
             router.refresh();
         } catch {
@@ -83,6 +88,21 @@ function SignInForm() {
     );
 }
 
+// ── Market options (matches seed / settings) ─────────────────────────────────
+
+const MARKETS = [
+    { code: "UAE_DXB", label: "🇦🇪  Dubai, UAE" },
+    { code: "GBR_LON", label: "🇬🇧  London, UK" },
+    { code: "USA_NYC", label: "🇺🇸  New York, USA" },
+    { code: "FRA_PAR", label: "🇫🇷  Paris, France" },
+    { code: "NLD_AMS", label: "🇳🇱  Amsterdam, Netherlands" },
+    { code: "ESP_BCN", label: "🇪🇸  Barcelona, Spain" },
+    { code: "USA_MIA", label: "🇺🇸  Miami, USA" },
+    { code: "PRT_LIS", label: "🇵🇹  Lisbon, Portugal" },
+    { code: "USA_NSH", label: "🇺🇸  Nashville, USA" },
+    { code: "AUS_SYD", label: "🇦🇺  Sydney, Australia" },
+];
+
 // ── Sign Up Form ──────────────────────────────────────────────────────────────
 
 function SignUpForm() {
@@ -90,6 +110,7 @@ function SignUpForm() {
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [marketCode, setMarketCode] = useState("UAE_DXB");
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
@@ -101,7 +122,7 @@ function SignUpForm() {
             const res = await fetch("/api/auth/register", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ name, email, password }),
+                body: JSON.stringify({ name, email, password, marketCode }),
             });
             const data = await res.json();
             if (!res.ok) {
@@ -113,7 +134,8 @@ function SignUpForm() {
                 setLoading(false);
                 return;
             }
-            router.push("/dashboard");
+            // New users always go to pending approval
+            router.push("/pending-approval");
             router.refresh();
         } catch {
             setError("Network error. Please try again.");
@@ -134,6 +156,24 @@ function SignUpForm() {
                     placeholder="Your name"
                     className="form-input"
                 />
+            </div>
+            <div>
+                <label className="form-label">Primary Market</label>
+                <select
+                    value={marketCode}
+                    onChange={(e) => setMarketCode(e.target.value)}
+                    className="form-input"
+                    style={{ appearance: "none", cursor: "pointer" }}
+                >
+                    {MARKETS.map((m) => (
+                        <option key={m.code} value={m.code} style={{ background: "#1a1a2e", color: "white" }}>
+                            {m.label}
+                        </option>
+                    ))}
+                </select>
+                <p style={{ fontSize: "11px", color: "rgba(255,255,255,0.35)", marginTop: "4px" }}>
+                    Sets your default currency, weekend definition, and guardrail defaults.
+                </p>
             </div>
             <div>
                 <label className="form-label">Email</label>
@@ -205,7 +245,7 @@ function LoginContent() {
                         </span>
                     </h2>
                     <p className="text-lg text-white/50 font-light leading-relaxed">
-                        The only revenue management system built specifically for the high-velocity Dubai luxury market.
+                        Autonomous revenue management for short-term rental operators — anywhere in the world.
                         Real-time event tracking, automated pricing, and competitor intelligence.
                     </p>
 
@@ -228,7 +268,7 @@ function LoginContent() {
                 </div>
 
                 <div className="relative z-10 flex items-center gap-6 text-xs text-white/30 font-medium tracking-wide">
-                    <div className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" /> Dubai Specialist</div>
+                    <div className="flex items-center gap-1.5"><Building2 className="h-3.5 w-3.5" /> 10+ Global Markets</div>
                     <div className="w-1 h-1 rounded-full bg-white/10" />
                     <div>Enterprise Grade</div>
                     <div className="w-1 h-1 rounded-full bg-white/10" />

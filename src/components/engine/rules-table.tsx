@@ -33,7 +33,8 @@ import {
 } from "@/components/ui/select";
 
 interface PricingRule {
-    id: number;
+    _id: string; // MongoDB ID
+    id?: string | number;
     name: string;
     ruleType: string;
     startDate: string | null;
@@ -88,7 +89,7 @@ export function RulesTable({ listingId }: { listingId: string }) {
             });
             if (res.ok) {
                 toast.success("Rule deleted");
-                setRules(rules.filter(r => r.id !== ruleId));
+                setRules(rules.filter(r => (r._id || r.id) !== ruleId));
             }
         } catch (err) {
             toast.error("Failed to delete rule");
@@ -256,7 +257,7 @@ export function RulesTable({ listingId }: { listingId: string }) {
                                 </TableCell>
                             </TableRow>
                         ) : rules.map((rule) => (
-                            <TableRow key={rule.id}>
+                            <TableRow key={rule._id || rule.id}>
                                 <TableCell className="font-medium">{rule.name}</TableCell>
                                 <TableCell>
                                     <Badge variant="secondary">{rule.ruleType}</Badge>
@@ -271,7 +272,7 @@ export function RulesTable({ listingId }: { listingId: string }) {
                                     <Switch checked={rule.enabled} />
                                 </TableCell>
                                 <TableCell>
-                                    <Button variant="ghost" size="icon" onClick={() => handleDelete(rule.id)}>
+                                    <Button variant="ghost" size="icon" onClick={() => handleDelete((rule._id || rule.id) as any)}>
                                         <Trash2 className="h-4 w-4 text-destructive" />
                                     </Button>
                                 </TableCell>

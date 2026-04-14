@@ -42,7 +42,7 @@ const OrgSchema = new Schema<IOrganization>(
     passwordHash: { type: String, required: true },
     refreshToken: { type: String },
     role: { type: String, enum: ["owner", "admin", "viewer"], default: "owner" },
-    isApproved: { type: Boolean, default: true },
+    isApproved: { type: Boolean, default: false },
     fullName: { type: String },
     hostawayApiKey: { type: String },
     hostawayAccountId: { type: String },

@@ -124,6 +124,70 @@ export async function POST(req: Request) {
             };
         }
 
+        // ── Portfolio context injection ─────────────────────────────────────────
+        // When the user is in portfolio mode, aggregate ALL listings so the agent
+        // has real numbers instead of working blind.
+        if (needsDataInjection && context.type === "portfolio") {
+            const dateFrom = dateRange?.from || new Date().toISOString().split('T')[0];
+            const plus29 = new Date();
+            plus29.setDate(plus29.getDate() + 29);
+            const dateTo = dateRange?.to || plus29.toISOString().split('T')[0];
+
+            const allListings = await Listing.find({ isActive: true })
+                .select("_id name area bedroomsNumber price priceFloor priceCeiling currencyCode")
+                .lean();
+
+            const statsResult = await InventoryMaster.aggregate([
+                { $match: { date: { $gte: dateFrom, $lte: dateTo } } },
+                {
+                    $group: {
+                        _id: "$listingId",
+                        totalDays: { $sum: 1 },
+                        bookedDays: { $sum: { $cond: [{ $in: ["$status", ["booked", "reserved"]] }, 1, 0] } },
+                        blockedDays: { $sum: { $cond: [{ $eq: ["$status", "blocked"] }, 1, 0] } },
+                        totalRevenue: { $sum: { $cond: [{ $in: ["$status", ["booked", "reserved"]] }, "$currentPrice", 0] } },
+                        avgPrice: { $avg: "$currentPrice" },
+                    },
+                },
+            ]);
+
+            const properties = allListings.map((l: any) => {
+                const stat = statsResult.find((s: any) => s._id.toString() === l._id.toString());
+                const bookable = stat ? stat.totalDays - stat.blockedDays : 0;
+                const occupancy = bookable > 0 ? Math.round((stat!.bookedDays / bookable) * 100) : 0;
+                return {
+                    id: l._id.toString(),
+                    name: l.name,
+                    area: l.area,
+                    bedrooms: l.bedroomsNumber,
+                    base_price: Number(l.price),
+                    floor_price: Number(l.priceFloor),
+                    ceiling_price: Number(l.priceCeiling),
+                    currency: l.currencyCode || "AED",
+                    occupancy_pct: occupancy,
+                    booked_nights: stat?.bookedDays ?? 0,
+                    revenue_in_window: Number((stat?.totalRevenue ?? 0).toFixed(2)),
+                    avg_nightly_rate: stat?.avgPrice ? Math.round(Number(stat.avgPrice)) : Number(l.price),
+                };
+            });
+
+            const totalRevenue = properties.reduce((s, p) => s + p.revenue_in_window, 0);
+            const avgOccupancy = properties.length
+                ? Math.round(properties.reduce((s, p) => s + p.occupancy_pct, 0) / properties.length)
+                : 0;
+
+            propertyDataPayload = {
+                today: new Date().toISOString().split('T')[0],
+                analysis_window: { from: dateFrom, to: dateTo },
+                portfolio_summary: {
+                    total_properties: allListings.length,
+                    avg_occupancy_pct: avgOccupancy,
+                    total_revenue_in_window: totalRevenue.toFixed(2),
+                },
+                properties,
+            };
+        }
+
         // Save user message
         await ChatMessage.create({
             orgId,
@@ -163,11 +227,28 @@ export async function POST(req: Request) {
         const { text: agentReply, parsedJson } = extractAgentMessage(lyzrData);
 
         // Apply Guardrails
+        // For property mode: use the single property's floor/ceiling.
+        // For portfolio mode: enforce per-proposal using each property's floor/ceiling from the
+        // properties array, falling back to portfolio-level 0 (no cap) when not found.
         const floorPrice = Number(propertyDataPayload?.property?.floor_price || 0);
         const ceilingPrice = Number(propertyDataPayload?.property?.ceiling_price || 0);
         let proposals = parsedJson?.proposals || null;
-        if (proposals && Array.isArray(proposals) && (floorPrice > 0 || ceilingPrice > 0)) {
-            proposals = enforceGuardrails(proposals, floorPrice, ceilingPrice);
+        if (proposals && Array.isArray(proposals)) {
+            if (context.type === "portfolio" && propertyDataPayload?.properties) {
+                // Build a quick lookup: listingId → { floor, ceiling }
+                const guardrailMap = new Map<string, { floor: number; ceiling: number }>(
+                    (propertyDataPayload.properties as any[]).map((p: any) => [
+                        p.id,
+                        { floor: Number(p.floor_price || 0), ceiling: Number(p.ceiling_price || 0) },
+                    ])
+                );
+                proposals = proposals.map((p: any) => {
+                    const g = guardrailMap.get(String(p.listing_id || p.listingId || ""));
+                    return g ? enforceGuardrails([p], g.floor, g.ceiling)[0] : p;
+                });
+            } else if (floorPrice > 0 || ceilingPrice > 0) {
+                proposals = enforceGuardrails(proposals, floorPrice, ceilingPrice);
+            }
         }
 
         // Save assistant reply

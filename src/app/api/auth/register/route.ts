@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       passwordHash,
       fullName: name,
       role: "owner",
-      isApproved: true,
+      isApproved: false,
       marketCode: mktCode,
       currency: template?.currency || "AED",
       timezone: template?.timezone || "Asia/Dubai",
@@ -53,16 +53,19 @@ export async function POST(req: NextRequest) {
       orgId: org._id.toString(),
       email: org.email,
       role: org.role,
+      isApproved: false,
     });
 
     const response = NextResponse.json({
       success: true,
+      pending: true,
       user: {
         id: org._id.toString(),
         email: org.email,
         name: org.fullName || org.name,
         role: org.role,
         orgId: org._id.toString(),
+        isApproved: false,
       },
     }, { status: 201 });
 

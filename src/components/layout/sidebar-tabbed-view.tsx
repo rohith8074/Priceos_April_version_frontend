@@ -62,6 +62,7 @@ export function SidebarTabbedView() {
         conversationSummary,
         setConversationSummary,
         marketRefreshTrigger,
+        propertyCurrency,
     } = useContextStore();
 
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -208,7 +209,7 @@ export function SidebarTabbedView() {
                                                 {!calendarMetrics ? (
                                                     <span className="text-3xl font-bold text-muted-foreground/30 animate-pulse">--</span>
                                                 ) : (
-                                                    <><span className="text-3xl font-black tracking-tighter">{calendarMetrics.avgPrice.toFixed(0)}</span><span className="text-[12px] font-bold text-muted-foreground mb-0.5 ml-1">AED</span></>
+                                                    <><span className="text-3xl font-black tracking-tighter">{calendarMetrics.avgPrice.toFixed(0)}</span><span className="text-[12px] font-bold text-muted-foreground mb-0.5 ml-1">{propertyCurrency}</span></>
                                                 )}
                                             </div>
                                         </div>
@@ -348,6 +349,7 @@ export function SidebarTabbedView() {
                                     dateFrom={dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : null}
                                     dateTo={dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : null}
                                     refreshKey={marketRefreshTrigger}
+                                    currency={propertyCurrency}
                                 />
                             </div>
                         </div>

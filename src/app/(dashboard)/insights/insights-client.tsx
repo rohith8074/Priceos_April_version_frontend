@@ -15,9 +15,12 @@ import {
   AlertTriangle,
   RefreshCw,
   Filter,
+  Pencil,
+  X,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { format, parseISO } from "date-fns";
@@ -105,15 +108,23 @@ function confidenceColor(c: number) {
 function InsightCard({
   insight,
   onAction,
+  onModify,
 }: {
   insight: Insight;
   onAction: (id: string, status: InsightStatus) => Promise<void>;
+  onModify: (id: string, adjustPct: number) => Promise<void>;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [acting, setActing] = useState(false);
+  const [modifying, setModifying] = useState(false);
+  const [modifyPct, setModifyPct] = useState<string>(
+    insight.action?.adjustPct != null ? String(insight.action.adjustPct) : ""
+  );
+  const [savingModify, setSavingModify] = useState(false);
 
   const CategoryIcon = CATEGORY_ICONS[insight.category] ?? Zap;
   const isPending = insight.status === "pending";
+  const hasAdjPct = insight.action?.adjustPct != null;
 
   const handleAction = async (status: InsightStatus) => {
     setActing(true);
@@ -121,6 +132,18 @@ function InsightCard({
       await onAction(insight.id, status);
     } finally {
       setActing(false);
+    }
+  };
+
+  const handleSaveModify = async () => {
+    const pct = parseFloat(modifyPct);
+    if (isNaN(pct)) { toast.error("Enter a valid percentage."); return; }
+    setSavingModify(true);
+    try {
+      await onModify(insight.id, pct);
+      setModifying(false);
+    } finally {
+      setSavingModify(false);
     }
   };
 
@@ -256,34 +279,86 @@ function InsightCard({
 
       {/* Action Buttons (only for pending) */}
       {isPending && (
-        <div className="flex items-center gap-2 px-5 pb-4 pt-1">
-          <Button
-            size="sm"
-            disabled={acting}
-            onClick={() => handleAction("approved")}
-            className="h-7 px-3 text-xs bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20"
-          >
-            <CheckCircle2 className="h-3 w-3 mr-1" />
-            Approve
-          </Button>
-          <Button
-            size="sm"
-            disabled={acting}
-            onClick={() => handleAction("snoozed")}
-            className="h-7 px-3 text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20"
-          >
-            <Clock className="h-3 w-3 mr-1" />
-            Snooze 7d
-          </Button>
-          <Button
-            size="sm"
-            disabled={acting}
-            onClick={() => handleAction("rejected")}
-            className="h-7 px-3 text-xs bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20"
-          >
-            <XCircle className="h-3 w-3 mr-1" />
-            Dismiss
-          </Button>
+        <div className="px-5 pb-4 pt-1 space-y-2">
+          {/* Inline modify form */}
+          {modifying && hasAdjPct && (
+            <div className="flex items-center gap-2 rounded-lg bg-white/[0.03] border border-white/10 px-3 py-2">
+              <span className="text-xs text-text-tertiary shrink-0">Adjust %:</span>
+              <Input
+                type="number"
+                value={modifyPct}
+                onChange={(e) => setModifyPct(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveModify();
+                  if (e.key === "Escape") setModifying(false);
+                }}
+                className="h-6 w-24 text-xs bg-white/5 border-white/10 px-2"
+                autoFocus
+              />
+              <Button
+                size="sm"
+                disabled={savingModify}
+                onClick={handleSaveModify}
+                className="h-6 px-2 text-xs bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20"
+              >
+                {savingModify ? <RefreshCw className="h-3 w-3 animate-spin" /> : <CheckCircle2 className="h-3 w-3" />}
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => setModifying(false)}
+                className="h-6 px-2 text-xs bg-white/5 text-text-disabled border border-white/10 hover:text-text-secondary"
+              >
+                <X className="h-3 w-3" />
+              </Button>
+              <span className="text-[10px] text-text-disabled">Enter to save · Esc to cancel</span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              disabled={acting}
+              onClick={() => handleAction("approved")}
+              className="h-7 px-3 text-xs bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20"
+            >
+              <CheckCircle2 className="h-3 w-3 mr-1" />
+              Approve
+            </Button>
+            {hasAdjPct && (
+              <Button
+                size="sm"
+                disabled={acting}
+                onClick={() => setModifying((v) => !v)}
+                className={cn(
+                  "h-7 px-3 text-xs border",
+                  modifying
+                    ? "bg-amber/10 text-amber border-amber/30"
+                    : "bg-white/5 text-text-secondary border-white/10 hover:text-amber hover:border-amber/30"
+                )}
+              >
+                <Pencil className="h-3 w-3 mr-1" />
+                Modify
+              </Button>
+            )}
+            <Button
+              size="sm"
+              disabled={acting}
+              onClick={() => handleAction("snoozed")}
+              className="h-7 px-3 text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20"
+            >
+              <Clock className="h-3 w-3 mr-1" />
+              Snooze 7d
+            </Button>
+            <Button
+              size="sm"
+              disabled={acting}
+              onClick={() => handleAction("rejected")}
+              className="h-7 px-3 text-xs bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20"
+            >
+              <XCircle className="h-3 w-3 mr-1" />
+              Dismiss
+            </Button>
+          </div>
         </div>
       )}
     </div>
@@ -340,7 +415,25 @@ export function InsightsClient({ initialInsights }: { initialInsights: Insight[]
     };
     toast.success(labels[status] ?? "Done.");
 
-    // Remove from current list (it moved to a different status)
+    setInsights((prev) => prev.filter((i) => i.id !== id));
+  }, []);
+
+  const handleModify = useCallback(async (id: string, adjustPct: number) => {
+    const res = await fetch(`/api/insights/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "modified",
+        modifiedAction: { adjustPct },
+      }),
+    });
+
+    if (!res.ok) {
+      toast.error("Failed to save modification.");
+      return;
+    }
+
+    toast.success(`Insight modified to ${adjustPct > 0 ? "+" : ""}${adjustPct}% and approved.`);
     setInsights((prev) => prev.filter((i) => i.id !== id));
   }, []);
 
@@ -434,7 +527,7 @@ export function InsightsClient({ initialInsights }: { initialInsights: Insight[]
       ) : (
         <div className="space-y-3">
           {displayed.map((insight) => (
-            <InsightCard key={insight.id} insight={insight} onAction={handleAction} />
+            <InsightCard key={insight.id} insight={insight} onAction={handleAction} onModify={handleModify} />
           ))}
         </div>
       )}

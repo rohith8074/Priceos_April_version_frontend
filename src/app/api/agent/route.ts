@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/lib/auth/server'
-import type { AgentCacheContext } from '@/lib/cache/types'
+import { getSession } from '@/lib/auth/server'
 
 const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'http://localhost:8000'
 
@@ -25,9 +24,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Get authenticated user
-    const { data: session, error } = await auth.getSession()
+    const session = await getSession()
 
-    if (!session?.user?.id) {
+    if (!session?.userId) {
       return NextResponse.json(
         {
           success: false,
@@ -43,19 +42,40 @@ export async function POST(request: NextRequest) {
     }
 
     // Proxy to Python backend
-    const pythonResponse = await fetch(`${PYTHON_BACKEND_URL}/api/agent`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        message,
-        agent_id: agent_id || 'cro',
-        user_id: session.user.id,
-        session_id: session_id || `${agent_id || 'cro'}-${session.user.id}`,
-        cache: cache || null,
-      }),
-    })
+    let pythonResponse: Response
+    try {
+      pythonResponse = await fetch(`${PYTHON_BACKEND_URL}/api/agent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          agent_id: agent_id || 'cro',
+          user_id: session.userId,
+          session_id: session_id || `${agent_id || 'cro'}-${session.userId}`,
+          cache: cache || null,
+        }),
+      })
+    } catch (fetchErr) {
+      // Connection refused or DNS failure — backend is not running
+      const isConnRefused =
+        fetchErr instanceof Error &&
+        (fetchErr.message.includes('ECONNREFUSED') ||
+          fetchErr.message.includes('fetch failed') ||
+          fetchErr.message.includes('ENOTFOUND'))
+
+      const userMessage = isConnRefused
+        ? `The AI backend is currently offline (could not reach ${PYTHON_BACKEND_URL}). Please ensure the Python backend is running and try again.`
+        : `Failed to reach the AI backend: ${fetchErr instanceof Error ? fetchErr.message : String(fetchErr)}`
+
+      return NextResponse.json(
+        {
+          success: false,
+          response: { status: 'error', result: {}, message: userMessage },
+          error: userMessage,
+        },
+        { status: 503 }
+      )
+    }
 
     const pythonData = await pythonResponse.json()
 
@@ -82,11 +102,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        response: {
-          status: 'error',
-          result: {},
-          message: errorMsg,
-        },
+        response: { status: 'error', result: {}, message: errorMsg },
         error: errorMsg,
       },
       { status: 500 }

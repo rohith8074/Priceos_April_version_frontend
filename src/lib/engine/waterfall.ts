@@ -23,6 +23,13 @@ export interface ListingConfig {
     lastMinuteDiscountPct: number;
     lastMinuteMinStay: number | null;
 
+    // Gradual last-minute ramp curve (KB Tier 1 #3)
+    // When enabled, discount tapers from maxDiscountPct (day 0) → minDiscountPct (day rampDays)
+    lastMinuteRampEnabled: boolean;
+    lastMinuteRampDays: number;
+    lastMinuteMaxDiscountPct: number;
+    lastMinuteMinDiscountPct: number;
+
     farOutEnabled: boolean;
     farOutDaysOut: number;
     farOutMarkupPct: number;
@@ -41,6 +48,20 @@ export interface ListingConfig {
     gapFillLengthMax: number;
     gapFillDiscountPct: number;
     gapFillOverrideCico: boolean;
+
+    // Occupancy-based adjustments (KB Tier 1 #4 — Revenue 9/10)
+    // currentOccupancyPct is a rolling value computed by the pipeline caller
+    occupancyEnabled: boolean;
+    currentOccupancyPct: number;       // rolling occupancy % passed in by pipeline
+    occupancyTargetPct: number;
+    occupancyHighThresholdPct: number;
+    occupancyHighAdjPct: number;       // positive = price up (e.g. +8)
+    occupancyLowThresholdPct: number;
+    occupancyLowAdjPct: number;        // negative = price down (e.g. -10)
+
+    // Weekend minimum pricing (KB Tier 2 #8)
+    weekendMinPrice: number;
+    weekendDays: number[]; // DOW indices (0=Mon..6=Sun), e.g. [3,4] for Thu/Fri
 }
 
 export interface Rule {
@@ -207,7 +228,7 @@ export function computeDay(
 
     // ── Pass 2 — Strategy ─────────────────────────────────────────────────────
 
-    // Last-minute discount
+    // Last-minute discount (flat or gradual ramp curve — KB Tier 1 #3)
     if (
         config.lastMinuteEnabled &&
         !suspendLastMinute &&
@@ -215,10 +236,24 @@ export function computeDay(
         leadTime >= 0 &&
         isAvailable === 1
     ) {
-        price = price * (1 - config.lastMinuteDiscountPct / 100);
-        notes.push(
-            `[LAST_MINUTE] ${config.lastMinuteDiscountPct}% discount (${leadTime} days out)`
-        );
+        let discountPct: number;
+        if (config.lastMinuteRampEnabled && config.lastMinuteRampDays > 0) {
+            // Gradual ramp: lerp from maxDiscountPct (day 0) → minDiscountPct (day rampDays)
+            const rampWindow = Math.min(config.lastMinuteRampDays, config.lastMinuteDaysOut);
+            const t = Math.min(leadTime / rampWindow, 1); // 0 at day 0 → 1 at day rampDays
+            discountPct =
+                config.lastMinuteMaxDiscountPct * (1 - t) +
+                config.lastMinuteMinDiscountPct * t;
+            notes.push(
+                `[LAST_MINUTE_RAMP] ${discountPct.toFixed(1)}% discount (lerp ${config.lastMinuteMaxDiscountPct}%→${config.lastMinuteMinDiscountPct}%, ${leadTime}/${rampWindow} days out)`
+            );
+        } else {
+            discountPct = config.lastMinuteDiscountPct;
+            notes.push(
+                `[LAST_MINUTE] ${discountPct}% discount (${leadTime} days out)`
+            );
+        }
+        price = price * (1 - discountPct / 100);
         if (config.lastMinuteMinStay !== null) {
             minimumStay = config.lastMinuteMinStay;
             notes.push(`[LAST_MINUTE] min stay override to ${minimumStay}`);
@@ -253,6 +288,26 @@ export function computeDay(
         if (config.dowMinStay !== null) {
             minimumStay = config.dowMinStay;
             notes.push(`[DOW] min stay override to ${minimumStay}`);
+        }
+    }
+
+    // Occupancy-based adjustment (KB Tier 1 #4 — Revenue 9/10)
+    if (config.occupancyEnabled && isAvailable === 1) {
+        const occ = config.currentOccupancyPct;
+        if (occ > config.occupancyHighThresholdPct) {
+            price = price * (1 + config.occupancyHighAdjPct / 100);
+            notes.push(
+                `[OCCUPANCY] ${occ.toFixed(1)}% > high threshold ${config.occupancyHighThresholdPct}%, +${config.occupancyHighAdjPct}%`
+            );
+        } else if (occ < config.occupancyLowThresholdPct) {
+            price = price * (1 + config.occupancyLowAdjPct / 100); // lowAdjPct is negative
+            notes.push(
+                `[OCCUPANCY] ${occ.toFixed(1)}% < low threshold ${config.occupancyLowThresholdPct}%, ${config.occupancyLowAdjPct}%`
+            );
+        } else {
+            notes.push(
+                `[OCCUPANCY] ${occ.toFixed(1)}% in target zone [${config.occupancyLowThresholdPct}%–${config.occupancyHighThresholdPct}%], no adjustment`
+            );
         }
     }
 
@@ -316,6 +371,19 @@ export function computeDay(
     }
 
     // ── Pass 4 — Integrity ────────────────────────────────────────────────────
+
+    // Weekend minimum price (KB Tier 2 #8) — applied before global floor clamp
+    if (
+        config.weekendMinPrice > 0 &&
+        config.weekendDays.includes(dow) &&
+        isAvailable === 1 &&
+        price < config.weekendMinPrice
+    ) {
+        notes.push(
+            `[WEEKEND_MIN] Price ${price.toFixed(2)} raised to weekend min ${config.weekendMinPrice} (DOW ${dow})`
+        );
+        price = config.weekendMinPrice;
+    }
 
     const effectiveMinPrice = ruleMinPrice ?? config.absoluteMinPrice;
     const effectiveMaxPrice = ruleMaxPrice ?? config.absoluteMaxPrice;

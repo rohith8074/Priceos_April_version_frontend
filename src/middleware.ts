@@ -6,9 +6,11 @@ const COOKIE_NAME = "priceos-session";
 const PUBLIC_PATHS = [
   "/login",
   "/waitlist",
+  "/pending-approval",
   "/api/auth/login",
   "/api/auth/register",
   "/api/auth/refresh",
+  "/api/auth/check-approval",
   "/api/v1/auth",
 ];
 
@@ -16,13 +18,16 @@ function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 }
 
-function isValidToken(token: string): boolean {
-  try {
-    // Edge-compatible JWT decode (no crypto verification needed just for routing)
-    const parts = token.split(".");
-    if (parts.length !== 3) return false;
+interface JwtPayload {
+  exp?: number;
+  isApproved?: boolean;
+}
 
-    // Decode base64url payload
+function decodeToken(token: string): JwtPayload | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+
     const base64Url = parts[1];
     const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
     const jsonPayload = decodeURIComponent(
@@ -31,20 +36,21 @@ function isValidToken(token: string): boolean {
         .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
         .join("")
     );
-
-    const payload = JSON.parse(jsonPayload);
-
-    // Check expiration if present
-    if (payload.exp) {
-      const now = Math.floor(Date.now() / 1000);
-      return payload.exp > now;
-    }
-
-    return true;
+    return JSON.parse(jsonPayload);
   } catch (err) {
-    console.log("[Middleware] isValidToken error:", err);
-    return false;
+    console.log("[Middleware] decodeToken error:", err);
+    return null;
   }
+}
+
+function isValidToken(token: string): boolean {
+  const payload = decodeToken(token);
+  if (!payload) return false;
+  if (payload.exp) {
+    const now = Math.floor(Date.now() / 1000);
+    return payload.exp > now;
+  }
+  return true;
 }
 
 export default function middleware(request: NextRequest) {
@@ -65,14 +71,15 @@ export default function middleware(request: NextRequest) {
   }
 
   const token = request.cookies.get(COOKIE_NAME)?.value;
-  console.log(`[Middleware] Checking path ${pathname} | token exists:`, !!token);
   const valid = token ? isValidToken(token) : false;
-  console.log(`[Middleware] token valid:`, valid);
+  const jwtPayload = token ? decodeToken(token) : null;
+  const isApproved = jwtPayload?.isApproved ?? true; // legacy tokens without field → assume approved
 
   // Root redirect
   if (pathname === "/") {
+    if (!valid) return NextResponse.redirect(new URL("/login", request.url));
     return NextResponse.redirect(
-      new URL(valid ? "/dashboard" : "/login", request.url)
+      new URL(isApproved ? "/dashboard" : "/pending-approval", request.url)
     );
   }
 
@@ -81,13 +88,21 @@ export default function middleware(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Page routes — redirect to login
+  // Page routes — redirect to login if not authenticated
   if (!valid) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Already logged in, don't show login page
-  if (valid && pathname === "/login") {
+  // Authenticated but not yet approved → only allow /pending-approval
+  if (valid && !isApproved && !pathname.startsWith("/pending-approval")) {
+    return NextResponse.redirect(new URL("/pending-approval", request.url));
+  }
+
+  // Already approved, don't show pending page or login
+  if (valid && isApproved && pathname === "/pending-approval") {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+  if (valid && isApproved && pathname === "/login") {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

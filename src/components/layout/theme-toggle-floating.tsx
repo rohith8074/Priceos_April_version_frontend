@@ -31,7 +31,7 @@ export function ThemeToggleFloating() {
         </div>
         
         {/* Tooltip */}
-        <span className="absolute right-full mr-4 px-3 py-1.5 rounded-lg bg-surface-1 border border-border-subtle text-text-primary text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl">
+        <span className="absolute right-full mr-4 px-3 py-1.5 rounded-lg bg-surface-1 border border-border-subtle text-text-primary text-[10px] font-bold uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap shadow-xl pointer-events-none">
           Switch to {theme === "dark" ? "Light" : "Dark"} Mode
         </span>
       </button>

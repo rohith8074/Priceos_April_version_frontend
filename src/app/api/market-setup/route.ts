@@ -6,6 +6,8 @@ import {
     Listing,
     InventoryMaster,
     Reservation,
+    Organization,
+    MarketTemplate,
 } from "@/lib/db";
 import { getSession } from "@/lib/auth/server";
 import {
@@ -85,34 +87,40 @@ export async function POST(req: NextRequest) {
         console.log(`\n🚀 STARTING MARKET ANALYSIS FOR LISTING ${listingId}`);
         console.log(`📅 Date Range: ${dateRange.from} to ${dateRange.to}`);
 
-        // 1. Fetch Property Context
-        const listing = await Listing.findById(listingObjectId).lean();
-        const area = listing?.area || "Dubai";
+        // 1. Fetch Property Context + org's market template for locale-aware prompts
+        const [listing, org] = await Promise.all([
+            Listing.findById(listingObjectId).lean(),
+            Organization.findById(orgId).select("marketCode currency").lean(),
+        ]);
+
+        const area = listing?.area || "";
         const bedrooms = listing?.bedroomsNumber || 1;
-        console.log(`🏠 Property: "${listing?.name || "Unknown"}" in ${area} (${bedrooms}BR)`);
+        const currency = (listing as any)?.currencyCode || (org as any)?.currency || "AED";
+        console.log(`🏠 Property: "${listing?.name || "Unknown"}" in ${area || "unknown area"} (${bedrooms}BR, ${currency})`);
 
-        // 2. Build prompts
-        const currentDate = new Date().toISOString().split("T")[0];
-        let searchClusters = area;
-        if (area.toLowerCase().includes("marina") || area.toLowerCase().includes("jbr")) {
-            searchClusters = "Dubai Marina, JBR (Jumeirah Beach Residence), and Bluewaters Island";
-        } else if (area.toLowerCase().includes("downtown") || area.toLowerCase().includes("difc")) {
-            searchClusters = "Downtown Dubai, DIFC, and Business Bay";
-        } else if (area.toLowerCase().includes("palm")) {
-            searchClusters = "Palm Jumeirah, West Beach, and Pointe";
-        }
+        // Fetch market template for city-aware event keywords and seasonal notes
+        const marketCode = (org as any)?.marketCode || "UAE_DXB";
+        const template = await MarketTemplate.findOne({ marketCode }).lean() as any;
+        const templateCity = template?.eventApiConfig?.ticketmasterCity || template?.displayName || marketCode;
+        const templateKeywords: string[] = template?.eventApiConfig?.customKeywords || [];
 
+        // 2. Build search context — use area if set, fall back to template city
+        const searchClusters = area || templateCity;
+
+        // Month-aware event hints — use template's seasonal notes if available, else generic
         const month = parseInt(dateRange.from.substring(5, 7));
-        let eventHints = "";
-        if (month >= 1 && month <= 3) eventHints = "Dubai Shopping Festival, Art Dubai, Dubai International Boat Show.";
-        else if (month >= 3 && month <= 5) eventHints = "Dubai World Cup, Ramadan events, Eid celebrations.";
-        else if (month >= 6 && month <= 8) eventHints = "Dubai Summer Surprises (DSS), Eid Al Adha.";
-        else if (month >= 9 && month <= 10) eventHints = "GITEX Global, Dubai Design Week.";
-        else eventHints = "Dubai Airshow, UAE National Day, New Year events, Art Dubai.";
+        const seasonEntry = template?.seasonalPatterns?.find((s: any) => s.month === month);
+        const eventHints = seasonEntry?.notes
+            ? `${seasonEntry.notes}. Key events: ${templateKeywords.join(", ")}.`
+            : templateKeywords.length > 0
+                ? `Key events for ${templateCity}: ${templateKeywords.join(", ")}.`
+                : `Search for major local events and holidays in ${templateCity} during this period.`;
 
-        const marketingPrompt = `Today: ${currentDate}. Area: ${searchClusters}. Date range: ${dateRange.from} to ${dateRange.to}. Property: ${bedrooms}BR, base price ${listing?.price || "Unknown"} AED. Events: ${eventHints}. Return JSON with events, holidays, news, daily_events arrays. Each event needs: title, date_start, date_end, impact, description, source, suggested_premium_pct, sentiment, demand_impact.`;
+        const currentDate = new Date().toISOString().split("T")[0];
 
-        const benchmarkPrompt = `Area: ${searchClusters}. ${bedrooms}BR. Base price: ${listing?.price || "Unknown"} AED. Date range: ${dateRange.from} to ${dateRange.to}. Find 10-15 comparable properties. Return JSON with rate_distribution (p25,p50,p75,p90,avg_weekday,avg_weekend), pricing_verdict (verdict,percentile,your_price), rate_trend (direction,pct_change), recommended_rates (weekday,weekend,event_peak,reasoning), comps array.`;
+        const marketingPrompt = `Today: ${currentDate}. Market: ${templateCity}. Area: ${searchClusters}. Date range: ${dateRange.from} to ${dateRange.to}. Property: ${bedrooms}BR, base price ${listing?.price || "Unknown"} ${currency}. Seasonal context: ${eventHints} Return JSON with events, holidays, news, daily_events arrays. Each event needs: title, date_start, date_end, impact, description, source, suggested_premium_pct, sentiment, demand_impact.`;
+
+        const benchmarkPrompt = `Market: ${templateCity}. Area: ${searchClusters}. ${bedrooms}BR. Base price: ${listing?.price || "Unknown"} ${currency}. Date range: ${dateRange.from} to ${dateRange.to}. Find 10-15 comparable short-term rental properties. Return JSON with rate_distribution (p25,p50,p75,p90,avg_weekday,avg_weekend), pricing_verdict (verdict,percentile,your_price), rate_trend (direction,pct_change), recommended_rates (weekday,weekend,event_peak,reasoning), comps array.`;
 
         const [marketingRes, benchmarkRes] = await Promise.all([
             callLyzrAgent(MARKETING_AGENT_ID || MARKET_RESEARCH_ID, marketingPrompt),
@@ -216,7 +224,7 @@ export async function POST(req: NextRequest) {
 
         if (Number(listing?.priceFloor || 0) === 0 && Number(listing?.priceCeiling || 0) === 0) {
             console.log(`🛡️ Guardrails unset. Invoking Guardrails Agent...`);
-            const guardrailsPrompt = `Compute suggested_floor and suggested_ceiling for: ${JSON.stringify({ name: listing?.name, bedrooms, price: listing?.price })}. Benchmark p25=${benchmarkDoc.p25Rate} p50=${benchmarkDoc.p50Rate} p90=${benchmarkDoc.p90Rate}. Return JSON: {suggested_floor, suggested_ceiling, floor_reasoning, ceiling_reasoning}.`;
+            const guardrailsPrompt = `Compute suggested_floor and suggested_ceiling for: ${JSON.stringify({ name: listing?.name, bedrooms, price: listing?.price, currency })}. Market: ${templateCity}. Benchmark p25=${benchmarkDoc.p25Rate} p50=${benchmarkDoc.p50Rate} p90=${benchmarkDoc.p90Rate}. Return JSON: {suggested_floor, suggested_ceiling, floor_reasoning, ceiling_reasoning}.`;
 
             const guardRes = await callLyzrAgent(
                 GUARDRAILS_AGENT_ID || MARKET_RESEARCH_ID,

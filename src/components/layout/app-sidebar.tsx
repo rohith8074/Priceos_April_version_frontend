@@ -115,9 +115,16 @@ export function AppSidebar() {
     const agentBadgeCount = showAgentBadge ? warningAgents : 0;
     const guestBadgeCount = showGuestBadge ? needsReplyCount : 0;
 
+    const tourId = name === "Dashboard" ? "tour-sidebar-dashboard" 
+                 : name === "Pricing" ? "tour-sidebar-pricing" 
+                 : name === "Market" ? "tour-sidebar-market" 
+                 : name === "Agents" ? "tour-sidebar-agents" 
+                 : undefined;
+
     return (
       <Link
         href={href}
+        id={tourId}
         className={cn(
           "group relative flex items-center gap-3 px-3 py-2 text-body transition-colors duration-200 rounded-md mx-2",
           active

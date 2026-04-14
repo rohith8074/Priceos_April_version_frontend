@@ -69,7 +69,7 @@ export function PropertyCard({ property, detailed = false }: PropertyCardProps) 
             <p className="text-lg font-bold">
               {property.price}{" "}
               <span className="text-xs font-normal text-muted-foreground">
-                AED/night
+                {property.currencyCode || "AED"}/night
               </span>
             </p>
             <p className="text-xs text-muted-foreground">Base Price</p>

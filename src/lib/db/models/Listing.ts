@@ -49,6 +49,22 @@ export interface IListing extends Document {
   allowedCheckoutDays: number[];
   lowestMinStayAllowed: number;
   defaultMaxStay: number;
+  // Occupancy-based adjustments (KB Tier 1 #4 — Revenue 9/10)
+  occupancyEnabled: boolean;
+  occupancyTargetPct: number;
+  occupancyHighThresholdPct: number;
+  occupancyHighAdjPct: number;
+  occupancyLowThresholdPct: number;
+  occupancyLowAdjPct: number;
+  occupancyLookbackDays: number;
+  // Weekend minimum pricing (KB Tier 2 #8 — Revenue 7/10)
+  weekendMinPrice: number;
+  weekendDays: number[];
+  // Gradual last-minute discount curve (KB Tier 1 #3)
+  lastMinuteRampEnabled: boolean;
+  lastMinuteRampDays: number;
+  lastMinuteMaxDiscountPct: number;
+  lastMinuteMinDiscountPct: number;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -102,6 +118,22 @@ const ListingSchema = new Schema<IListing>(
     allowedCheckoutDays: { type: [Number], default: [1, 1, 1, 1, 1, 1, 1] },
     lowestMinStayAllowed: { type: Number, default: 1 },
     defaultMaxStay: { type: Number, default: 365 },
+    // Occupancy-based adjustments
+    occupancyEnabled: { type: Boolean, default: false },
+    occupancyTargetPct: { type: Number, default: 75 },
+    occupancyHighThresholdPct: { type: Number, default: 85 },
+    occupancyHighAdjPct: { type: Number, default: 15 },
+    occupancyLowThresholdPct: { type: Number, default: 50 },
+    occupancyLowAdjPct: { type: Number, default: -10 },
+    occupancyLookbackDays: { type: Number, default: 30 },
+    // Weekend minimum pricing
+    weekendMinPrice: { type: Number, default: 0 },
+    weekendDays: { type: [Number], default: [4, 5] }, // Thu+Fri (Dubai default)
+    // Gradual last-minute discount curve
+    lastMinuteRampEnabled: { type: Boolean, default: false },
+    lastMinuteRampDays: { type: Number, default: 15 },
+    lastMinuteMaxDiscountPct: { type: Number, default: 30 },
+    lastMinuteMinDiscountPct: { type: Number, default: 5 },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

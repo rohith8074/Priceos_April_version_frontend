@@ -26,7 +26,7 @@ export function ContextPanel({ properties }: Props) {
   };
 
   const handlePropertyClick = (property: PropertyWithMetrics) => {
-    setPropertyContext(property.id, property.name);
+    setPropertyContext(property.id, property.name, (property as any).currencyCode || "AED");
     switchContext({ type: "property", propertyId: property.id });
   };
 

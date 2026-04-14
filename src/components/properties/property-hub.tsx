@@ -87,7 +87,7 @@ export function PropertyHub({
         <Card>
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground">Base Price</p>
-            <p className="text-lg font-semibold">{property.price} AED</p>
+            <p className="text-lg font-semibold">{property.price} {(property as any).currencyCode || "AED"}</p>
           </CardContent>
         </Card>
 

@@ -93,7 +93,14 @@ export interface ContextSyncData {
         status: string;
         price: number;
         min_stay: number;
+        max_stay: number;
     }[];
+    bookingPace?: {
+        newBookingsLast7d: number;
+        cancellationsLast7d: number;
+        avgLeadTimeDays: number;
+        gaps: { start: string; end: string; nights: number }[];
+    };
 }
 
 /**
@@ -210,10 +217,30 @@ function buildContextValue(data: ContextSyncData): string {
             suggested_premium_pct: e.suggestedPremium ?? null
         })),
 
+        // 📈 BOOKING PACE & GAPS
+        booking_pace: data.bookingPace ? {
+            new_bookings_last_7d: data.bookingPace.newBookingsLast7d,
+            _new_bookings_last_7d__meaning: "Number of new reservations created in the past 7 days. Downward trend = demand softening.",
+            cancellations_last_7d: data.bookingPace.cancellationsLast7d,
+            _cancellations_last_7d__meaning: "Number of cancellations received in the past 7 days. High value = revenue risk.",
+            avg_lead_time_days: data.bookingPace.avgLeadTimeDays,
+            _avg_lead_time_days__meaning: "Average days between booking date and check-in date. Short lead time = last-minute demand.",
+            booking_gaps: data.bookingPace.gaps.map(g => ({
+                start: g.start,
+                end: g.end,
+                nights: g.nights,
+                _meaning: "Unbooked gap between two confirmed reservations. Candidate for gap-fill discount.",
+            })),
+        } : null,
+
         // 📅 DAILY CALENDAR
         inventory: (data.inventory || []).map(i => ({
-            ...i,
-            _status__meaning: "available = can be booked. booked = occupied. blocked = maintenance/owner hold (NOT a gap)."
+            date: i.date,
+            status: i.status,
+            price: i.price,
+            min_stay: i.min_stay,
+            max_stay: i.max_stay,
+            _status__meaning: "available = can be booked. booked = occupied. blocked = maintenance/owner hold (NOT a gap).",
         }))
     };
 
@@ -226,6 +253,9 @@ import {
     BOOKING_INTELLIGENCE_ID,
     MARKET_RESEARCH_ID,
     PRICE_GUARD_ID,
+    MARKETING_AGENT_ID,
+    BENCHMARK_AGENT_ID,
+    GUARDRAILS_AGENT_ID,
 } from "./agents/constants";
 
 /**
@@ -235,13 +265,16 @@ import {
  */
 export async function syncContextToLyzr(contextData: ContextSyncData): Promise<boolean> {
     const apiKey = process.env.LYZR_API_KEY;
-    // All 5 agents that need context access
+    // All 8 agents that need property context access
     const ALL_AGENT_IDS = [
         process.env.AGENT_ID || CRO_ROUTER_AGENT_ID,
         PROPERTY_ANALYST_ID,
         BOOKING_INTELLIGENCE_ID,
         MARKET_RESEARCH_ID,
         PRICE_GUARD_ID,
+        MARKETING_AGENT_ID,
+        BENCHMARK_AGENT_ID,
+        GUARDRAILS_AGENT_ID,
     ].filter(id => !!id);
 
     if (!apiKey || ALL_AGENT_IDS.length === 0) {

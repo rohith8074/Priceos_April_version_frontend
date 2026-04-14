@@ -1,6 +1,8 @@
+import { connectDB, Listing } from "@/lib/db";
 import { apiSuccess, apiError } from "@/lib/api/response";
 import { suggestReplySchema, formatZodErrors } from "@/lib/validators";
 import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/api/rate-limit";
+import mongoose from "mongoose";
 
 /**
  * POST /api/v1/guests/suggest
@@ -43,11 +45,12 @@ export async function POST(request: Request) {
         );
     }
 
-    const { message, guestName, propertyName } = validation.data;
+    const { message, guestName, propertyName, listingId } = validation.data;
 
     try {
         // ── Step 2: Check Lyzr configuration ──
-        const lyzrAgentId = process.env.LYZR_Chat_Response_Agent_ID;
+        const lyzrAgentId = process.env.LYZR_CHAT_RESPONSE_AGENT_ID
+            || process.env.LYZR_Chat_Response_Agent_ID; // legacy alias
         const lyzrApiKey = process.env.LYZR_API_KEY;
         const lyzrApiUrl = process.env.LYZR_API_URL || "https://agent-prod.studio.lyzr.ai/v3/inference/chat/";
 
@@ -59,12 +62,42 @@ export async function POST(request: Request) {
             });
         }
 
+        // ── Step 2b: Fetch property context if listingId provided ──
+        let propertyContext = "";
+        if (listingId) {
+            try {
+                await connectDB();
+                const listing = await Listing.findById(
+                    new mongoose.Types.ObjectId(String(listingId))
+                )
+                    .select("name area bedroomsNumber bathroomsNumber personCapacity amenities currencyCode price priceFloor priceCeiling lowestMinStayAllowed defaultMaxStay allowedCheckinDays allowedCheckoutDays")
+                    .lean();
+
+                if (listing) {
+                    const amenityList = (listing.amenities || []).slice(0, 10).join(", ") || "N/A";
+                    propertyContext = `
+Property details (use these facts when relevant — do NOT reveal pricing floors/ceilings to guests):
+- Name: ${listing.name}
+- Area: ${listing.area}
+- Bedrooms: ${listing.bedroomsNumber} | Bathrooms: ${listing.bathroomsNumber} | Max guests: ${listing.personCapacity ?? "N/A"}
+- Base nightly rate: ${listing.currencyCode} ${listing.price}
+- Min stay: ${listing.lowestMinStayAllowed} night(s) | Max stay: ${listing.defaultMaxStay} night(s)
+- Amenities: ${amenityList}`;
+                }
+            } catch {
+                // Non-fatal — proceed without property context
+            }
+        }
+
         // ── Step 3: Build prompt and call Lyzr agent ──
-        const prompt = `Property: "${propertyName}"
+        const prompt = `You are a professional property manager responding to a guest.
+${propertyContext}
+
 Guest name: ${guestName}
+Property: "${propertyName}"
 Guest's message: "${message}"
 
-Generate a professional, warm, and concise reply as the property manager. Address their question directly. Keep it to 2-4 sentences. Do not use formal sign-offs.`;
+Write a professional, warm, and concise reply. Address their question directly using the property details above where relevant. Keep it to 2-4 sentences. Do not use formal sign-offs like "Sincerely" or "Best regards".`;
 
         console.log(`📨 [v1/guests/suggest] Calling Lyzr agent ${lyzrAgentId}...`);
 

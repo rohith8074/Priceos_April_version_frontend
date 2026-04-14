@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 
 export async function GET(
-    req: NextRequest,
+    _req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
@@ -22,6 +22,10 @@ export async function GET(
             lastMinuteDaysOut: l.lastMinuteDaysOut,
             lastMinuteDiscountPct: l.lastMinuteDiscountPct,
             lastMinuteMinStay: l.lastMinuteMinStay,
+            lastMinuteRampEnabled: l.lastMinuteRampEnabled ?? false,
+            lastMinuteRampDays: l.lastMinuteRampDays ?? 15,
+            lastMinuteMaxDiscountPct: l.lastMinuteMaxDiscountPct ?? 30,
+            lastMinuteMinDiscountPct: l.lastMinuteMinDiscountPct ?? 5,
             farOutEnabled: l.farOutEnabled,
             farOutDaysOut: l.farOutDaysOut,
             farOutMarkupPct: l.farOutMarkupPct,
@@ -41,6 +45,15 @@ export async function GET(
             allowedCheckoutDays: l.allowedCheckoutDays,
             lowestMinStayAllowed: l.lowestMinStayAllowed,
             defaultMaxStay: l.defaultMaxStay,
+            occupancyEnabled: l.occupancyEnabled ?? false,
+            occupancyTargetPct: l.occupancyTargetPct ?? 75,
+            occupancyHighThresholdPct: l.occupancyHighThresholdPct ?? 85,
+            occupancyHighAdjPct: l.occupancyHighAdjPct ?? 15,
+            occupancyLowThresholdPct: l.occupancyLowThresholdPct ?? 50,
+            occupancyLowAdjPct: l.occupancyLowAdjPct ?? -10,
+            occupancyLookbackDays: l.occupancyLookbackDays ?? 30,
+            weekendMinPrice: l.weekendMinPrice ?? 0,
+            weekendDays: l.weekendDays ?? [4, 5],
         };
 
         return NextResponse.json(config);
@@ -61,12 +74,16 @@ export async function PATCH(
         const allowed = [
             "priceFloor", "priceCeiling",
             "lastMinuteEnabled", "lastMinuteDaysOut", "lastMinuteDiscountPct", "lastMinuteMinStay",
+            "lastMinuteRampEnabled", "lastMinuteRampDays", "lastMinuteMaxDiscountPct", "lastMinuteMinDiscountPct",
             "farOutEnabled", "farOutDaysOut", "farOutMarkupPct", "farOutMinStay",
             "dowPricingEnabled", "dowDays", "dowPriceAdjPct", "dowMinStay",
             "gapPreventionEnabled", "minFragmentThreshold",
             "gapFillEnabled", "gapFillLengthMin", "gapFillLengthMax", "gapFillDiscountPct", "gapFillOverrideCico",
             "allowedCheckinDays", "allowedCheckoutDays",
             "lowestMinStayAllowed", "defaultMaxStay",
+            "occupancyEnabled", "occupancyTargetPct", "occupancyHighThresholdPct", "occupancyHighAdjPct",
+            "occupancyLowThresholdPct", "occupancyLowAdjPct", "occupancyLookbackDays",
+            "weekendMinPrice", "weekendDays",
         ];
 
         const updateFields: Record<string, unknown> = {};

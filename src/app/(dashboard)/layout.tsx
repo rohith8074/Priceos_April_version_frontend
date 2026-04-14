@@ -4,6 +4,8 @@ import { AgentCacheProvider } from "@/lib/cache/agent-cache-provider";
 import { InactivityMonitor } from "@/components/auth/inactivity-wrapper";
 import { ApprovalGuard } from "@/components/auth/approval-guard";
 import { ThemeToggleFloating } from "@/components/layout/theme-toggle-floating";
+import { Suspense } from "react";
+import { GlobalTour } from "@/components/tour/global-tour";
 
 export default function DashboardLayout({
   children,
@@ -16,7 +18,9 @@ export default function DashboardLayout({
       <ApprovalGuard />
       
       {/* Column 1: Sidebar (232px) */}
-      <AppSidebar />
+      <Suspense fallback={<div className="w-[232px] border-r border-border-default bg-surface-1 shrink-0 z-50"></div>}>
+        <AppSidebar />
+      </Suspense>
 
       {/* Column 2: Main Content (flex-1) */}
       <div className="flex flex-1 flex-col min-w-0 overflow-hidden relative">
@@ -34,6 +38,9 @@ export default function DashboardLayout({
 
       {/* Floating Theme Toggle */}
       <ThemeToggleFloating />
+
+      {/* Global Onboarding Tour */}
+      <GlobalTour />
     </div>
   );
 }

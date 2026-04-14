@@ -1,4 +1,8 @@
 import { connectDB, GuestSummary, HostawayConversation, Listing } from "@/lib/db";
+
+// Cached summaries older than this are considered stale and regenerated automatically.
+const SUMMARY_TTL_HOURS = 6;
+const SUMMARY_TTL_MS = SUMMARY_TTL_HOURS * 60 * 60 * 1000;
 import { apiSuccess, apiError } from "@/lib/api/response";
 import { getSummarySchema, generateSummarySchema, formatZodErrors } from "@/lib/validators";
 import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/api/rate-limit";
@@ -37,10 +41,14 @@ export async function GET(request: Request) {
         }).lean();
 
         if (cached) {
-            return apiSuccess({ summary: cached, cached: true });
+            const ageMs = Date.now() - new Date(cached.updatedAt).getTime();
+            const isStale = ageMs > SUMMARY_TTL_MS;
+            // Return the cached summary but flag it as stale so the UI can
+            // show a "Refresh" prompt without blocking the initial render.
+            return apiSuccess({ summary: cached, cached: !isStale, stale: isStale });
         }
 
-        return apiSuccess({ summary: null, cached: false });
+        return apiSuccess({ summary: null, cached: false, stale: false });
     } catch (error) {
         console.error("❌ [v1/guests/summary GET] Error:", error);
         return apiError("INTERNAL_ERROR", "Failed to check summary cache", 500);
@@ -113,7 +121,8 @@ export async function POST(request: Request) {
         let summaryData: any;
 
         try {
-            const lyzrAgentId = process.env.LYZR_Conversation_Summary_Agent_ID;
+            const lyzrAgentId = process.env.LYZR_CONVERSATION_SUMMARY_AGENT_ID
+                || process.env.LYZR_Conversation_Summary_Agent_ID; // legacy alias
             const lyzrApiKey = process.env.LYZR_API_KEY;
             const lyzrApiUrl = process.env.LYZR_API_URL || "https://agent-prod.studio.lyzr.ai/v3/inference/chat/";
 
