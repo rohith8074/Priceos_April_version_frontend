@@ -11,8 +11,16 @@ export const metadata = {
     description: "Real-time guest communication and AI-powered relationship management.",
 };
 
-export default async function GuestChatPage() {
+export default async function GuestChatPage({
+    searchParams,
+}: {
+    searchParams?: Promise<{ propertyId?: string; conversationId?: string }>;
+}) {
     const cookieStore = await cookies();
+    const resolvedSearchParams = searchParams ? await searchParams : undefined;
+    const initialPropertyId = resolvedSearchParams?.propertyId || null;
+    const initialConversationId = resolvedSearchParams?.conversationId || null;
+
     const token = cookieStore.get("priceos-session")?.value;
     if (!token) redirect("/login");
 
@@ -76,6 +84,9 @@ export default async function GuestChatPage() {
                     : Number(listing.price),
         };
     });
+    const initialProperty = initialPropertyId
+        ? propertiesWithMetrics.find((listing: any) => listing.id === initialPropertyId)
+        : null;
 
     return (
         <div className="flex h-full overflow-hidden">
@@ -85,7 +96,12 @@ export default async function GuestChatPage() {
 
             {/* Center Guest Chat Panel */}
             <div className="flex-1 min-w-[500px] flex flex-col h-full bg-background relative z-10 transition-all duration-300">
-                <GuestChatInterface />
+                <GuestChatInterface
+                    initialPropertyId={initialPropertyId}
+                    initialPropertyName={initialProperty?.name || null}
+                    initialPropertyCurrency={initialProperty?.currencyCode || "AED"}
+                    initialConversationId={initialConversationId}
+                />
             </div>
 
         </div>

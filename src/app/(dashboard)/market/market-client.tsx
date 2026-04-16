@@ -4,14 +4,12 @@ import { useState, useMemo } from "react";
 import {
   Calendar,
   TrendingUp,
-  RefreshCw,
   Globe,
   AlertTriangle,
   Star,
   BarChart2,
   Filter,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -67,11 +65,11 @@ const FILTER_SELECT_CLASS =
   "focus:outline-none focus:ring-2 focus:ring-amber-500/35 focus:ring-offset-2 focus:ring-offset-background " +
   "dark:border-white/15 dark:bg-white/[0.06] dark:text-foreground";
 
-const SOURCE_META: Record<string, { agent: string; api: string; link: string }> = {
+const SOURCE_META: Record<string, { agent: string; api: string; link?: string }> = {
   ai_detected: {
     agent: "Market Intelligence Agent",
     api: "PriceOS Agent Pipeline",
-    link: "/api/sync/run",
+    // no external link — internal pipeline
   },
   ticketmaster: {
     agent: "Market Intelligence Agent",
@@ -86,12 +84,12 @@ const SOURCE_META: Record<string, { agent: string; api: string; link: string }> 
   market_template: {
     agent: "Market Template Seeder",
     api: "PriceOS Internal Templates",
-    link: "/api/events",
+    // no external link — internal data
   },
   manual: {
     agent: "Manual Entry",
     api: "PriceOS Dashboard",
-    link: "/api/events",
+    // no external link
   },
 };
 
@@ -110,8 +108,6 @@ function daysUntil(dateStr: string) {
 }
 
 export function MarketIntelligenceClient({ events, occupancyPct, avgNightly, listings }: Props) {
-  const [scanning, setScanning] = useState(false);
-  const [lastScan, setLastScan] = useState<string | null>(null);
   const [selectedListingId, setSelectedListingId] = useState<string>(listings[0]?.id ?? "");
   const [filterImpact, setFilterImpact] = useState<"all" | "high" | "medium" | "low">("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
@@ -173,36 +169,12 @@ export function MarketIntelligenceClient({ events, occupancyPct, avgNightly, lis
   return (
     <div className="p-8 max-w-6xl space-y-8">
       {/* Page Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight mb-1">Market Intelligence</h1>
-          <p className="text-text-secondary text-sm flex items-center gap-1.5">
-            <Globe className="h-3.5 w-3.5" />
-            Your market — live events, demand signals, and comp positioning
-            {lastScan && <span className="text-text-tertiary">· Updated at {lastScan}</span>}
-          </p>
-        </div>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                onClick={handleRunAnalysis}
-                disabled={scanning}
-                className="bg-amber text-black hover:bg-amber/90 gap-2 shrink-0"
-              >
-                {scanning ? (
-                  <RefreshCw className="h-4 w-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4" />
-                )}
-                {scanning ? "Scanning…" : "Run Market Analysis"}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent className="text-[10px] p-2 dark:bg-black border border-white/20">
-              Triggers a live scan of Ticketmaster, Eventbrite, and competitor rates for your properties.
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+      <div>
+        <h1 className="text-3xl font-bold text-white tracking-tight mb-1">Market Intelligence</h1>
+        <p className="text-text-secondary text-sm flex items-center gap-1.5">
+          <Globe className="h-3.5 w-3.5" />
+          Your market — live events, demand signals, and comp positioning
+        </p>
       </div>
 
       {/* KPI Cards */}
@@ -248,11 +220,11 @@ export function MarketIntelligenceClient({ events, occupancyPct, avgNightly, lis
                   className="rounded-xl border border-white/5 bg-white/[0.02] p-4 flex flex-col gap-2 cursor-help transition-colors hover:bg-white/[0.04]"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-text-tertiary">{kpi.label}</span>
+                    <span className="text-xs text-muted-foreground font-medium">{kpi.label}</span>
                     <kpi.icon className={cn("h-4 w-4", kpi.color)} />
                   </div>
                   <div className={cn("text-2xl font-bold tabular-nums", kpi.color)}>{kpi.value}</div>
-                  <div className="text-[11px] text-text-disabled">{kpi.sub}</div>
+                  <div className="text-[11px] text-muted-foreground/70">{kpi.sub}</div>
                 </div>
               </TooltipTrigger>
               <TooltipContent className="text-[10px] p-2 dark:bg-black border border-white/20">
@@ -445,14 +417,16 @@ export function MarketIntelligenceClient({ events, occupancyPct, avgNightly, lis
                       <div className="text-xs text-foreground space-y-0.5">
                         <div className="font-medium">{sourceMeta.agent}</div>
                         <div className="text-muted-foreground">{sourceMeta.api}</div>
-                        <a
-                          href={sourceMeta.link}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-amber-700 hover:text-amber-900 hover:underline dark:text-amber dark:hover:text-amber/90"
-                        >
-                          Source link
-                        </a>
+                        {sourceMeta.link && (
+                          <a
+                            href={sourceMeta.link}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-amber-700 hover:text-amber-900 hover:underline dark:text-amber dark:hover:text-amber/90"
+                          >
+                            Source link ↗
+                          </a>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

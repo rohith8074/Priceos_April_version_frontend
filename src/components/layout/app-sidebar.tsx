@@ -48,12 +48,16 @@ export function AppSidebar() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [needsReplyCount, setNeedsReplyCount] = useState(0);
+  const [pendingGuestTarget, setPendingGuestTarget] = useState<{ propertyId: string; conversationId: string } | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [todayEvents, setTodayEvents] = useState<
     { id: string; name: string; impactLevel: "high" | "medium" | "low"; upliftPct: number; area?: string; source?: string }[]
   >([]);
   const [proposalNotifications, setProposalNotifications] = useState<
     { id: string; label: string; listingName: string; type: "expiring" | "high_risk"; updatedAt?: string }[]
+  >([]);
+  const [guestNotifications, setGuestNotifications] = useState<
+    { id: string; guestName: string; preview: string; propertyId: string; conversationId: string }[]
   >([]);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<string>>(new Set());
 
@@ -69,10 +73,29 @@ export function AppSidebar() {
         if (!r.ok) return;
         const data = await r.json();
         if (disposed || !data) return;
-        const count = (data.conversations ?? []).filter(
+        const pendingConversations = (data.conversations ?? []).filter(
           (c: any) => c.unread || c.needsReply || c.status === "needs_reply"
-        ).length;
+        );
+        const count = pendingConversations.length;
         setNeedsReplyCount(count);
+        setGuestNotifications(
+          pendingConversations
+            .filter((c: any) => c.listingId && c.id)
+            .slice(0, 8)
+            .map((c: any) => ({
+              id: `guest-${c.id}`,
+              guestName: c.guestName || "Guest",
+              preview: c.lastMessage || "New guest message",
+              propertyId: String(c.listingId),
+              conversationId: String(c.id),
+            }))
+        );
+        const firstPending = pendingConversations.find((c: any) => c.listingId && c.id);
+        setPendingGuestTarget(
+          firstPending
+            ? { propertyId: String(firstPending.listingId), conversationId: String(firstPending.id) }
+            : null
+        );
       } catch {
         // Best-effort only.
       }
@@ -171,7 +194,9 @@ export function AppSidebar() {
 
   const visibleEvents = todayEvents.filter((e) => !dismissedNotificationIds.has(`event-${e.id}`));
   const visibleProposalNotifications = proposalNotifications.filter((p) => !dismissedNotificationIds.has(p.id));
-  const totalNotificationCount = visibleEvents.length + visibleProposalNotifications.length;
+  const visibleGuestNotifications = guestNotifications.filter((g) => !dismissedNotificationIds.has(g.id));
+  const totalNotificationCount =
+    visibleEvents.length + visibleProposalNotifications.length + visibleGuestNotifications.length;
 
   const dismissNotification = (id: string) => {
     setDismissedNotificationIds((prev) => {
@@ -208,6 +233,10 @@ export function AppSidebar() {
   }) => {
     const active = isActive(href);
     const guestBadgeCount = showGuestBadge ? needsReplyCount : 0;
+    const effectiveHref =
+      showGuestBadge && pendingGuestTarget
+        ? `/guest-chat?propertyId=${encodeURIComponent(pendingGuestTarget.propertyId)}&conversationId=${encodeURIComponent(pendingGuestTarget.conversationId)}`
+        : href;
 
     const tourId = name === "Dashboard" ? "tour-sidebar-dashboard" 
                  : name === "Pricing" ? "tour-sidebar-pricing" 
@@ -216,7 +245,7 @@ export function AppSidebar() {
 
     return (
       <Link
-        href={href}
+        href={effectiveHref}
         id={tourId}
         className={cn(
           "group relative flex items-center gap-3 px-3 py-2 text-body transition-colors duration-200 rounded-md mx-2",
@@ -287,13 +316,68 @@ export function AppSidebar() {
               <div className="max-h-72 overflow-y-auto">
                 {totalNotificationCount === 0 ? (
                   <div className="px-3 py-4 text-[12px] text-text-tertiary">
-                    No active events or proposal alerts right now.
+                    No active guest, event, or proposal alerts right now.
                   </div>
                 ) : (
                   <div className="divide-y divide-border-subtle">
+                    {visibleGuestNotifications.slice(0, 8).map((notification) => (
+                      <div
+                        key={notification.id}
+                        onClick={() =>
+                          router.push(
+                            `/guest-chat?propertyId=${encodeURIComponent(notification.propertyId)}&conversationId=${encodeURIComponent(notification.conversationId)}&highlight=1`
+                          )
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            router.push(
+                              `/guest-chat?propertyId=${encodeURIComponent(notification.propertyId)}&conversationId=${encodeURIComponent(notification.conversationId)}&highlight=1`
+                            );
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
+                        className="w-full text-left px-3 py-2.5 hover:bg-surface-2/70 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-[12px] font-medium text-text-primary leading-snug">
+                              New Guest Message
+                            </p>
+                            <p className="text-[11px] text-text-tertiary truncate">{notification.guestName}</p>
+                            <p className="text-[10px] text-text-tertiary truncate mt-1">{notification.preview}</p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Badge className="text-[10px] border-none h-5 bg-blue-500/15 text-blue-400">
+                              inbox
+                            </Badge>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                dismissNotification(notification.id);
+                              }}
+                              className="h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center"
+                              title="Dismiss"
+                            >
+                              <X className="h-3 w-3 text-muted-foreground" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                     {visibleProposalNotifications.slice(0, 8).map((proposal) => (
                       <div
                         key={proposal.id}
+                        onClick={() => router.push("/pricing")}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            router.push("/pricing");
+                          }
+                        }}
+                        role="button"
+                        tabIndex={0}
                         className="w-full px-3 py-2.5 hover:bg-surface-2/70 transition-colors"
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -370,7 +454,7 @@ export function AppSidebar() {
                         </div>
                       </button>
                     ))}
-                    {(visibleEvents.length > 8 || visibleProposalNotifications.length > 8) && (
+                    {(visibleEvents.length > 8 || visibleProposalNotifications.length > 8 || visibleGuestNotifications.length > 8) && (
                       <div className="px-3 py-2 text-[10px] text-text-tertiary bg-surface-1">
                         +more notifications
                       </div>

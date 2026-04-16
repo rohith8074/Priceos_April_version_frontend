@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -26,13 +27,25 @@ interface SimulatedConversation {
     messages: Message[];
 }
 
-export function GuestChatInterface() {
+export function GuestChatInterface({
+    initialPropertyId = null,
+    initialPropertyName = null,
+    initialPropertyCurrency = "AED",
+    initialConversationId = null,
+}: {
+    initialPropertyId?: string | null;
+    initialPropertyName?: string | null;
+    initialPropertyCurrency?: string;
+    initialConversationId?: string | null;
+}) {
+    const searchParams = useSearchParams();
     const {
         contextType,
         propertyId,
         propertyName,
         setConversationSummary,
-        conversationSummary
+        conversationSummary,
+        setPropertyContext,
     } = useContextStore();
 
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
@@ -45,7 +58,29 @@ export function GuestChatInterface() {
     const [isLoading, setIsLoading] = useState(false);
     const [isSyncingHostaway, setIsSyncingHostaway] = useState(false);
     const [autoReplyEnabled, setAutoReplyEnabled] = useState(false);
+    const [highlightConversationId, setHighlightConversationId] = useState<string | null>(initialConversationId);
     const autoRepliedIds = useRef<Set<string>>(new Set());
+    const requestedConversationIdRef = useRef<string | null>(initialConversationId);
+
+    useEffect(() => {
+        const propertyFromQuery = searchParams.get("propertyId") || initialPropertyId;
+        if (!propertyFromQuery) return;
+        if (propertyId === propertyFromQuery && contextType === "property") return;
+        setPropertyContext(
+            propertyFromQuery,
+            initialPropertyName || propertyName || "Selected Property",
+            initialPropertyCurrency
+        );
+    }, [
+        contextType,
+        initialPropertyCurrency,
+        initialPropertyId,
+        initialPropertyName,
+        propertyId,
+        propertyName,
+        searchParams,
+        setPropertyContext,
+    ]);
 
     const syncFromHostaway = async () => {
         if (!propertyId) return;
@@ -83,6 +118,11 @@ export function GuestChatInterface() {
                 const convData = await convRes.json();
                 const cachedConversations = convData.conversations || [];
                 setConversations(cachedConversations);
+                const requestedConversationId = searchParams.get("conversationId") || requestedConversationIdRef.current;
+                if (requestedConversationId && cachedConversations.some((c: SimulatedConversation) => c.id === requestedConversationId)) {
+                    setActiveConversationId(requestedConversationId);
+                    requestedConversationIdRef.current = requestedConversationId;
+                }
 
                 // 2) If cache is empty, sync from Hostaway live API for this property
                 if (cachedConversations.length === 0) {
@@ -91,6 +131,11 @@ export function GuestChatInterface() {
                         const liveData = await liveRes.json();
                         const syncedConversations = liveData.conversations || [];
                         setConversations(syncedConversations);
+                        const requestedConversationId = searchParams.get("conversationId") || requestedConversationIdRef.current;
+                        if (requestedConversationId && syncedConversations.some((c: SimulatedConversation) => c.id === requestedConversationId)) {
+                            setActiveConversationId(requestedConversationId);
+                            requestedConversationIdRef.current = requestedConversationId;
+                        }
                         if (showLoadingToast) {
                             toast.success(`Synced ${syncedConversations.length} threads from Hostaway`, { id: "fetch_conv" });
                         }
@@ -122,7 +167,16 @@ export function GuestChatInterface() {
         setConversationSummary(null);
         setReplyText("");
         fetchConversations();
-    }, [propertyId]);
+    }, [propertyId, searchParams]);
+
+    useEffect(() => {
+        const shouldHighlight = searchParams.get("highlight") === "1";
+        const requestedConversationId = searchParams.get("conversationId") || initialConversationId;
+        if (!shouldHighlight || !requestedConversationId) return;
+        setHighlightConversationId(requestedConversationId);
+        const timeout = window.setTimeout(() => setHighlightConversationId(null), 3500);
+        return () => window.clearTimeout(timeout);
+    }, [initialConversationId, searchParams]);
 
     const generateAiReply = async (conversation: SimulatedConversation): Promise<string | null> => {
         const res = await fetch("/api/hostaway/suggest-reply", {
@@ -377,8 +431,17 @@ export function GuestChatInterface() {
                         {conversations.map(conv => (
                             <button
                                 key={conv.id}
-                                onClick={() => setActiveConversationId(conv.id)}
-                                className={`w-full text-left p-3 rounded-xl transition-all border ${activeConversationId === conv.id ? 'bg-primary/5 border-primary/30' : 'bg-background hover:bg-muted/50 border-border/50 hover:border-border'}`}
+                                onClick={() => {
+                                    setActiveConversationId(conv.id);
+                                    setHighlightConversationId(conv.id);
+                                }}
+                                className={`w-full text-left p-3 rounded-xl transition-all border ${
+                                    highlightConversationId === conv.id
+                                        ? 'bg-amber-500/10 border-amber-500/50 ring-1 ring-amber-500/30'
+                                        : activeConversationId === conv.id
+                                            ? 'bg-primary/5 border-primary/30'
+                                            : 'bg-background hover:bg-muted/50 border-border/50 hover:border-border'
+                                }`}
                             >
                                 <div className="flex items-start gap-3">
                                     <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
@@ -437,7 +500,9 @@ export function GuestChatInterface() {
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                            <div className={`flex-1 overflow-y-auto p-6 space-y-4 transition-colors ${
+                                highlightConversationId === activeConversationId ? 'bg-amber-500/5' : ''
+                            }`}>
                                 {activeConversation.messages.map((msg) => (
                                     <div key={msg.id} className={`flex flex-col max-w-[85%] ${msg.sender === 'admin' ? 'ml-auto items-end' : 'mr-auto items-start'}`}>
                                         <div className={`px-4 py-2.5 rounded-2xl overflow-hidden ${msg.sender === 'admin' ? 'bg-primary text-primary-foreground rounded-br-sm' : 'bg-muted border border-border/50 rounded-bl-sm'}`}>

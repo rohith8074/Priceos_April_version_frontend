@@ -27,6 +27,7 @@ import {
   ArrowUpDown,
   Pencil,
   X,
+  Upload,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -266,6 +267,7 @@ export function PricingClient({
 
   // Selection helpers
   const pendingDisplay = displayProposals.filter((p) => p.proposalStatus === "pending");
+  const approvedDisplay = displayProposals.filter((p) => p.proposalStatus === "approved");
   const toggleSelectAll = () => {
     setSelectedIds(
       selectedIds.size === pendingDisplay.length
@@ -330,6 +332,29 @@ export function PricingClient({
       });
     } catch {
       toast.error(`Failed to ${action} proposal.`);
+    }
+  };
+
+  const handlePushAction = async (ids: string[]) => {
+    if (ids.length === 0) return;
+    setIsProcessing(true);
+    try {
+      const res = await fetch("/api/v1/revenue/proposals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ _ids: ids, action: "push" }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(payload?.error || payload?.message || "Failed to push proposals");
+      setProposals((prev) =>
+        prev.map((p) => (ids.includes(p.id) ? { ...p, proposalStatus: "pushed" } : p))
+      );
+      setSelectedIds(new Set());
+      toast.success(`${ids.length} approved proposal${ids.length > 1 ? "s" : ""} pushed to MongoDB.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to push proposals.");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -444,7 +469,7 @@ export function PricingClient({
       <div className="flex items-center gap-3 flex-wrap">
         <Building2 className="h-3.5 w-3.5 text-text-tertiary shrink-0" />
         <Select value={filterProperty} onValueChange={setFilterProperty}>
-          <SelectTrigger className="h-7 w-44 text-xs bg-white/5 border-white/10">
+          <SelectTrigger className="h-8 w-44 text-xs bg-background border-border/70 text-foreground shadow-sm">
             <SelectValue placeholder="All properties" />
           </SelectTrigger>
           <SelectContent>
@@ -457,7 +482,7 @@ export function PricingClient({
 
         {activeTab === "pending" && (
           <Select value={filterDirection} onValueChange={(v) => setFilterDirection(v as typeof filterDirection)}>
-            <SelectTrigger className="h-7 w-36 text-xs bg-white/5 border-white/10">
+            <SelectTrigger className="h-8 w-36 text-xs bg-background border-border/70 text-foreground shadow-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -468,17 +493,17 @@ export function PricingClient({
           </Select>
         )}
 
-        <div className="ml-auto flex items-center gap-1">
-          <span className="text-[11px] text-text-disabled">Sort:</span>
+        <div className="ml-auto flex items-center gap-2 rounded-xl border border-border/70 bg-background px-2 py-1 shadow-sm">
+          <span className="text-[11px] font-semibold text-foreground">Sort:</span>
           {(["date", "changePct", "property"] as SortKey[]).map((key) => (
             <button
               key={key}
               onClick={() => cycleSort(key)}
               className={cn(
-                "flex items-center gap-0.5 text-[11px] px-2 py-1 rounded border transition-colors",
+                "flex items-center gap-0.5 text-[11px] px-2.5 py-1 rounded-md border transition-colors font-medium",
                 sortKey === key
-                  ? "border-amber/30 bg-amber/5 text-amber"
-                  : "border-white/5 text-text-disabled hover:border-white/10"
+                  ? "border-amber/40 bg-amber/10 text-amber"
+                  : "border-border/60 bg-muted/30 text-foreground hover:border-border"
               )}
             >
               {key === "date" ? "Date" : key === "changePct" ? "Change %" : "Property"}
@@ -489,7 +514,7 @@ export function PricingClient({
           ))}
           <button
             onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-            className="text-[11px] px-2 py-1 rounded border border-white/5 text-text-disabled hover:border-white/10"
+            className="text-[11px] px-2.5 py-1 rounded-md border border-border/60 bg-muted/30 text-foreground font-medium hover:border-border"
           >
             {sortDir === "asc" ? "↑ Asc" : "↓ Desc"}
           </button>
@@ -499,7 +524,7 @@ export function PricingClient({
       {/* Bulk Actions (pending tab only) */}
       {activeTab === "pending" && pendingDisplay.length > 0 && (
         <div className="flex items-center justify-between gap-4">
-          <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
+          <label className="flex items-center gap-2 text-xs text-foreground font-medium cursor-pointer rounded-lg border border-border/60 bg-background px-3 py-2 shadow-sm">
             <Checkbox
               checked={
                 selectedIds.size === pendingDisplay.length && pendingDisplay.length > 0
@@ -541,6 +566,24 @@ export function PricingClient({
         </div>
       )}
 
+      {activeTab === "approved" && approvedDisplay.length > 0 && (
+        <div className="flex items-center justify-end gap-2">
+          <Button
+            size="sm"
+            disabled={approvedDisplay.length === 0 || isProcessing}
+            onClick={() => handlePushAction(approvedDisplay.map((p) => p.id))}
+            className="h-8 px-4 text-xs bg-blue-600 text-white hover:bg-blue-500 gap-1.5"
+          >
+            {isProcessing ? (
+              <RefreshCcw className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Upload className="h-3.5 w-3.5" />
+            )}
+            Push All Approved
+          </Button>
+        </div>
+      )}
+
       {/* Proposal List */}
       {displayProposals.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3 rounded-xl border border-white/5 bg-white/[0.02]">
@@ -560,7 +603,7 @@ export function PricingClient({
             <div className="text-right">Price</div>
             <div className="text-center">Risk</div>
             <div>Reasoning</div>
-            {activeTab === "pending" && <div>Actions</div>}
+            {(activeTab === "pending" || activeTab === "approved") && <div>Actions</div>}
           </div>
 
           <div className="divide-y divide-white/[0.04]">
@@ -572,7 +615,7 @@ export function PricingClient({
                   key={row.id}
                   className={cn(
                     "grid gap-x-4 px-4 py-3 hover:bg-white/[0.02] transition-colors",
-                    activeTab === "pending"
+                    activeTab === "pending" || activeTab === "approved"
                       ? "grid-cols-[auto_1fr_auto_auto_auto_auto]"
                       : "grid-cols-[1fr_auto_auto_auto]",
                     stale && "border-l-2 border-l-amber/40"
@@ -660,9 +703,9 @@ export function PricingClient({
                   </div>
 
                   {/* Row Actions (pending only) */}
-                  {activeTab === "pending" && (
+                  {(activeTab === "pending" || activeTab === "approved") && (
                     <div className="flex flex-col gap-1 shrink-0">
-                      {modifyingId === row.id ? (
+                      {activeTab === "pending" && modifyingId === row.id ? (
                         // ── Inline modify form ──
                         <div className="flex items-center gap-1">
                           <span className="text-[10px] text-text-tertiary">{row.currencyCode || "AED"}</span>
@@ -694,7 +737,7 @@ export function PricingClient({
                             <X className="h-3 w-3" />
                           </Button>
                         </div>
-                      ) : (
+                      ) : activeTab === "pending" ? (
                         // ── Default action buttons ──
                         <div className="flex items-center gap-1">
                           <Button
@@ -723,6 +766,18 @@ export function PricingClient({
                           >
                             <XCircle className="h-3 w-3" />
                             Reject
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="sm"
+                            disabled={isProcessing}
+                            onClick={() => handlePushAction([row.id])}
+                            className="h-7 px-2.5 text-[11px] bg-blue-600 text-white hover:bg-blue-500 gap-1"
+                          >
+                            <Upload className="h-3 w-3" />
+                            Push
                           </Button>
                         </div>
                       )}

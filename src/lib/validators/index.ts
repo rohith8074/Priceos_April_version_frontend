@@ -151,7 +151,7 @@ export const getProposalsSchema = z.object({
 /** POST /v1/revenue/proposals/bulk */
 export const bulkProposalActionSchema = z.object({
     ids: z.array(z.number()).min(1, "At least one ID is required"),
-    action: z.enum(["approve", "reject", "apply", "save"]),
+    action: z.enum(["approve", "reject", "apply", "push", "save"]),
 });
 
 // ─────────────────────────────────────────────────────────

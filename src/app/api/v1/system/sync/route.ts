@@ -2,6 +2,7 @@ import { apiSuccess, apiError } from "@/lib/api/response";
 import { triggerSyncSchema, formatZodErrors } from "@/lib/validators";
 import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/api/rate-limit";
 import { startBackgroundSync } from "@/lib/sync/background-sync";
+import { getSession } from "@/lib/auth/server";
 
 /**
  * POST /api/v1/system/sync
@@ -27,7 +28,12 @@ export async function POST(req: Request) {
 
         const { entity, listingId } = validation.data;
 
-        const result = startBackgroundSync();
+        const session = await getSession();
+        if (!session?.orgId) {
+            return apiError("UNAUTHORIZED", "Authentication required", 401);
+        }
+
+        const result = startBackgroundSync(session.orgId);
         if (!result.started) {
             return apiError("SYNC_ALREADY_RUNNING", result.message, 409);
         }

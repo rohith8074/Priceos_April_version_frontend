@@ -75,6 +75,7 @@ export async function GET(request: Request) {
 
             return {
                 id: conv.hostawayConversationId,
+                listingId: String(conv.listingId),
                 guestName: conv.guestName,
                 lastMessage: lastMsg?.text || "No messages",
                 status: lastMsg?.sender === "guest" ? "needs_reply" : "resolved",

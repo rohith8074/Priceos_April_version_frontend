@@ -164,8 +164,8 @@ export class HostawayClient implements PMSClient {
   private staticToken: string;
   private baseUrl: string = "https://api.hostaway.com/v1";
 
-  constructor() {
-    this.staticToken = process.env.Hostaway_Authorization_token || "";
+  constructor(token?: string) {
+    this.staticToken = token || process.env.Hostaway_Authorization_token || "";
 
     if (!this.staticToken) {
       throw new Error(

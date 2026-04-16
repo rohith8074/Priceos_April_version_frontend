@@ -4,11 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Building2,
   Link2,
-  Activity,
   Eye,
   EyeOff,
   Globe2,
-  RefreshCw,
   Loader2,
   Save,
   Check,
@@ -96,17 +94,13 @@ export default function SettingsPage() {
 
   // Editable form state
   const [apiKey, setApiKey] = useState("");
+  const [accountId, setAccountId] = useState("");
   const [showApiKey, setShowApiKey] = useState(false);
   const [orgName, setOrgName] = useState("");
   const [timezone, setTimezone] = useState("");
   const [selectedMarket, setSelectedMarket] = useState("");
   const [useCurrencyOverride, setUseCurrencyOverride] = useState(false);
   const [currencyOverride, setCurrencyOverride] = useState("");
-  const [autoPush, setAutoPush] = useState(false);
-  const [dailyPipeline, setDailyPipeline] = useState(true);
-
-  const [testingConnection, setTestingConnection] = useState(false);
-
   // Fetch org settings + markets in parallel
   useEffect(() => {
     Promise.all([
@@ -119,14 +113,13 @@ export default function SettingsPage() {
 
         // Populate form state from DB
         setApiKey(orgData.hostawayApiKey || "");
+        setAccountId(orgData.hostawayAccountId || "");
         setOrgName(orgData.name || "");
         setTimezone(orgData.timezone || "Asia/Dubai");
         setSelectedMarket(orgData.marketCode || "UAE_DXB");
         const hasCurrOverride = !!orgData.settings?.overrides?.currency;
         setUseCurrencyOverride(hasCurrOverride);
         setCurrencyOverride(orgData.settings?.overrides?.currency || "");
-        setAutoPush(orgData.settings?.automation?.autoPushApproved ?? false);
-        setDailyPipeline(orgData.settings?.automation?.dailyPipelineRun ?? true);
       })
       .catch((err) => {
         console.error("Failed to load settings:", err);
@@ -178,33 +171,6 @@ export default function SettingsPage() {
     []
   );
 
-  const handleTestConnection = async () => {
-    if (!apiKey.trim()) {
-      toast.error("Enter a Hostaway API key first");
-      return;
-    }
-    setTestingConnection(true);
-    try {
-      const res = await fetch("/api/hostaway/metadata", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey: apiKey.trim() }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        toast.success("Hostaway Connection Successful", {
-          description: `Found ${data.listingsCount ?? "?"} active listings.`,
-        });
-      } else {
-        toast.error("Connection failed — check your API key");
-      }
-    } catch {
-      toast.error("Network error — could not reach Hostaway");
-    } finally {
-      setTestingConnection(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-[60vh] gap-2 text-text-disabled">
@@ -219,7 +185,7 @@ export default function SettingsPage() {
       <div className="flex flex-col gap-1.5">
         <h1 className="text-3xl font-bold tracking-tight text-text-primary">Settings</h1>
         <p className="text-text-secondary text-body">
-          Manage your organization, connections, and AI pipeline guardrails.
+          Manage your organization, connections, and market configuration.
         </p>
       </div>
 
@@ -239,13 +205,6 @@ export default function SettingsPage() {
             <Building2 className="h-3.5 w-3.5 mr-2" />
             Organization
           </TabsTrigger>
-          <TabsTrigger
-            value="automation"
-            className="data-[state=active]:bg-surface-2 data-[state=active]:text-amber text-body-xs font-medium px-6"
-          >
-            <Activity className="h-3.5 w-3.5 mr-2" />
-            Automation
-          </TabsTrigger>
         </TabsList>
 
         {/* ── TAB: Connections ──────────────────────────────────────────── */}
@@ -264,6 +223,18 @@ export default function SettingsPage() {
               </div>
 
               <div className="flex flex-col gap-4 max-w-xl">
+                <div className="space-y-2">
+                  <Label htmlFor="hostaway-account-id" className="text-body-xs text-text-secondary">
+                    Account ID
+                  </Label>
+                  <Input
+                    id="hostaway-account-id"
+                    value={accountId}
+                    onChange={(e) => setAccountId(e.target.value)}
+                    className="bg-surface-2 border-border-default h-10 text-body-xs"
+                    placeholder="e.g. 12345"
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="hostaway-api" className="text-body-xs text-text-secondary">
                     Hostaway API Key
@@ -289,26 +260,24 @@ export default function SettingsPage() {
                     </button>
                   </div>
                 </div>
+                <div className="rounded-lg border border-border-subtle bg-surface-2/30 p-3">
+                  <p className="text-[10px] font-semibold text-text-primary mb-1">
+                    Sync behavior
+                  </p>
+                  <p className="text-[11px] text-text-tertiary leading-relaxed">
+                    These credentials are saved per organization in MongoDB and used when you click
+                    {" "}
+                    <span className="font-medium text-text-primary">Sync Hostaway</span>.
+                  </p>
+                </div>
                 <div className="flex gap-3">
                   <button
-                    onClick={handleTestConnection}
-                    disabled={testingConnection}
-                    className="bg-surface-2 hover:bg-surface-3 text-text-primary font-bold h-10 px-6 rounded-md text-body-xs w-fit transition-all flex items-center gap-2 border border-border-default disabled:opacity-50"
-                  >
-                    {testingConnection ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-3.5 w-3.5" />
-                    )}
-                    Test Connection
-                  </button>
-                  <button
-                    onClick={() => handleSave({ hostawayApiKey: apiKey })}
+                    onClick={() => handleSave({ hostawayApiKey: apiKey.trim(), hostawayAccountId: accountId.trim() })}
                     disabled={saving}
                     className="bg-amber hover:bg-amber/90 text-black font-bold h-10 px-6 rounded-md text-body-xs w-fit transition-all flex items-center gap-2 disabled:opacity-50"
                   >
                     <SaveIcon saving={saving} saved={saved} />
-                    Save Key
+                    Save Credentials
                   </button>
                 </div>
               </div>
@@ -548,44 +517,6 @@ export default function SettingsPage() {
           </div>
         </TabsContent>
 
-        {/* ── TAB: Automation ───────────────────────────────────────────── */}
-        <TabsContent
-          value="automation"
-          className="mt-8 space-y-8 animate-in fade-in-50 duration-500"
-        >
-          <div className="grid gap-6">
-            {/* Pipeline Schedule */}
-            <div className="bg-surface-1 border border-border-subtle rounded-xl p-6 flex flex-col gap-6">
-              <div className="flex flex-col gap-1">
-                <h3 className="text-title font-semibold text-text-primary">Pipeline Schedule</h3>
-                <p className="text-body-xs text-text-tertiary">
-                  Configure how the intelligence engine runs automatically.
-                </p>
-              </div>
-
-              <div className="grid gap-4">
-                <ToggleRow
-                  title="Auto-run pipeline daily"
-                  description="Run the Sources → Detectors → Pricing cycle every day at midnight (org timezone)."
-                  checked={dailyPipeline}
-                  onCheckedChange={(v) => {
-                    setDailyPipeline(v);
-                    handleSave({ settings: { automation: { dailyPipelineRun: v } } });
-                  }}
-                />
-                <ToggleRow
-                  title="Auto-push approved prices"
-                  description="Automatically push auto-approved price changes to Hostaway without manual confirmation."
-                  checked={autoPush}
-                  onCheckedChange={(v) => {
-                    setAutoPush(v);
-                    handleSave({ settings: { automation: { autoPushApproved: v } } });
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        </TabsContent>
       </Tabs>
     </div>
   );
@@ -602,27 +533,6 @@ function SpecRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ToggleRow({
-  title,
-  description,
-  checked,
-  onCheckedChange,
-}: {
-  title: string;
-  description: string;
-  checked: boolean;
-  onCheckedChange: (v: boolean) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between p-4 rounded-xl border border-border-subtle bg-surface-2/20 hover:bg-surface-2/40 transition-colors">
-      <div className="flex flex-col gap-0.5">
-        <span className="text-body-xs font-bold text-text-primary">{title}</span>
-        <span className="text-[10px] text-text-tertiary">{description}</span>
-      </div>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
-    </div>
-  );
-}
 
 function SaveIcon({ saving, saved }: { saving: boolean; saved: boolean }) {
   if (saving) return <Loader2 className="h-3.5 w-3.5 animate-spin" />;

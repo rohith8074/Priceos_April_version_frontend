@@ -32,6 +32,11 @@ import {
   Line,
   BarChart,
   Bar,
+  PieChart,
+  Pie,
+  Cell,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -47,6 +52,15 @@ const CHART_TOOLTIP_STYLE = {
   borderRadius: "12px",
   boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
 };
+const ANALYTICS_COLORS = {
+  blue: "#3b82f6",
+  emerald: "#10b981",
+  amber: "#f59e0b",
+  violet: "#8b5cf6",
+  rose: "#f43f5e",
+  cyan: "#06b6d4",
+};
+const CHANNEL_COLORS = ["#10b981", "#ef4444", "#3b82f6", "#8b5cf6", "#f59e0b", "#14b8a6"];
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -790,6 +804,11 @@ function PropertyAnalyticsPanel({
   onRangeChange: (v: { from: string; to: string }) => void;
 }) {
   const shortDate = (d: string) => format(parseISO(`${d}T00:00:00.000Z`), "MMM d");
+  const channelMixWithFill =
+    data?.channelMix.map((item, index) => ({
+      ...item,
+      fill: CHANNEL_COLORS[index % CHANNEL_COLORS.length],
+    })) ?? [];
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-border-subtle bg-surface-1 p-4 space-y-3">
@@ -860,15 +879,15 @@ function PropertyAnalyticsPanel({
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3">
-            <KpiCard label="Bookings" value={data.summary.totalBookings.toLocaleString("en-US")} />
-            <KpiCard label="Avg LOS" value={`${data.summary.avgLos} nights`} />
-            <KpiCard label="Occupancy" value={`${data.summary.occupancyPct}%`} />
-            <KpiCard label="Revenue" value={`${property.currency} ${data.summary.totalRevenue.toLocaleString("en-US")}`} />
+            <KpiCard label="Bookings" value={data.summary.totalBookings.toLocaleString("en-US")} accent="blue" />
+            <KpiCard label="Avg LOS" value={`${data.summary.avgLos} nights`} accent="violet" />
+            <KpiCard label="Occupancy" value={`${data.summary.occupancyPct}%`} accent="emerald" />
+            <KpiCard label="Revenue" value={`${property.currency} ${data.summary.totalRevenue.toLocaleString("en-US")}`} accent="amber" />
           </div>
 
           <ChartCard title="Booking Velocity" subtitle="Bookings created per day + 7d moving average">
             <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={data.bookingVelocity}>
+              <BarChart data={data.bookingVelocity}>
                 <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_STROKE} strokeOpacity={0.25} />
                 <XAxis dataKey="date" tickFormatter={shortDate} tick={{ fontSize: 10, fill: CHART_AXIS_STROKE }} />
                 <YAxis tick={{ fontSize: 10, fill: CHART_AXIS_STROKE }} />
@@ -877,9 +896,9 @@ function PropertyAnalyticsPanel({
                   labelFormatter={(v) => format(parseISO(`${String(v)}T00:00:00.000Z`), "dd MMM yyyy")}
                 />
                 <Legend />
-                <Bar dataKey="bookings" name="Bookings" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
-                <Line type="monotone" dataKey="movingAvg7d" name="7d Avg" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={false} />
-              </LineChart>
+                <Bar dataKey="bookings" name="Bookings" fill={ANALYTICS_COLORS.blue} radius={[6, 6, 0, 0]} />
+                <Line type="monotone" dataKey="movingAvg7d" name="7d Avg" stroke={ANALYTICS_COLORS.amber} strokeWidth={3} dot={false} />
+              </BarChart>
             </ResponsiveContainer>
           </ChartCard>
 
@@ -890,20 +909,30 @@ function PropertyAnalyticsPanel({
                 <XAxis dataKey="bucket" tick={{ fontSize: 10, fill: CHART_AXIS_STROKE }} />
                 <YAxis tick={{ fontSize: 10, fill: CHART_AXIS_STROKE }} />
                 <RechartTooltip contentStyle={CHART_TOOLTIP_STYLE} />
-                <Bar dataKey="bookings" name="Bookings" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="bookings" name="Bookings" radius={[6, 6, 0, 0]}>
+                  {data.losDistribution.map((entry, index) => (
+                    <Cell key={`${entry.bucket}-${index}`} fill={CHANNEL_COLORS[index % CHANNEL_COLORS.length]} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
 
           <ChartCard title="Occupancy Trend" subtitle="Daily occupancy for selected range">
             <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={data.occupancyTrend}>
+              <AreaChart data={data.occupancyTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_STROKE} strokeOpacity={0.25} />
                 <XAxis dataKey="date" tickFormatter={shortDate} tick={{ fontSize: 10, fill: CHART_AXIS_STROKE }} />
                 <YAxis tick={{ fontSize: 10, fill: CHART_AXIS_STROKE }} domain={[0, 100]} />
                 <RechartTooltip contentStyle={CHART_TOOLTIP_STYLE} formatter={(val: number) => [`${val}%`, "Occupancy"]} />
-                <Line type="monotone" dataKey="occupancyPct" name="Occupancy %" stroke="hsl(var(--chart-4))" strokeWidth={2} dot={false} />
-              </LineChart>
+                <defs>
+                  <linearGradient id="occupancyFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={ANALYTICS_COLORS.emerald} stopOpacity={0.45} />
+                    <stop offset="95%" stopColor={ANALYTICS_COLORS.emerald} stopOpacity={0.04} />
+                  </linearGradient>
+                </defs>
+                <Area type="monotone" dataKey="occupancyPct" name="Occupancy %" stroke={ANALYTICS_COLORS.emerald} fill="url(#occupancyFill)" strokeWidth={3} />
+              </AreaChart>
             </ResponsiveContainer>
           </ChartCard>
 
@@ -915,24 +944,57 @@ function PropertyAnalyticsPanel({
                 <YAxis tick={{ fontSize: 10, fill: CHART_AXIS_STROKE }} />
                 <RechartTooltip contentStyle={CHART_TOOLTIP_STYLE} />
                 <Legend />
-                <Line type="monotone" dataKey="adr" name="ADR" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="revpar" name="RevPAR" stroke="hsl(var(--chart-5))" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="adr" name="ADR" stroke={ANALYTICS_COLORS.violet} strokeWidth={3} dot={false} />
+                <Line type="monotone" dataKey="revpar" name="RevPAR" stroke={ANALYTICS_COLORS.rose} strokeWidth={3} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </ChartCard>
 
           <ChartCard title="Revenue by Channel" subtitle="Booking and revenue contribution by channel">
             <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={data.channelMix}>
-                <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID_STROKE} strokeOpacity={0.25} />
-                <XAxis dataKey="channel" tick={{ fontSize: 10, fill: CHART_AXIS_STROKE }} />
-                <YAxis yAxisId="left" tick={{ fontSize: 10, fill: CHART_AXIS_STROKE }} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: CHART_AXIS_STROKE }} />
-                <RechartTooltip contentStyle={CHART_TOOLTIP_STYLE} />
+              <PieChart>
+                <RechartTooltip
+                  contentStyle={CHART_TOOLTIP_STYLE}
+                  formatter={(value: number, name: string) =>
+                    name === "Revenue"
+                      ? [`${property.currency} ${value.toLocaleString("en-US")}`, name]
+                      : [value, name]
+                  }
+                />
                 <Legend />
-                <Bar yAxisId="left" dataKey="revenue" name={`Revenue (${property.currency})`} fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
-                <Bar yAxisId="right" dataKey="bookings" name="Bookings" fill="hsl(var(--chart-3))" radius={[4, 4, 0, 0]} />
-              </BarChart>
+                <Pie
+                  data={channelMixWithFill}
+                  dataKey="revenue"
+                  nameKey="channel"
+                  name="Revenue"
+                  cx="35%"
+                  cy="50%"
+                  innerRadius={40}
+                  outerRadius={72}
+                  paddingAngle={4}
+                  stroke="none"
+                >
+                  {channelMixWithFill.map((entry, index) => (
+                    <Cell key={`${entry.channel}-${index}`} fill={entry.fill} />
+                  ))}
+                </Pie>
+                <Pie
+                  data={channelMixWithFill}
+                  dataKey="bookings"
+                  nameKey="channel"
+                  name="Bookings"
+                  cx="74%"
+                  cy="50%"
+                  innerRadius={28}
+                  outerRadius={54}
+                  paddingAngle={3}
+                  stroke="none"
+                >
+                  {channelMixWithFill.map((entry, index) => (
+                    <Cell key={`${entry.channel}-bookings-${index}`} fill={entry.fill} fillOpacity={0.85} />
+                  ))}
+                </Pie>
+              </PieChart>
             </ResponsiveContainer>
           </ChartCard>
         </>
@@ -1041,7 +1103,8 @@ function ChartCard({
   children: React.ReactNode;
 }) {
   return (
-    <Card className="shadow-xl border-border dark:border-white/5 bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl">
+    <Card className="shadow-xl border-border dark:border-white/5 bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl overflow-hidden">
+      <div className="h-px w-full bg-gradient-to-r from-blue-500/0 via-violet-500/50 to-amber-500/0" />
       <CardHeader className="pb-2">
         <CardTitle className="text-sm text-foreground dark:text-white">{title}</CardTitle>
         <p className="text-[11px] text-muted-foreground">{subtitle}</p>
@@ -1051,11 +1114,31 @@ function ChartCard({
   );
 }
 
-function KpiCard({ label, value }: { label: string; value: string }) {
+function KpiCard({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent: "blue" | "violet" | "emerald" | "amber";
+}) {
+  const accentMap = {
+    blue: "from-blue-500/20 to-cyan-500/5 border-blue-500/20",
+    violet: "from-violet-500/20 to-fuchsia-500/5 border-violet-500/20",
+    emerald: "from-emerald-500/20 to-teal-500/5 border-emerald-500/20",
+    amber: "from-amber-500/20 to-orange-500/5 border-amber-500/20",
+  };
+  const textMap = {
+    blue: "text-blue-400",
+    violet: "text-violet-400",
+    emerald: "text-emerald-400",
+    amber: "text-amber-400",
+  };
   return (
-    <Card className="bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl border-border dark:border-white/5 shadow-xl">
+    <Card className={cn("bg-gradient-to-br backdrop-blur-xl shadow-xl border dark:border-white/5", accentMap[accent])}>
       <CardContent className="p-3">
-        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{label}</p>
+        <p className={cn("text-[10px] uppercase tracking-wider font-semibold", textMap[accent])}>{label}</p>
         <p className="text-base font-bold text-foreground dark:text-white mt-1 tabular-nums">{value}</p>
       </CardContent>
     </Card>

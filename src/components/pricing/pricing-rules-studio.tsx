@@ -199,7 +199,12 @@ const DOW_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
+function isPersistedListingId(listingId: string) {
+  return /^[a-f0-9]{24}$/i.test(listingId);
+}
+
 async function patchConfig(listingId: string, patch: Partial<EngineConfig>) {
+  if (!isPersistedListingId(listingId)) return;
   const res = await fetch(`/api/listings/${listingId}/engine-config`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -209,6 +214,9 @@ async function patchConfig(listingId: string, patch: Partial<EngineConfig>) {
 }
 
 async function createRule(listingId: string, rule: Omit<PricingRule, "_id">) {
+  if (!isPersistedListingId(listingId)) {
+    return { ...rule, _id: `demo-rule-${Date.now()}` };
+  }
   const res = await fetch(`/api/listings/${listingId}/rules`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -219,6 +227,7 @@ async function createRule(listingId: string, rule: Omit<PricingRule, "_id">) {
 }
 
 async function toggleRule(listingId: string, ruleId: string, enabled: boolean) {
+  if (!isPersistedListingId(listingId) || ruleId.startsWith("demo-rule-")) return;
   const res = await fetch(`/api/listings/${listingId}/rules/${ruleId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -228,6 +237,7 @@ async function toggleRule(listingId: string, ruleId: string, enabled: boolean) {
 }
 
 async function deleteRule(listingId: string, ruleId: string) {
+  if (!isPersistedListingId(listingId) || ruleId.startsWith("demo-rule-")) return;
   const res = await fetch(`/api/listings/${listingId}/rules/${ruleId}`, {
     method: "DELETE",
   });
@@ -1713,6 +1723,11 @@ export function PricingRulesStudio({ listings }: Props) {
     if (!listingId) return;
     setLoading(true);
     try {
+      if (!isPersistedListingId(listingId)) {
+        setConfig(DEFAULT_CONFIG);
+        setRules([]);
+        return;
+      }
       const [cfgRes, rulesRes] = await Promise.all([
         fetch(`/api/listings/${listingId}/engine-config`),
         fetch(`/api/listings/${listingId}/rules`),

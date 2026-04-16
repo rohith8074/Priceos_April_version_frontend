@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from '@/lib/auth/server'
+import { getSession } from "@/lib/auth/server";
 import { startBackgroundSync } from "@/lib/sync/background-sync";
 
 export async function POST(req: NextRequest) {
@@ -13,17 +13,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Get authenticated user
-    const { data: session, error } = await auth.getSession()
-
-    if (!session?.user?.id) {
+    const session = await getSession();
+    if (!session?.orgId) {
       return NextResponse.json(
         { success: false, error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    const result = startBackgroundSync();
+    const result = startBackgroundSync(session.orgId);
     if (!result.started) {
       return NextResponse.json(
         { success: false, error: result.message },

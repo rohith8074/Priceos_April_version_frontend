@@ -1,5 +1,5 @@
-import { createPMSClient } from "@/lib/pms";
-import { connectDB, Listing, Reservation } from "@/lib/db";
+import { connectDB, Listing, Reservation, Organization } from "@/lib/db";
+import { HostawayClient } from "@/lib/pms/hostaway-client";
 import {
   syncListingsToDb,
   syncReservationsToDb,
@@ -24,7 +24,7 @@ export function getBackgroundSyncStatus(): GlobalSyncStatus {
   return globalThis.syncStatus || { status: "idle", message: "" };
 }
 
-export async function performBackgroundSync() {
+export async function performBackgroundSync(orgId?: string) {
   globalThis.syncStatus = {
     status: "syncing",
     message: "Starting sync...",
@@ -32,12 +32,23 @@ export async function performBackgroundSync() {
   };
 
   try {
-    const client = createPMSClient();
+    await connectDB();
+    if (!orgId) {
+      throw new Error("Missing organization for Hostaway sync.");
+    }
+
+    const org = await Organization.findById(orgId)
+      .select("hostawayApiKey hostawayAccountId")
+      .lean();
+
+    if (!org?.hostawayApiKey) {
+      throw new Error("Save Hostaway credentials in Settings before running sync.");
+    }
+
+    const client = new HostawayClient(org.hostawayApiKey);
     console.log("------------------------------------------");
     console.log("🚀 Starting Hostaway Synchronization (BACKGROUND)...");
     console.log("------------------------------------------");
-
-    await connectDB();
 
     globalThis.syncStatus.message = "Syncing listings...";
     const hListings = await client.listListings();
@@ -108,7 +119,7 @@ export async function performBackgroundSync() {
 
     globalThis.syncStatus.message = "Syncing conversations...";
     console.log("📥 Step 4: Fetching Conversations...");
-    const convStats = await syncConversationsToDb(hostawayToInternalIdMap);
+    const convStats = await syncConversationsToDb(hostawayToInternalIdMap, org.hostawayApiKey);
     console.log(`✅ Step 4 Complete: Synced ${convStats.synced} conversations (${convStats.errors} errors).`);
 
     console.log("------------------------------------------");
@@ -122,7 +133,7 @@ export async function performBackgroundSync() {
   }
 }
 
-export function startBackgroundSync() {
+export function startBackgroundSync(orgId?: string) {
   const current = getBackgroundSyncStatus();
 
   if (current.status === "syncing") {
@@ -133,7 +144,7 @@ export function startBackgroundSync() {
     };
   }
 
-  performBackgroundSync()
+  performBackgroundSync(orgId)
     .then(() => console.log("Background sync promise resolved."))
     .catch((err) => console.error("Unhandled background sync error:", err));
 

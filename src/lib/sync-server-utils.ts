@@ -186,9 +186,10 @@ export async function syncCalendarToDb(
  * Fetch and sync all conversations from Hostaway into DB
  */
 export async function syncConversationsToDb(
-    hostawayToInternalIdMap: Map<number, mongoose.Types.ObjectId>
+    hostawayToInternalIdMap: Map<number, mongoose.Types.ObjectId>,
+    tokenOverride?: string
 ) {
-    const token = process.env.Hostaway_Authorization_token;
+    const token = tokenOverride || process.env.Hostaway_Authorization_token;
     if (!token) {
         console.error("No Hostaway token for syncing conversations.");
         return { synced: 0, errors: 1 };

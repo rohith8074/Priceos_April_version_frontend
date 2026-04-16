@@ -67,6 +67,7 @@ export async function POST(req: NextRequest) {
     if (body.fullName !== undefined) $set.fullName = body.fullName;
     if (body.email !== undefined) $set.email = body.email;
     if (body.hostawayApiKey !== undefined) $set.hostawayApiKey = body.hostawayApiKey;
+    if (body.hostawayAccountId !== undefined) $set.hostawayAccountId = body.hostawayAccountId;
     if (body.marketCode !== undefined) $set.marketCode = body.marketCode;
     if (body.currency !== undefined) $set.currency = body.currency;
     if (body.timezone !== undefined) $set.timezone = body.timezone;
@@ -122,6 +123,8 @@ export async function POST(req: NextRequest) {
         marketCode: updated.marketCode,
         currency: updated.currency,
         timezone: updated.timezone,
+        hostawayApiKey: updated.hostawayApiKey || "",
+        hostawayAccountId: updated.hostawayAccountId || "",
         settings: updated.settings,
     });
 }
