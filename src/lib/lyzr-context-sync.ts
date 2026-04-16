@@ -1,3 +1,4 @@
+import { getLyzrConfig, requireLyzrBaseUrl } from "@/lib/env";
 /**
  * Lyzr Global Context Sync
  * 
@@ -12,7 +13,7 @@
  *   4. Attach (associate) it with the CRO agent
  */
 
-const LYZR_BASE_URL = "https://agent-prod.studio.lyzr.ai/v3";
+const LYZR_BASE_URL = requireLyzrBaseUrl();
 const CONTEXT_NAME = "active_property_data";
 
 interface LyzrContext {
@@ -264,7 +265,7 @@ import {
  * Falls back to CREATE + ATTACH only if no existing context found.
  */
 export async function syncContextToLyzr(contextData: ContextSyncData): Promise<boolean> {
-    const apiKey = process.env.LYZR_API_KEY;
+    const { apiKey, contextId: pinnedContextId } = getLyzrConfig();
     // All 8 agents that need property context access
     const ALL_AGENT_IDS = [
         process.env.AGENT_ID || CRO_ROUTER_AGENT_ID,
@@ -295,8 +296,6 @@ export async function syncContextToLyzr(contextData: ContextSyncData): Promise<b
         // ── STRATEGY: Use env-pinned context ID if available (most reliable) ──
         // Once LYZR_CONTEXT_ID is set, we ALWAYS PUT to that exact ID.
         // This eliminates the "new ID on every sync" problem entirely.
-        const pinnedContextId = process.env.LYZR_CONTEXT_ID;
-
         if (pinnedContextId) {
             console.log(`📌 [Lyzr Context] Using pinned context ID: ${pinnedContextId}`);
             console.log(`🔄 [Lyzr Context] PUT-updating context (${contextValue.length} chars)...`);

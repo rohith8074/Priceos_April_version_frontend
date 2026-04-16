@@ -62,10 +62,10 @@ export const useContextStore = create<ContextStore>()(
       conversationSummary: null,
       isSidebarOpen: true,
 
-      // Initial Date Range (Next 30 days)
+      // Initial Date Range (Next 1 month)
       dateRange: {
         from: new Date(),
-        to: addDays(new Date(), 14),
+        to: addDays(new Date(), 30),
       },
 
       marketRefreshTrigger: 0,

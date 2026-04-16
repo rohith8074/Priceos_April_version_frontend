@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/server'
 import { buildAgentContext } from '@/lib/agents/db-context-builder'
-
-const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'http://localhost:8000'
+import { requirePythonBackendUrl } from '@/lib/env'
 
 export async function POST(request: NextRequest) {
   try {
+    const PYTHON_BACKEND_URL = requirePythonBackendUrl()
     const body = await request.json()
     const { message, agent_id, session_id, cache, listing_id } = body
 
@@ -103,6 +103,27 @@ export async function POST(request: NextRequest) {
         },
         { status: pythonResponse.status }
       )
+    }
+
+    // Detect tool-loop error from Lyzr and replace with a clean user-facing message.
+    // This happens when the agent has tools attached but should be using injected context.
+    const rawMessage: string =
+      pythonData?.response?.message ||
+      pythonData?.message ||
+      pythonData?.result?.chat_response ||
+      ''
+    const isToolLoopError =
+      typeof rawMessage === 'string' &&
+      (rawMessage.toLowerCase().includes('maximum number of tool calls') ||
+        rawMessage.toLowerCase().includes("i've reached the maximum") ||
+        rawMessage.toLowerCase().includes('reached the maximum number of tool calls'))
+
+    if (isToolLoopError) {
+      const retryMessage =
+        "I hit a processing limit on that request. Could you rephrase or ask a simpler question? For example: \"What's my occupancy?\" or \"Show revenue by channel.\""
+      if (pythonData?.response?.message) pythonData.response.message = retryMessage
+      if (pythonData?.message) pythonData.message = retryMessage
+      if (pythonData?.result?.chat_response) pythonData.result.chat_response = retryMessage
     }
 
     // Return Python backend response

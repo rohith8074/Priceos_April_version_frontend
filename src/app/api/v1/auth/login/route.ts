@@ -25,38 +25,14 @@ export async function POST(req: Request) {
 
         await connectDB();
 
-        console.log(`🔍 [Auth/Login] Searching for user: ${cleanUsername}`);
-        let org = await Organization.findOne({ email: cleanUsername }).lean();
-
-        // Auto-seed test users if not found
-        const testUsernames = ['rohith@example.com', 'ram@gmail.com'];
-        if (!org && testUsernames.includes(cleanUsername)) {
-            console.log(`🌱 [Auth/Login] Seeding test user: ${cleanUsername}`);
-            try {
-                const passwordHash = await bcrypt.hash('Password@123', 10);
-                org = await Organization.create({
-                    name: cleanUsername.split('@')[0],
-                    email: cleanUsername,
-                    passwordHash,
-                    fullName: cleanUsername.split('@')[0],
-                    role: 'owner',
-                    isApproved: true,
-                });
-                console.log(`✅ [Auth/Login] User seeded: ${org._id}`);
-            } catch (seedErr: any) {
-                console.error(`❌ [Auth/Login] Seeding failed: ${seedErr.message}`, seedErr);
-                throw seedErr;
-            }
-        }
+        const org = await Organization.findOne({ email: cleanUsername }).lean();
 
         if (!org || !org.passwordHash) {
-            console.log(`❌ [Auth/Login] User not found for: ${cleanUsername}`);
             return apiError("UNAUTHORIZED", "Invalid credentials", 401);
         }
 
         const isPasswordValid = await bcrypt.compare(password, org.passwordHash);
         if (!isPasswordValid) {
-            console.log(`❌ [Auth/Login] Password mismatch for: ${cleanUsername}`);
             return apiError("UNAUTHORIZED", "Invalid credentials", 401);
         }
 
@@ -65,11 +41,10 @@ export async function POST(req: Request) {
         }
 
         const orgId = org._id.toString();
-        console.log(`🎫 [Auth/Login] Generating tokens for: ${orgId}`);
-        const accessToken = signAccessToken({ 
-            userId: orgId, 
-            orgId, 
-            email: org.email, 
+        const accessToken = signAccessToken({
+            userId: orgId,
+            orgId,
+            email: org.email,
             role: org.role,
             isApproved: !!org.isApproved,
             onboardingStep: (org as any).onboarding?.step ?? "complete",
@@ -78,7 +53,6 @@ export async function POST(req: Request) {
 
         await Organization.findByIdAndUpdate(org._id, { $set: { refreshToken } });
 
-        console.log(`🚀 [Auth/Login] Login successful for: ${org.email}`);
         return apiSuccess({
             user: {
                 username: org.email,
@@ -90,7 +64,7 @@ export async function POST(req: Request) {
         });
 
     } catch (e: any) {
-        console.error("❌ [Auth/Login] Unexpected Error:", e.name, e.message);
-        return apiError("INTERNAL_ERROR", `An unexpected error occurred: ${e.message}`, 500);
+        console.error("[Auth/Login] Unexpected error:", e.name);
+        return apiError("INTERNAL_ERROR", "An unexpected error occurred", 500);
     }
 }

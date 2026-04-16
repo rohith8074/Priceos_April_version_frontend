@@ -22,19 +22,14 @@ export async function POST(req: NextRequest) {
     }
 
     await connectDB();
-    console.log("[Auth/Login] Looking up email:", loginEmail);
     const org = await Organization.findOne({ email: loginEmail });
-    console.log("[Auth/Login] Org found:", !!org, org ? `id=${org._id} approved=${org.isApproved}` : "");
 
     if (!org) {
-      console.log("[Auth/Login] ❌ No org found for:", loginEmail);
       return apiError("UNAUTHORIZED", "Invalid credentials", 401);
     }
 
     const isValid = await bcrypt.compare(password, org.passwordHash);
-    console.log("[Auth/Login] Password valid:", isValid);
     if (!isValid) {
-      console.log("[Auth/Login] ❌ Wrong password for:", loginEmail);
       return apiError("UNAUTHORIZED", "Invalid credentials", 401);
     }
 

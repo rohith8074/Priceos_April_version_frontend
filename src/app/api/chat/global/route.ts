@@ -3,15 +3,23 @@ import { connectDB, ChatMessage } from "@/lib/db";
 import { getSession } from "@/lib/auth/server";
 import mongoose from "mongoose";
 import { buildAgentContext } from "@/lib/agents/db-context-builder";
+import { getLyzrConfig, requireLyzrChatUrl, requirePythonBackendUrl } from "@/lib/env";
 
-const LYZR_API_URL = process.env.LYZR_API_URL || "https://agent-prod.studio.lyzr.ai/v3/inference/chat/";
-const LYZR_API_KEY = process.env.LYZR_API_KEY || "";
+const LOG_PREFIX = "[DashboardAgent]";
+
+/** Truncate for server logs (single line, safe length). */
+function logPreview(text: string, max = 500): string {
+    const t = text.replace(/\s+/g, " ").trim();
+    return t.length <= max ? t : `${t.slice(0, max)}…`;
+}
 
 function sseEvent(type: string, data: any): string {
     return `data: ${JSON.stringify({ type, ...data })}\n\n`;
 }
 
 export async function POST(req: NextRequest) {
+    const LYZR_API_URL = requireLyzrChatUrl();
+    const { apiKey: LYZR_API_KEY } = getLyzrConfig();
     const startTime = performance.now();
     const encoder = new TextEncoder();
 
@@ -62,15 +70,37 @@ export async function POST(req: NextRequest) {
                     console.error("Failed to build DB context for global chat:", err);
                 }
 
+                // Portfolio JSON is injected so the model can answer from Mongo even when the Python
+                // proxy is down. Lyzr OpenAPI tools still need the *session* orgId on each call — Studio
+                // defaults often point at a placeholder org; force the real id in-prompt.
+                const toolSessionBlock = `[SESSION — AGENT TOOLS]
+orgId (required query parameter for every PriceOS /api/agent-tools/v1 call, alongside apiKey): ${orgId.toString()}
+Use exactly this orgId. Do not use placeholder, example, or cached org ids from OpenAPI defaults.
+
+`;
+
                 const finalMessage = dbContext
-                    ? `[SYSTEM CONTEXT - USE EXCLUSIVELY]\n${dbContext}\n\n[USER QUESTION]\n${message}`
-                    : message;
+                    ? `${toolSessionBlock}[SYSTEM CONTEXT - USE EXCLUSIVELY]\n${dbContext}\n\n[USER QUESTION]\n${message}`
+                    : `${toolSessionBlock}${message}`;
+
+                console.log(`${LOG_PREFIX} input`, {
+                    agentId: dashboardAgentId,
+                    orgId: orgId.toString(),
+                    sessionId,
+                    userId: session?.userId,
+                    userMessage: logPreview(message, 600),
+                    userMessageChars: message.length,
+                    dbContextChars: dbContext.length,
+                    finalMessageChars: finalMessage.length,
+                });
 
                 send("status", { step: "agent", message: "Portfolio agent is analyzing…" });
 
-                const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
+                // Align with src/app/api/agent/route.ts (PYTHON_BACKEND_URL); BACKEND_URL kept for backwards compatibility.
+                const backendUrl = requirePythonBackendUrl();
                 let responseMessage = "";
                 let usedFallback = false;
+                let responseSource: "python_backend" | "lyzr_direct" = "python_backend";
                 let result: any;
 
                 // Progress timer for long-running agent calls
@@ -88,7 +118,7 @@ export async function POST(req: NextRequest) {
                 }, 4000);
 
                 try {
-                    const agentResponse = await fetch(`${backendUrl}/api/agent/`, {
+                    const agentResponse = await fetch(`${backendUrl}/api/agent`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
@@ -99,11 +129,29 @@ export async function POST(req: NextRequest) {
                             cache: null,
                         }),
                     });
-                    if (!agentResponse.ok) throw new Error("Backend not ok");
+                    if (!agentResponse.ok) {
+                        const errBody = await agentResponse.text();
+                        console.warn(`${LOG_PREFIX} python_backend HTTP error`, {
+                            status: agentResponse.status,
+                            backendUrl,
+                            bodyPreview: logPreview(errBody, 400),
+                        });
+                        throw new Error(`Backend HTTP ${agentResponse.status}`);
+                    }
                     result = await agentResponse.json();
                     responseMessage = result.response?.response || result.response?.message || "";
-                } catch {
+                    if (responseMessage) {
+                        console.log(`${LOG_PREFIX} python_backend reply`, {
+                            chars: responseMessage.length,
+                            preview: logPreview(responseMessage, 600),
+                        });
+                    }
+                } catch (err) {
                     usedFallback = true;
+                    console.warn(`${LOG_PREFIX} python_backend failed; falling back to Lyzr direct`, {
+                        backendUrl,
+                        reason: err instanceof Error ? err.message : String(err),
+                    });
                 }
 
                 let metadata: Record<string, number | string> = {};
@@ -111,6 +159,7 @@ export async function POST(req: NextRequest) {
                 if (usedFallback || !responseMessage) {
                     if (!LYZR_API_KEY) {
                         clearInterval(progressTimer);
+                        console.error(`${LOG_PREFIX} LYZR_API_KEY missing; cannot fall back after python failure`);
                         send("error", { message: "Dashboard agent unavailable (missing API key)." });
                         controller.close();
                         return;
@@ -133,7 +182,10 @@ export async function POST(req: NextRequest) {
                         const errText = await directRes.text();
                         clearInterval(progressTimer);
                         send("error", { message: `Dashboard agent unavailable (${directRes.status})` });
-                        console.error(`Lyzr direct error: ${errText.slice(0, 200)}`);
+                        console.error(`${LOG_PREFIX} lyzr_direct HTTP error`, {
+                            status: directRes.status,
+                            bodyPreview: logPreview(errText, 400),
+                        });
                         controller.close();
                         return;
                     }
@@ -146,6 +198,11 @@ export async function POST(req: NextRequest) {
 
                     responseMessage = raw || "No response from dashboard agent.";
                     metadata = { source: "lyzr_direct" };
+                    responseSource = "lyzr_direct";
+                    console.log(`${LOG_PREFIX} lyzr_direct reply`, {
+                        chars: responseMessage.length,
+                        preview: logPreview(responseMessage, 600),
+                    });
                 }
 
                 clearInterval(progressTimer);
@@ -163,7 +220,14 @@ export async function POST(req: NextRequest) {
                 }).catch((err) => console.error("Failed to save reply:", err));
 
                 const duration = Math.round(performance.now() - startTime);
-                console.log(`✅ DASHBOARD REPLY — ${duration}ms`);
+                console.log(`${LOG_PREFIX} output`, {
+                    source: responseSource,
+                    responseChars: responseMessage.length,
+                    preview: logPreview(responseMessage, 800),
+                    durationMs: duration,
+                    orgId: orgId.toString(),
+                    sessionId,
+                });
 
                 send("complete", { message: responseMessage, metadata, duration });
             } catch (error) {

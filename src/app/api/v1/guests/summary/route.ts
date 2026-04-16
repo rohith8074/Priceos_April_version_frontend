@@ -7,6 +7,7 @@ import { apiSuccess, apiError } from "@/lib/api/response";
 import { getSummarySchema, generateSummarySchema, formatZodErrors } from "@/lib/validators";
 import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/api/rate-limit";
 import { getSession } from "@/lib/auth/server";
+import { getAgentId, getLyzrConfig, requireLyzrChatUrl } from "@/lib/env";
 import mongoose from "mongoose";
 
 export async function GET(request: Request) {
@@ -121,10 +122,9 @@ export async function POST(request: Request) {
         let summaryData: any;
 
         try {
-            const lyzrAgentId = process.env.LYZR_CONVERSATION_SUMMARY_AGENT_ID
-                || process.env.LYZR_Conversation_Summary_Agent_ID; // legacy alias
-            const lyzrApiKey = process.env.LYZR_API_KEY;
-            const lyzrApiUrl = process.env.LYZR_API_URL || "https://agent-prod.studio.lyzr.ai/v3/inference/chat/";
+            const lyzrAgentId = getAgentId("LYZR_CONVERSATION_SUMMARY_AGENT_ID", "LYZR_Conversation_Summary_Agent_ID");
+            const { apiKey: lyzrApiKey } = getLyzrConfig();
+            const lyzrApiUrl = requireLyzrChatUrl();
 
             if (!lyzrAgentId || !lyzrApiKey) throw new Error("Lyzr not configured");
 

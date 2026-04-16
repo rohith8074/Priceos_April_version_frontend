@@ -21,11 +21,14 @@ export async function GET() {
 
     const orgId = new mongoose.Types.ObjectId(session.orgId);
     const org = await Organization.findById(orgId)
-        .select("onboarding.activatedListingIds")
+        .select("onboarding.activatedListingIds onboarding.selectedListingIds")
         .lean();
 
     const activatedIds = new Set(
         (org?.onboarding?.activatedListingIds || []).map(String)
+    );
+    const selectedIds = new Set(
+        (org?.onboarding?.selectedListingIds || []).map(String)
     );
 
     const listings = await Listing.find({ orgId })
@@ -114,6 +117,16 @@ export async function GET() {
         const channels = channelMap.get(id) || [];
         channels.sort((a, b) => b.revenue - a.revenue);
 
+        const hostawayId = String(l.hostawayId || "");
+        const hostawaySuffix = hostawayId.includes("_")
+            ? hostawayId.split("_").slice(1).join("_")
+            : hostawayId;
+        const isActivated =
+            activatedIds.has(id) ||
+            selectedIds.has(id) ||
+            (hostawayId.length > 0 && (activatedIds.has(hostawayId) || selectedIds.has(hostawayId))) ||
+            (hostawaySuffix.length > 0 && (activatedIds.has(hostawaySuffix) || selectedIds.has(hostawaySuffix)));
+
         return {
             id,
             name: l.name,
@@ -129,7 +142,7 @@ export async function GET() {
             hostawayId: l.hostawayId || null,
             propertyType: PROPERTY_TYPE_MAP[l.propertyTypeId] || "Other",
             isActive: l.isActive !== false,
-            isActivated: activatedIds.has(id),
+            isActivated,
             occupancyPct,
             avgPrice: occ?.avgPrice ? Math.round(occ.avgPrice) : l.price,
             pendingProposals: occ?.pendingProposals || 0,

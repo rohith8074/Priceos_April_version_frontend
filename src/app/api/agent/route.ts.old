@@ -6,8 +6,9 @@ import { userSettings } from '@/lib/db'
 import { eq } from 'drizzle-orm'
 import type { AgentCacheContext } from '@/lib/cache/types'
 import { buildAgentContext } from '@/lib/cache/utils'
+import { requireLyzrChatUrl } from '@/lib/env'
 
-const LYZR_API_URL = 'https://agent-prod.studio.lyzr.ai/v3/inference/chat/'
+const LYZR_API_URL = requireLyzrChatUrl()
 
 // Types
 interface NormalizedAgentResponse {

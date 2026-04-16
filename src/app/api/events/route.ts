@@ -32,7 +32,14 @@ export async function GET(req: NextRequest) {
       .limit(100)
       .lean();
 
-    return NextResponse.json({ success: true, events });
+    const latestUpdatedAt = events.reduce<string | null>((latest, event: any) => {
+      const current = event?.updatedAt ? new Date(event.updatedAt).toISOString() : null;
+      if (!current) return latest;
+      if (!latest) return current;
+      return current > latest ? current : latest;
+    }, null);
+
+    return NextResponse.json({ success: true, events, latestUpdatedAt });
   } catch (error) {
     console.error("[Events GET]", error);
     return NextResponse.json({ error: "Failed to fetch events" }, { status: 500 });

@@ -31,7 +31,7 @@ export default async function OverviewPage() {
   const plus29Str = plus29.toISOString().split("T")[0];
 
   // ── 2. Fetch only THIS org's listings ─────────────────────────────────────
-  const allListings = await Listing.find({ orgId: orgObjectId }).lean();
+  const allListings = await Listing.find({ orgId: orgObjectId, isActive: true }).lean();
 
   // ── 3. Aggregate stats scoped to orgId ────────────────────────────────────
   const statsResult = await InventoryMaster.aggregate([

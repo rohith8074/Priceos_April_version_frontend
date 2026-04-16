@@ -11,6 +11,7 @@ import {
   Reservation,
 } from "@/lib/db";
 import { toolLogger as log } from "./logger";
+import { getAgentId, getLyzrConfig, requireLyzrChatUrl } from "@/lib/env";
 
 interface PortfolioStatAggregate {
   _id: mongoose.Types.ObjectId;
@@ -684,10 +685,9 @@ export async function suggestGuestReply(params: {
   const ep = "suggestGuestReply";
 
   const lyzrAgentId =
-    process.env.LYZR_CHAT_RESPONSE_AGENT_ID || process.env.LYZR_Chat_Response_Agent_ID;
-  const lyzrApiKey = process.env.LYZR_API_KEY;
-  const lyzrApiUrl =
-    process.env.LYZR_API_URL || "https://agent-prod.studio.lyzr.ai/v3/inference/chat/";
+    getAgentId("LYZR_CHAT_RESPONSE_AGENT_ID", "LYZR_Chat_Response_Agent_ID");
+  const { apiKey: lyzrApiKey } = getLyzrConfig();
+  const lyzrApiUrl = requireLyzrChatUrl();
 
   if (!lyzrAgentId || !lyzrApiKey) {
     log.externalCall(ep, "Lyzr", "SKIPPED — missing LYZR_CHAT_RESPONSE_AGENT_ID or LYZR_API_KEY");

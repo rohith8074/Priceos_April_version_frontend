@@ -31,7 +31,6 @@ export default function TestAgentPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: question,
-          agent_id: '6992c6ade9c656b13d173dc2', // CRO Agent
           user_id: 'test-user-' + Date.now(),
           session_id: 'test-session-' + Date.now(),
         }),
@@ -63,7 +62,7 @@ export default function TestAgentPage() {
         <CardHeader>
           <CardTitle>Test Configuration</CardTitle>
           <CardDescription>
-            Agent ID: <code className="text-xs bg-muted px-2 py-1 rounded">6992c6ade9c656b13d173dc2</code>
+            Agent ID is resolved from server configuration.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

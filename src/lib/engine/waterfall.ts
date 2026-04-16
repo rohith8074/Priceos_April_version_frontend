@@ -9,7 +9,8 @@
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 export interface ListingConfig {
-    basePrice: number;
+    basePrice: number;           // weekday base (from Hostaway or benchmark recommendedWeekday/p50)
+    basePriceWeekend: number;    // weekend base (from benchmark recommendedWeekend; 0 = use basePrice)
     absoluteMinPrice: number;
     absoluteMaxPrice: number;
     defaultMinStay: number;
@@ -34,6 +35,7 @@ export interface ListingConfig {
     farOutDaysOut: number;
     farOutMarkupPct: number;
     farOutMinStay: number | null;
+    farOutMinPrice: number;
 
     dowPricingEnabled: boolean;
     dowDays: number[]; // e.g. [5,6] — 0=Mon..6=Sun
@@ -47,7 +49,13 @@ export interface ListingConfig {
     gapFillLengthMin: number;
     gapFillLengthMax: number;
     gapFillDiscountPct: number;
+    gapFillDiscountWeekdayPct: number;
+    gapFillDiscountWeekendPct: number;
+    gapFillMaxDaysUntilCheckin: number;
     gapFillOverrideCico: boolean;
+    adjacentAdjustmentEnabled: boolean;
+    adjacentAdjustmentPct: number;
+    adjacentTurnoverCost: number;
 
     // Occupancy-based adjustments (KB Tier 1 #4 — Revenue 9/10)
     // currentOccupancyPct is a rolling value computed by the pipeline caller
@@ -58,6 +66,14 @@ export interface ListingConfig {
     occupancyHighAdjPct: number;       // positive = price up (e.g. +8)
     occupancyLowThresholdPct: number;
     occupancyLowAdjPct: number;        // negative = price down (e.g. -10)
+    occupancyWindowProfiles: {
+        startDay: number;
+        endDay: number;
+        highThresholdPct: number;
+        highAdjPct: number;
+        lowThresholdPct: number;
+        lowAdjPct: number;
+    }[];
 
     // Weekend minimum pricing (KB Tier 2 #8)
     weekendMinPrice: number;
@@ -91,6 +107,7 @@ export interface BookingContext {
     gapLength: number | null; // length of gap this day is part of, null if not in a gap
     gapStart: string | null;
     gapEnd: string | null;
+    adjacentToBooking: boolean;
 }
 
 export interface DayResult {
@@ -136,7 +153,15 @@ export function computeDay(
 
     // ── Pass 1 — Foundation ────────────────────────────────────────────────────
 
-    let price = config.basePrice;
+    // Use weekend base price if this day falls on a configured weekend day and
+    // a separate weekend anchor was provided by the benchmark data.
+    const isWeekendDay = config.weekendDays.includes(dow);
+    const effectiveBase =
+        isWeekendDay && config.basePriceWeekend > 0
+            ? config.basePriceWeekend
+            : config.basePrice;
+
+    let price = effectiveBase;
     let minimumStay = config.defaultMinStay;
     let maximumStay = config.defaultMaxStay;
     let isAvailable = bookingCtx.isBooked ? 0 : 1;
@@ -275,6 +300,12 @@ export function computeDay(
             minimumStay = config.farOutMinStay;
             notes.push(`[FAR_OUT] min stay override to ${minimumStay}`);
         }
+        if (config.farOutMinPrice > 0 && price < config.farOutMinPrice) {
+            notes.push(
+                `[FAR_OUT_MIN] Price ${price.toFixed(2)} raised to far-out floor ${config.farOutMinPrice}`
+            );
+            price = config.farOutMinPrice;
+        }
     }
 
     // DOW pricing
@@ -294,19 +325,27 @@ export function computeDay(
     // Occupancy-based adjustment (KB Tier 1 #4 — Revenue 9/10)
     if (config.occupancyEnabled && isAvailable === 1) {
         const occ = config.currentOccupancyPct;
-        if (occ > config.occupancyHighThresholdPct) {
-            price = price * (1 + config.occupancyHighAdjPct / 100);
+        const profile = (config.occupancyWindowProfiles || []).find(
+            (p) => leadTime >= p.startDay && leadTime <= p.endDay
+        );
+        const highThreshold = profile?.highThresholdPct ?? config.occupancyHighThresholdPct;
+        const lowThreshold = profile?.lowThresholdPct ?? config.occupancyLowThresholdPct;
+        const highAdj = profile?.highAdjPct ?? config.occupancyHighAdjPct;
+        const lowAdj = profile?.lowAdjPct ?? config.occupancyLowAdjPct;
+
+        if (occ > highThreshold) {
+            price = price * (1 + highAdj / 100);
             notes.push(
-                `[OCCUPANCY] ${occ.toFixed(1)}% > high threshold ${config.occupancyHighThresholdPct}%, +${config.occupancyHighAdjPct}%`
+                `[OCCUPANCY] ${occ.toFixed(1)}% > high threshold ${highThreshold}%, +${highAdj}%${profile ? " (window profile)" : ""}`
             );
-        } else if (occ < config.occupancyLowThresholdPct) {
-            price = price * (1 + config.occupancyLowAdjPct / 100); // lowAdjPct is negative
+        } else if (occ < lowThreshold) {
+            price = price * (1 + lowAdj / 100);
             notes.push(
-                `[OCCUPANCY] ${occ.toFixed(1)}% < low threshold ${config.occupancyLowThresholdPct}%, ${config.occupancyLowAdjPct}%`
+                `[OCCUPANCY] ${occ.toFixed(1)}% < low threshold ${lowThreshold}%, ${lowAdj}%${profile ? " (window profile)" : ""}`
             );
         } else {
             notes.push(
-                `[OCCUPANCY] ${occ.toFixed(1)}% in target zone [${config.occupancyLowThresholdPct}%–${config.occupancyHighThresholdPct}%], no adjustment`
+                `[OCCUPANCY] ${occ.toFixed(1)}% in target zone [${lowThreshold}%–${highThreshold}%], no adjustment`
             );
         }
     }
@@ -349,17 +388,24 @@ export function computeDay(
         }
 
         // Gap fill: if gap is in target range, discount and adjust
+        const gapDiscount =
+            isWeekendDay && config.gapFillDiscountWeekendPct > 0
+                ? config.gapFillDiscountWeekendPct
+                : !isWeekendDay && config.gapFillDiscountWeekdayPct > 0
+                    ? config.gapFillDiscountWeekdayPct
+                    : config.gapFillDiscountPct;
         if (
             config.gapFillEnabled &&
             !suspendGapFill &&
             isAvailable === 1 &&
             bookingCtx.gapLength >= config.gapFillLengthMin &&
-            bookingCtx.gapLength <= config.gapFillLengthMax
+            bookingCtx.gapLength <= config.gapFillLengthMax &&
+            leadTime <= config.gapFillMaxDaysUntilCheckin
         ) {
-            price = price * (1 - config.gapFillDiscountPct / 100);
+            price = price * (1 - gapDiscount / 100);
             minimumStay = bookingCtx.gapLength;
             notes.push(
-                `[GAP_FILL] ${config.gapFillDiscountPct}% discount, min stay set to gap length ${bookingCtx.gapLength}`
+                `[GAP_FILL] ${gapDiscount}% discount, min stay set to gap length ${bookingCtx.gapLength}`
             );
 
             if (config.gapFillOverrideCico) {
@@ -368,6 +414,16 @@ export function computeDay(
                 notes.push(`[GAP_FILL] CICO restrictions overridden`);
             }
         }
+    }
+    if (
+        config.adjacentAdjustmentEnabled &&
+        isAvailable === 1 &&
+        bookingCtx.adjacentToBooking
+    ) {
+        price = price * (1 + config.adjacentAdjustmentPct / 100) + config.adjacentTurnoverCost;
+        notes.push(
+            `[ADJACENT] Applied ${config.adjacentAdjustmentPct}% and turnover ${config.adjacentTurnoverCost}`
+        );
     }
 
     // ── Pass 4 — Integrity ────────────────────────────────────────────────────

@@ -30,6 +30,7 @@ export interface IListing extends Document {
   farOutDaysOut: number;
   farOutMarkupPct: number;
   farOutMinStay?: number;
+  farOutMinPrice?: number;
   // DOW pricing
   dowPricingEnabled: boolean;
   dowDays: number[];
@@ -43,7 +44,13 @@ export interface IListing extends Document {
   gapFillLengthMin: number;
   gapFillLengthMax: number;
   gapFillDiscountPct: number;
+  gapFillDiscountWeekdayPct?: number;
+  gapFillDiscountWeekendPct?: number;
+  gapFillMaxDaysUntilCheckin?: number;
   gapFillOverrideCico: boolean;
+  adjacentAdjustmentEnabled?: boolean;
+  adjacentAdjustmentPct?: number;
+  adjacentTurnoverCost?: number;
   // Check-in/out restrictions
   allowedCheckinDays: number[];
   allowedCheckoutDays: number[];
@@ -57,6 +64,27 @@ export interface IListing extends Document {
   occupancyLowThresholdPct: number;
   occupancyLowAdjPct: number;
   occupancyLookbackDays: number;
+  occupancyWindowProfiles?: {
+    startDay: number;
+    endDay: number;
+    highThresholdPct: number;
+    highAdjPct: number;
+    lowThresholdPct: number;
+    lowAdjPct: number;
+  }[];
+  useGroupOccupancyProfile?: boolean;
+  groupOccupancyWeightPct?: number;
+  groupOccupancyProfiles?: {
+    startDay: number;
+    endDay: number;
+    occupancyPct: number;
+    sampleSize: number;
+    groupIds: string[];
+  }[];
+  basePriceSource?: "history_1y" | "benchmark" | "hostaway";
+  basePriceConfidencePct?: number;
+  basePriceSampleSize?: number;
+  basePriceLastComputedAt?: Date;
   // Weekend minimum pricing (KB Tier 2 #8 — Revenue 7/10)
   weekendMinPrice: number;
   weekendDays: number[];
@@ -103,6 +131,7 @@ const ListingSchema = new Schema<IListing>(
     farOutDaysOut: { type: Number, default: 90 },
     farOutMarkupPct: { type: Number, default: 10 },
     farOutMinStay: { type: Number },
+    farOutMinPrice: { type: Number, default: 0 },
     dowPricingEnabled: { type: Boolean, default: false },
     dowDays: { type: [Number], default: [4, 5] }, // Thu+Fri (0=Mon)
     dowPriceAdjPct: { type: Number, default: 20 },
@@ -113,7 +142,13 @@ const ListingSchema = new Schema<IListing>(
     gapFillLengthMin: { type: Number, default: 1 },
     gapFillLengthMax: { type: Number, default: 3 },
     gapFillDiscountPct: { type: Number, default: 10 },
+    gapFillDiscountWeekdayPct: { type: Number, default: 0 },
+    gapFillDiscountWeekendPct: { type: Number, default: 0 },
+    gapFillMaxDaysUntilCheckin: { type: Number, default: 30 },
     gapFillOverrideCico: { type: Boolean, default: true },
+    adjacentAdjustmentEnabled: { type: Boolean, default: false },
+    adjacentAdjustmentPct: { type: Number, default: 0 },
+    adjacentTurnoverCost: { type: Number, default: 0 },
     allowedCheckinDays: { type: [Number], default: [1, 1, 1, 1, 1, 1, 1] },
     allowedCheckoutDays: { type: [Number], default: [1, 1, 1, 1, 1, 1, 1] },
     lowestMinStayAllowed: { type: Number, default: 1 },
@@ -126,6 +161,41 @@ const ListingSchema = new Schema<IListing>(
     occupancyLowThresholdPct: { type: Number, default: 50 },
     occupancyLowAdjPct: { type: Number, default: -10 },
     occupancyLookbackDays: { type: Number, default: 30 },
+    occupancyWindowProfiles: {
+      type: [
+        {
+          startDay: { type: Number, required: true },
+          endDay: { type: Number, required: true },
+          highThresholdPct: { type: Number, required: true },
+          highAdjPct: { type: Number, required: true },
+          lowThresholdPct: { type: Number, required: true },
+          lowAdjPct: { type: Number, required: true },
+        },
+      ],
+      default: [],
+    },
+    useGroupOccupancyProfile: { type: Boolean, default: true },
+    groupOccupancyWeightPct: { type: Number, default: 50 },
+    groupOccupancyProfiles: {
+      type: [
+        {
+          startDay: { type: Number, required: true },
+          endDay: { type: Number, required: true },
+          occupancyPct: { type: Number, required: true },
+          sampleSize: { type: Number, required: true },
+          groupIds: { type: [String], default: [] },
+        },
+      ],
+      default: [],
+    },
+    basePriceSource: {
+      type: String,
+      enum: ["history_1y", "benchmark", "hostaway"],
+      default: "hostaway",
+    },
+    basePriceConfidencePct: { type: Number, default: 0 },
+    basePriceSampleSize: { type: Number, default: 0 },
+    basePriceLastComputedAt: { type: Date },
     // Weekend minimum pricing
     weekendMinPrice: { type: Number, default: 0 },
     weekendDays: { type: [Number], default: [4, 5] }, // Thu+Fri (Dubai default)

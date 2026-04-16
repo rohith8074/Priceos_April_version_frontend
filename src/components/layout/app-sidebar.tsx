@@ -16,6 +16,10 @@ import {
   Home,
   Bell,
   CalendarDays,
+  Layers,
+  AlertTriangle,
+  Clock3,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -34,6 +38,7 @@ const BUSINESS_GROUP = [
   { name: "Agent Chat", href: "/agent-chat", icon: MessagesSquare },
   { name: "Guest Inbox", href: "/guest-chat", icon: MessageSquare, showGuestBadge: true },
   { name: "Properties", href: "/properties", icon: Home },
+  { name: "Groups", href: "/groups", icon: Layers },
 ];
 
 export function AppSidebar() {
@@ -43,33 +48,43 @@ export function AppSidebar() {
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [needsReplyCount, setNeedsReplyCount] = useState(0);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const [todayEvents, setTodayEvents] = useState<
     { id: string; name: string; impactLevel: "high" | "medium" | "low"; upliftPct: number; area?: string; source?: string }[]
   >([]);
+  const [proposalNotifications, setProposalNotifications] = useState<
+    { id: string; label: string; listingName: string; type: "expiring" | "high_risk"; updatedAt?: string }[]
+  >([]);
+  const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<string>>(new Set());
 
   useEffect(() => { setMounted(true); }, []);
 
-  // Guest inbox unread count from Hostaway conversations
+  // Refresh badges every minute so sidebar notifications stay current.
   useEffect(() => {
-    fetch("/api/hostaway/conversations/cached")
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => {
-        if (!data) return;
+    let disposed = false;
+
+    const refreshGuestInbox = async () => {
+      try {
+        const r = await fetch("/api/hostaway/conversations/cached");
+        if (!r.ok) return;
+        const data = await r.json();
+        if (disposed || !data) return;
         const count = (data.conversations ?? []).filter(
           (c: any) => c.unread || c.needsReply
         ).length;
         setNeedsReplyCount(count);
-      })
-      .catch(() => {});
-  }, []);
+      } catch {
+        // Best-effort only.
+      }
+    };
 
-  // Today's events notification
-  useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    fetch(`/api/events?dateFrom=${today}&dateTo=${today}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (!data?.events) return;
+    const refreshTodayEvents = async () => {
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const r = await fetch(`/api/events?dateFrom=${today}&dateTo=${today}`);
+        if (!r.ok) return;
+        const data = await r.json();
+        if (disposed || !data?.events) return;
         const items = (data.events as any[])
           .filter((e) => e?.isActive !== false)
           .map((e) => ({
@@ -81,9 +96,90 @@ export function AppSidebar() {
             source: e.source || "market_template",
           }));
         setTodayEvents(items);
-      })
-      .catch(() => {});
+        const latestUpdatedAt = data.latestUpdatedAt
+          ? new Date(data.latestUpdatedAt)
+          : (data.events as any[]).reduce<Date | null>((latest, event) => {
+              if (!event?.updatedAt) return latest;
+              const current = new Date(event.updatedAt);
+              if (!latest || current > latest) return current;
+              return latest;
+            }, null);
+        setLastUpdatedAt(
+          latestUpdatedAt
+            ? latestUpdatedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            : null
+        );
+      } catch {
+        // Best-effort only.
+      }
+    };
+
+    const refreshProposalNotifications = async () => {
+      try {
+        const r = await fetch("/api/v1/revenue/proposals?status=pending");
+        if (!r.ok) return;
+        const payload = await r.json();
+        const proposals = payload?.data?.proposals ?? [];
+        if (disposed || !Array.isArray(proposals)) return;
+
+        const now = new Date();
+        const in48h = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+
+        const highRisk = proposals
+          .filter((p: any) => String(p?.riskLevel || "").toLowerCase() === "high")
+          .slice(0, 8)
+          .map((p: any) => ({
+            id: `proposal-high-${p._id}`,
+            label: "High Risk Proposal",
+            listingName: p.listingName || "Unknown Property",
+            type: "high_risk" as const,
+            updatedAt: p.updatedAt,
+          }));
+
+        const expiring = proposals
+          .filter((p: any) => {
+            if (!p?.date) return false;
+            const proposalDate = new Date(`${p.date}T00:00:00`);
+            return proposalDate >= now && proposalDate <= in48h;
+          })
+          .slice(0, 8)
+          .map((p: any) => ({
+            id: `proposal-exp-${p._id}`,
+            label: "Expiring Proposal",
+            listingName: p.listingName || "Unknown Property",
+            type: "expiring" as const,
+            updatedAt: p.updatedAt,
+          }));
+
+        setProposalNotifications([...highRisk, ...expiring]);
+      } catch {
+        // Best-effort only.
+      }
+    };
+
+    const refreshBadges = async () => {
+      await Promise.all([refreshGuestInbox(), refreshTodayEvents(), refreshProposalNotifications()]);
+    };
+
+    refreshBadges();
+    const interval = window.setInterval(refreshBadges, 60_000);
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+    };
   }, []);
+
+  const visibleEvents = todayEvents.filter((e) => !dismissedNotificationIds.has(`event-${e.id}`));
+  const visibleProposalNotifications = proposalNotifications.filter((p) => !dismissedNotificationIds.has(p.id));
+  const totalNotificationCount = visibleEvents.length + visibleProposalNotifications.length;
+
+  const dismissNotification = (id: string) => {
+    setDismissedNotificationIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  };
 
   const isActive = (href: string) => {
     if (href === "/") return pathname === "/";
@@ -155,42 +251,84 @@ export function AppSidebar() {
           </div>
 
           <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="relative h-9 w-9 rounded-md border border-border-subtle bg-surface-2/60 text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors flex items-center justify-center"
-                title="Today's events"
-              >
-                <Bell className="h-4 w-4" />
-                {todayEvents.length > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-amber text-black text-[10px] font-bold leading-4 text-center">
-                    {todayEvents.length > 9 ? "9+" : todayEvents.length}
-                  </span>
-                )}
-              </button>
-            </DropdownMenuTrigger>
+            <div className="flex flex-col items-end gap-1">
+              <DropdownMenuTrigger asChild>
+                <button
+                  className="relative h-9 w-9 rounded-md border border-border-subtle bg-surface-2/60 text-text-secondary hover:text-text-primary hover:bg-surface-2 transition-colors flex items-center justify-center"
+                  title="Today's events"
+                >
+                  <Bell className="h-4 w-4" />
+                  {totalNotificationCount > 0 && (
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-amber text-black text-[10px] font-bold leading-4 text-center">
+                      {totalNotificationCount > 9 ? "9+" : totalNotificationCount}
+                    </span>
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <span className="text-[10px] text-text-tertiary">
+                {lastUpdatedAt ? `Updated ${lastUpdatedAt}` : "Updating..."}
+              </span>
+            </div>
             <DropdownMenuContent align="start" className="w-80 p-0 overflow-hidden">
               <div className="px-3 py-2.5 border-b border-border-subtle bg-surface-1">
                 <div className="flex items-center gap-2">
                   <CalendarDays className="h-4 w-4 text-amber" />
                   <span className="text-xs font-bold uppercase tracking-wider text-text-primary">
-                    Today&apos;s Events
+                    Notifications
                   </span>
                 </div>
                 <p className="text-[11px] text-text-tertiary mt-1">
-                  {todayEvents.length === 0
-                    ? "No major events for today."
-                    : `${todayEvents.length} event${todayEvents.length > 1 ? "s" : ""} may influence demand.`}
+                  {totalNotificationCount === 0
+                    ? "No active notifications."
+                    : `${totalNotificationCount} notification${totalNotificationCount > 1 ? "s" : ""} right now.`}
                 </p>
               </div>
 
               <div className="max-h-72 overflow-y-auto">
-                {todayEvents.length === 0 ? (
+                {totalNotificationCount === 0 ? (
                   <div className="px-3 py-4 text-[12px] text-text-tertiary">
-                    No active events today. Demand should follow base seasonality.
+                    No active events or proposal alerts right now.
                   </div>
                 ) : (
                   <div className="divide-y divide-border-subtle">
-                    {todayEvents.slice(0, 8).map((event) => (
+                    {visibleProposalNotifications.slice(0, 8).map((proposal) => (
+                      <div
+                        key={proposal.id}
+                        className="w-full px-3 py-2.5 hover:bg-surface-2/70 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-[12px] font-medium text-text-primary leading-snug">
+                              {proposal.label}
+                            </p>
+                            <p className="text-[11px] text-text-tertiary truncate">{proposal.listingName}</p>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Badge
+                              className={cn(
+                                "text-[10px] border-none h-5",
+                                proposal.type === "high_risk"
+                                  ? "bg-red-500/15 text-red-400"
+                                  : "bg-amber-500/15 text-amber-400"
+                              )}
+                            >
+                              {proposal.type === "high_risk" ? "high risk" : "expiring"}
+                            </Badge>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                dismissNotification(proposal.id);
+                              }}
+                              className="h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center"
+                              title="Dismiss"
+                            >
+                              <X className="h-3 w-3 text-muted-foreground" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {visibleEvents.slice(0, 8).map((event) => (
                       <button
                         key={event.id}
                         onClick={() => router.push("/market?focus=today")}
@@ -198,18 +336,30 @@ export function AppSidebar() {
                       >
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-[12px] font-medium text-text-primary leading-snug">{event.name}</p>
-                          <Badge
-                            className={cn(
-                              "text-[10px] border-none h-5",
-                              event.impactLevel === "high"
-                                ? "bg-red-500/15 text-red-400"
-                                : event.impactLevel === "medium"
-                                  ? "bg-amber-500/15 text-amber-400"
-                                  : "bg-blue-500/15 text-blue-400"
-                            )}
-                          >
-                            {event.impactLevel}
-                          </Badge>
+                          <div className="flex items-center gap-1">
+                            <Badge
+                              className={cn(
+                                "text-[10px] border-none h-5",
+                                event.impactLevel === "high"
+                                  ? "bg-red-500/15 text-red-400"
+                                  : event.impactLevel === "medium"
+                                    ? "bg-amber-500/15 text-amber-400"
+                                    : "bg-blue-500/15 text-blue-400"
+                              )}
+                            >
+                              {event.impactLevel}
+                            </Badge>
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                dismissNotification(`event-${event.id}`);
+                              }}
+                              className="h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center"
+                              title="Dismiss"
+                            >
+                              <X className="h-3 w-3 text-muted-foreground" />
+                            </span>
+                          </div>
                         </div>
                         <div className="mt-1 flex items-center gap-3 text-[10px] text-text-tertiary">
                           <span className="inline-flex items-center gap-1">
@@ -220,21 +370,31 @@ export function AppSidebar() {
                         </div>
                       </button>
                     ))}
-                    {todayEvents.length > 8 && (
+                    {(visibleEvents.length > 8 || visibleProposalNotifications.length > 8) && (
                       <div className="px-3 py-2 text-[10px] text-text-tertiary bg-surface-1">
-                        +{todayEvents.length - 8} more events in Market page
+                        +more notifications
                       </div>
                     )}
                   </div>
                 )}
               </div>
               <div className="px-3 py-2 border-t border-border-subtle bg-surface-1">
-                <button
-                  onClick={() => router.push("/market?focus=today")}
-                  className="text-[11px] text-amber hover:text-amber/80 font-medium"
-                >
-                  Open Market page for today&apos;s events
-                </button>
+                <div className="flex items-center gap-3 text-[11px]">
+                  <button
+                    onClick={() => router.push("/market?focus=today")}
+                    className="text-amber hover:text-amber/80 font-medium inline-flex items-center gap-1"
+                  >
+                    <CalendarDays className="h-3 w-3" />
+                    Market events
+                  </button>
+                  <button
+                    onClick={() => router.push("/pricing")}
+                    className="text-amber hover:text-amber/80 font-medium inline-flex items-center gap-1"
+                  >
+                    <Clock3 className="h-3 w-3" />
+                    Proposals
+                  </button>
+                </div>
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -243,11 +403,7 @@ export function AppSidebar() {
 
       {/* Navigation */}
       <div className="flex flex-1 flex-col gap-6 py-4 overflow-y-auto custom-scrollbar">
-        {/* BUSINESS */}
         <div className="flex flex-col gap-1">
-          <div className="px-6 mb-1">
-            <span className="text-2xs font-bold uppercase tracking-widest text-text-disabled">Business</span>
-          </div>
           {BUSINESS_GROUP.map((item) => (
             <NavItem key={item.name} {...item} />
           ))}
@@ -271,7 +427,7 @@ export function AppSidebar() {
         </button>
 
 
-        {mounted && (
+        {mounted && pathname !== "/guest-chat" && (
           <button
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             className="group flex items-center gap-3 px-3 py-2 text-body text-text-secondary hover:bg-surface-2 hover:text-text-primary transition-colors duration-200 rounded-md mx-2 mt-2 border border-border-subtle/50"

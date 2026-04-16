@@ -1,4 +1,4 @@
-import { connectDB, Listing, PricingRule, InventoryMaster, EngineRun } from "@/lib/db";
+import { connectDB, Listing, PricingRule, InventoryMaster, EngineRun, BenchmarkData, PropertyGroup } from "@/lib/db";
 import mongoose from "mongoose";
 import {
     computeDay,
@@ -32,6 +32,15 @@ function dateStr(d: Date): string {
     return d.toISOString().split("T")[0];
 }
 
+function average(nums: number[]): number {
+    if (!nums.length) return 0;
+    return nums.reduce((a, b) => a + b, 0) / nums.length;
+}
+
+function clamp(n: number, min: number, max: number): number {
+    return Math.max(min, Math.min(max, n));
+}
+
 /**
  * Runs the pricing engine for a listing for the next 365 days.
  * Calculations are stored as proposals in InventoryMaster.
@@ -54,6 +63,87 @@ export async function runPipeline(
             throw new Error(`Listing ${listingId} not found`);
         }
 
+        // ── Resolve effective base price from benchmark data ───────────────────
+        // Priority: benchmark.recommendedWeekday → benchmark.p50Rate → listing.price (Hostaway)
+        // This wires competitor ADR into the engine so pricing is market-anchored, not static.
+        const latestBenchmark = await BenchmarkData.findOne({
+            orgId: listing.orgId,
+            listingId: lid,
+        }).sort({ createdAt: -1 }).select("recommendedWeekday recommendedWeekend p50Rate comps createdAt").lean();
+
+        const hostawayPrice = toNum(listing.price); // always the Hostaway/manual fallback
+        const oneYearAgo = addDays(new Date(), -365);
+        const historicalPrices = await InventoryMaster.find({
+            orgId: listing.orgId,
+            listingId: lid,
+            date: { $gte: dateStr(oneYearAgo), $lte: dateStr(new Date()) },
+            currentPrice: { $gt: 0 },
+        }).select("currentPrice").lean();
+        const oneYearAvgBase = average(
+            historicalPrices.map((d: any) => Number(d.currentPrice || 0)).filter((n) => n > 0)
+        );
+
+        const basePriceSource: "history_1y" | "benchmark" | "hostaway" =
+            oneYearAvgBase > 0 ? "history_1y"
+                : ((latestBenchmark?.recommendedWeekday && latestBenchmark.recommendedWeekday > 0) || (latestBenchmark?.p50Rate && latestBenchmark.p50Rate > 0))
+                    ? "benchmark"
+                    : "hostaway";
+
+        const effectiveBasePrice =
+            oneYearAvgBase > 0
+                ? oneYearAvgBase
+                :
+            (latestBenchmark?.recommendedWeekday && latestBenchmark.recommendedWeekday > 0)
+                ? latestBenchmark.recommendedWeekday
+                : (latestBenchmark?.p50Rate && latestBenchmark.p50Rate > 0)
+                    ? latestBenchmark.p50Rate
+                    : hostawayPrice;
+        const benchmarkCompCount = Array.isArray((latestBenchmark as any)?.comps)
+            ? (latestBenchmark as any).comps.length
+            : 0;
+        const benchmarkFreshnessDays = latestBenchmark?.createdAt
+            ? Math.max(0, Math.round((Date.now() - new Date(latestBenchmark.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
+            : 365;
+        const historySampleSize = historicalPrices.length;
+        const historyConfidence = clamp((historySampleSize / 365) * 100, 0, 100);
+        const benchmarkConfidence = clamp(
+            (benchmarkCompCount >= 8 ? 70 : benchmarkCompCount >= 4 ? 55 : benchmarkCompCount > 0 ? 40 : 25) -
+            Math.min(25, benchmarkFreshnessDays * 1.2),
+            0,
+            100
+        );
+        const basePriceConfidencePct = Math.round(
+            basePriceSource === "history_1y"
+                ? historyConfidence
+                : basePriceSource === "benchmark"
+                    ? benchmarkConfidence
+                    : 30
+        );
+        const effectiveWeekendBase =
+            (latestBenchmark?.recommendedWeekend && latestBenchmark.recommendedWeekend > 0)
+                ? latestBenchmark.recommendedWeekend
+                : 0; // 0 = waterfall will use effectiveBasePrice for weekends too
+        const baseDriftPct =
+            hostawayPrice > 0 ? ((effectiveBasePrice - hostawayPrice) / hostawayPrice) * 100 : 0;
+
+        if (latestBenchmark || oneYearAvgBase > 0) {
+            console.log(
+                `[Pipeline] Base price resolved: weekday=${effectiveBasePrice}, ` +
+                `weekend=${effectiveWeekendBase || effectiveBasePrice}, hostaway=${hostawayPrice}, drift=${baseDriftPct.toFixed(1)}%`
+            );
+        }
+        if (Math.abs(baseDriftPct) >= 15) {
+            console.warn(`[Pipeline] Base price drift alert for listing ${String(listing._id)}: ${baseDriftPct.toFixed(1)}%`);
+        }
+        await Listing.findByIdAndUpdate(lid, {
+            $set: {
+                basePriceSource,
+                basePriceConfidencePct,
+                basePriceSampleSize: basePriceSource === "history_1y" ? historySampleSize : benchmarkCompCount,
+                basePriceLastComputedAt: new Date(),
+            },
+        });
+
         // Compute rolling occupancy % for the configured lookback window
         const lookbackDays: number = listing.occupancyLookbackDays ?? 30;
         let currentOccupancyPct = 0;
@@ -72,8 +162,18 @@ export async function runPipeline(
             }
         }
 
+        const defaultWindowProfiles = [
+            { startDay: 0, endDay: 7, highThresholdPct: 90, highAdjPct: 10, lowThresholdPct: 50, lowAdjPct: -10 },
+            { startDay: 8, endDay: 14, highThresholdPct: 85, highAdjPct: 8, lowThresholdPct: 55, lowAdjPct: -8 },
+            { startDay: 15, endDay: 30, highThresholdPct: 80, highAdjPct: 6, lowThresholdPct: 60, lowAdjPct: -6 },
+        ];
+        const occupancyProfiles = Array.isArray(listing.occupancyWindowProfiles) && listing.occupancyWindowProfiles.length > 0
+            ? listing.occupancyWindowProfiles
+            : defaultWindowProfiles;
+
         const config: ListingConfig = {
-            basePrice: toNum(listing.price),
+            basePrice: effectiveBasePrice,
+            basePriceWeekend: effectiveWeekendBase,
             absoluteMinPrice: toNum(listing.priceFloor),
             absoluteMaxPrice: toNum(listing.priceCeiling),
             defaultMinStay: 1,
@@ -93,6 +193,7 @@ export async function runPipeline(
             farOutDaysOut: listing.farOutDaysOut,
             farOutMarkupPct: toNum(listing.farOutMarkupPct),
             farOutMinStay: listing.farOutMinStay ?? null,
+            farOutMinPrice: toNum(listing.farOutMinPrice ?? 0),
             dowPricingEnabled: listing.dowPricingEnabled,
             dowDays: toIntArray(listing.dowDays),
             dowPriceAdjPct: toNum(listing.dowPriceAdjPct),
@@ -103,7 +204,13 @@ export async function runPipeline(
             gapFillLengthMin: listing.gapFillLengthMin,
             gapFillLengthMax: listing.gapFillLengthMax,
             gapFillDiscountPct: toNum(listing.gapFillDiscountPct),
+            gapFillDiscountWeekdayPct: toNum(listing.gapFillDiscountWeekdayPct ?? 0),
+            gapFillDiscountWeekendPct: toNum(listing.gapFillDiscountWeekendPct ?? 0),
+            gapFillMaxDaysUntilCheckin: listing.gapFillMaxDaysUntilCheckin ?? 30,
             gapFillOverrideCico: listing.gapFillOverrideCico,
+            adjacentAdjustmentEnabled: listing.adjacentAdjustmentEnabled ?? false,
+            adjacentAdjustmentPct: toNum(listing.adjacentAdjustmentPct ?? 0),
+            adjacentTurnoverCost: toNum(listing.adjacentTurnoverCost ?? 0),
             occupancyEnabled: listing.occupancyEnabled ?? false,
             currentOccupancyPct,
             occupancyTargetPct: listing.occupancyTargetPct ?? 80,
@@ -111,14 +218,40 @@ export async function runPipeline(
             occupancyHighAdjPct: toNum(listing.occupancyHighAdjPct ?? 8),
             occupancyLowThresholdPct: listing.occupancyLowThresholdPct ?? 60,
             occupancyLowAdjPct: toNum(listing.occupancyLowAdjPct ?? -10),
+            occupancyWindowProfiles: occupancyProfiles,
             weekendMinPrice: toNum(listing.weekendMinPrice ?? 0),
             weekendDays: listing.weekendDays ?? [3, 4], // Thu/Fri Dubai default
         };
 
-        const ruleRows = await PricingRule.find({
+        // Listing-level rules (highest priority)
+        const listingRuleRows = await PricingRule.find({
             listingId: lid,
+            scope: { $in: ["listing", null] }, // null for legacy rows that predate scope field
             enabled: true,
         }).sort({ priority: 1 }).lean();
+
+        // Group-level rules — find all groups this listing belongs to, then load their rules
+        const groups = await PropertyGroup.find({
+            orgId: listing.orgId,
+            listingIds: lid,
+        }).select("_id listingIds").lean();
+
+        const groupIds = groups.map((g) => g._id);
+        const groupRuleRows = groupIds.length > 0
+            ? await PricingRule.find({
+                groupId: { $in: groupIds },
+                scope: "group",
+                enabled: true,
+              }).sort({ priority: 1 }).lean()
+            : [];
+
+        // Merge: listing rules take precedence over group rules.
+        // Group rules get a priority offset (+1000) so they sort after listing rules
+        // when the waterfall picks the highest-priority matching rule.
+        const ruleRows = [
+            ...listingRuleRows,
+            ...groupRuleRows.map((r) => ({ ...r, priority: (r.priority ?? 0) + 1000 })),
+        ];
 
         const allRules: Rule[] = ruleRows.map((r) => ({
             id: r._id.toString(),
@@ -158,6 +291,58 @@ export async function runPipeline(
         }
 
         const gapMap = computeGaps(today, endDate, bookingMap);
+        const occupancyByWindow = new Map<string, number>();
+        for (const p of config.occupancyWindowProfiles || []) {
+            const windowStart = addDays(today, p.startDay);
+            const windowEnd = addDays(today, p.endDay);
+            const slice = existingInventory.filter(
+                (d) => d.date >= dateStr(windowStart) && d.date <= dateStr(windowEnd)
+            );
+            if (slice.length > 0) {
+                const bookedCount = slice.filter((d) => d.status !== "available").length;
+                occupancyByWindow.set(`${p.startDay}-${p.endDay}`, (bookedCount / slice.length) * 100);
+            }
+        }
+        const peerListingIds = Array.from(
+            new Set(
+                groups.flatMap((g: any) => (g.listingIds || []).map((id: any) => String(id))).filter((id: string) => id !== String(lid))
+            )
+        ).map((id) => new mongoose.Types.ObjectId(id));
+        const peerInventory = peerListingIds.length > 0
+            ? await InventoryMaster.find({
+                orgId: listing.orgId,
+                listingId: { $in: peerListingIds },
+                date: { $gte: dateStr(today), $lte: dateStr(addDays(today, 364)) },
+              }).select("date status").lean()
+            : [];
+        const groupOccupancyByWindow = new Map<string, { occupancyPct: number; sampleSize: number }>();
+        for (const p of config.occupancyWindowProfiles || []) {
+            const windowStart = dateStr(addDays(today, p.startDay));
+            const windowEnd = dateStr(addDays(today, p.endDay));
+            const slice = peerInventory.filter((d) => d.date >= windowStart && d.date <= windowEnd);
+            if (slice.length > 0) {
+                const bookedCount = slice.filter((d) => d.status !== "available").length;
+                groupOccupancyByWindow.set(`${p.startDay}-${p.endDay}`, {
+                    occupancyPct: (bookedCount / slice.length) * 100,
+                    sampleSize: slice.length,
+                });
+            }
+        }
+        await Listing.findByIdAndUpdate(lid, {
+            $set: {
+                groupOccupancyProfiles: (config.occupancyWindowProfiles || []).map((p) => {
+                    const k = `${p.startDay}-${p.endDay}`;
+                    const v = groupOccupancyByWindow.get(k);
+                    return {
+                        startDay: p.startDay,
+                        endDay: p.endDay,
+                        occupancyPct: Number((v?.occupancyPct ?? 0).toFixed(2)),
+                        sampleSize: v?.sampleSize ?? 0,
+                        groupIds: groups.map((g: any) => String(g._id)),
+                    };
+                }),
+            },
+        });
 
         let daysChanged = 0;
         const bulkOps: any[] = [];
@@ -173,9 +358,31 @@ export async function runPipeline(
                 gapLength: gap?.gapLength ?? null,
                 gapStart: gap?.gapStart ?? null,
                 gapEnd: gap?.gapEnd ?? null,
+                adjacentToBooking:
+                    Boolean(bookingMap.get(dateStr(addDays(currentDate, -1)))?.isBooked) ||
+                    Boolean(bookingMap.get(dateStr(addDays(currentDate, 1)))?.isBooked),
             };
 
-            const result = computeDay(currentDate, today, config, allRules, bookingCtx);
+            const leadTime = i;
+            const profile = (config.occupancyWindowProfiles || []).find(
+                (p) => leadTime >= p.startDay && leadTime <= p.endDay
+            );
+            const occupancyForDay = profile
+                ? (occupancyByWindow.get(`${profile.startDay}-${profile.endDay}`) ?? currentOccupancyPct)
+                : currentOccupancyPct;
+            const groupWindow = profile
+                ? groupOccupancyByWindow.get(`${profile.startDay}-${profile.endDay}`)
+                : undefined;
+            const blendedOccupancyForDay =
+                listing.useGroupOccupancyProfile !== false && profile && groupWindow
+                    ? (
+                        occupancyForDay * (1 - (Number(listing.groupOccupancyWeightPct ?? 50) / 100)) +
+                        groupWindow.occupancyPct * (Number(listing.groupOccupancyWeightPct ?? 50) / 100)
+                    )
+                    : occupancyForDay;
+
+            const dayConfig: ListingConfig = { ...config, currentOccupancyPct: blendedOccupancyForDay };
+            const result = computeDay(currentDate, today, dayConfig, allRules, bookingCtx);
 
             bulkOps.push({
                 updateOne: {
@@ -186,7 +393,7 @@ export async function runPipeline(
                             listingId: lid,
                             date: ds,
                             status: bookingCtx.isBooked ? "booked" : "available",
-                            currentPrice: toNum(listing.price),
+                            currentPrice: effectiveBasePrice,
                             proposedPrice: result.price,
                             reasoning: result.note,
                             proposalStatus: "pending",

@@ -1,12 +1,15 @@
 /**
  * GET /api/debug/user?email=x  — shows raw onboarding state
  * POST /api/debug/user?email=x — resets onboarding to "connect" for re-testing
- * TEMPORARY — remove before production.
+ * Development only — disabled in production.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB, Organization } from "@/lib/db";
 
+const NOT_FOUND = NextResponse.json({ error: "Not found" }, { status: 404 });
+
 export async function GET(req: NextRequest) {
+  if (process.env.NODE_ENV === "production") return NOT_FOUND;
   const email = req.nextUrl.searchParams.get("email");
   if (!email) return NextResponse.json({ error: "email param required" });
 
@@ -29,6 +32,7 @@ export async function GET(req: NextRequest) {
 
 /** Reset onboarding so the wizard re-runs — for demo/testing */
 export async function POST(req: NextRequest) {
+  if (process.env.NODE_ENV === "production") return NOT_FOUND;
   const email = req.nextUrl.searchParams.get("email");
   if (!email) return NextResponse.json({ error: "email param required" });
 

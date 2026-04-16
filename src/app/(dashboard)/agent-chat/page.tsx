@@ -32,8 +32,8 @@ export default async function DashboardPage() {
   plus14.setDate(plus14.getDate() + 14);
   const plus14Str = plus14.toISOString().split("T")[0];
 
-  // Fetch only THIS org's listings
-  const allListings = await Listing.find({ orgId: orgObjectId! }).lean();
+  // Fetch only active listings for THIS org
+  const allListings = await Listing.find({ orgId: orgObjectId!, isActive: true }).lean();
 
   // Aggregate occupancy/avg_price scoped to orgId
   const statsResult = await InventoryMaster.aggregate([

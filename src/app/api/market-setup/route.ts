@@ -17,14 +17,15 @@ import {
     BENCHMARK_AGENT_ID,
     GUARDRAILS_AGENT_ID,
 } from "@/lib/agents/constants";
+import { getLyzrConfig, requireLyzrChatUrl } from "@/lib/env";
 import mongoose from "mongoose";
 import { syncEventFeeds } from "@/lib/events/event-feed-syncer";
 
 export const dynamic = "force-dynamic";
 
 async function callLyzrAgent(agentId: string, message: string) {
-    const LYZR_API_KEY = process.env.LYZR_API_KEY;
-    const LYZR_API_URL = process.env.LYZR_API_URL || "https://studio.lyzr.ai/inference/chat";
+    const { apiKey: LYZR_API_KEY } = getLyzrConfig();
+    const LYZR_API_URL = requireLyzrChatUrl();
 
     if (!LYZR_API_KEY) return { text: "", parsedJson: null };
 
@@ -102,7 +103,26 @@ export async function POST(req: NextRequest) {
         // Fetch market template for city-aware event keywords and seasonal notes
         const marketCode = (org as any)?.marketCode || "UAE_DXB";
         const template = await MarketTemplate.findOne({ marketCode }).lean() as any;
-        const templateCity = template?.eventApiConfig?.ticketmasterCity || template?.displayName || marketCode;
+
+        // Resolve a human-readable city name for external event APIs.
+        // Priority: template's ticketmasterCity → template displayName → CITY_MAP → "Dubai"
+        const MARKET_CITY_MAP: Record<string, string> = {
+          UAE_DXB: "Dubai",
+          GBR_LDN: "London",
+          GBR_LON: "London",
+          USA_NYC: "New York",
+          USA_MIA: "Miami",
+          USA_NAS: "Nashville",
+          FRA_PAR: "Paris",
+          NLD_AMS: "Amsterdam",
+          ESP_BCN: "Barcelona",
+          PRT_LIS: "Lisbon",
+          AUS_SYD: "Sydney",
+        };
+        const templateCity = template?.eventApiConfig?.ticketmasterCity
+          || template?.displayName
+          || MARKET_CITY_MAP[marketCode]
+          || "Dubai";
         const templateKeywords: string[] = template?.eventApiConfig?.customKeywords || [];
 
         // 1b. Sync live events from Ticketmaster, Eventbrite, DTCM, RSS

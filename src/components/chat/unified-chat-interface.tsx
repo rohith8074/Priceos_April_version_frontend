@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Send, Loader2, Settings, Zap, Calendar as CalendarIcon,
-  PanelRightClose, PanelRightOpen, Building2, CheckSquare, AlertCircle,
-  User, ChevronLeft, Sparkles, PanelLeftClose, PanelLeftOpen, RefreshCw
+  Send, Loader2, Settings,
+  PanelRightClose, PanelRightOpen, Building2,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -71,11 +70,10 @@ function MarkdownMessage({ content, isUser }: { content: string; isUser: boolean
 import { useContextStore } from "@/stores/context-store";
 import type { PropertyWithMetrics } from "@/types";
 import { DateRangePicker } from "./date-range-picker";
-import { format } from "date-fns";
+import { addDays, differenceInCalendarDays, format, startOfDay } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { PriceGuardrailsEditor } from "./price-guardrails-editor";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { toast } from "sonner";
 import { readSSEStream } from "@/lib/chat/sse-reader";
@@ -86,6 +84,8 @@ interface Message {
   content: string;
   proposals?: any[];
   proposalStatus?: "pending" | "saved" | "rejected";
+  // per-proposal approve/reject decisions keyed by proposal_id
+  proposalDecisions?: Record<string, "approved" | "rejected">;
 }
 
 interface Props {
@@ -96,7 +96,7 @@ interface Props {
 
 // Focused Pricing Agent Interface
 
-export function UnifiedChatInterface({ properties }: Props) {
+export function UnifiedChatInterface({ properties: _properties }: Props) {
   const {
     contextType,
     propertyId,
@@ -106,10 +106,7 @@ export function UnifiedChatInterface({ properties }: Props) {
     dateRange,
     setDateRange,
     triggerMarketRefresh,
-    setSidebarTab,
     setCalendarMetrics: setGlobalMetrics,
-    conversationSummary,
-    setConversationSummary,
   } = useContextStore();
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -118,6 +115,36 @@ export function UnifiedChatInterface({ properties }: Props) {
   const [statusText, setStatusText] = useState("");
   const [isChatActive, setIsChatActive] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  /** After "Run Aria" succeeds, history may still be empty — async /api/chat/history must not flip chat back to OFFLINE. */
+  const ariaReadySessionRef = useRef<string | null>(null);
+  const scopeKeyRef = useRef<{ propertyId?: string; from?: number; to?: number }>({});
+
+  const ARIA_READY_STORAGE_PREFIX = "priceos-aria-chat-ready:";
+
+  const readAriaReadyFromStorage = useCallback((sessionKey: string) => {
+    if (typeof window === "undefined") return false;
+    try {
+      return sessionStorage.getItem(`${ARIA_READY_STORAGE_PREFIX}${sessionKey}`) === "1";
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const writeAriaReadyToStorage = useCallback((sessionKey: string) => {
+    if (typeof window === "undefined") return;
+    try {
+      sessionStorage.setItem(`${ARIA_READY_STORAGE_PREFIX}${sessionKey}`, "1");
+    } catch {
+      /* quota / private mode */
+    }
+  }, []);
+
+  const isAriaReadyForSession = useCallback(
+    (expectedSessionId: string) =>
+      ariaReadySessionRef.current === expectedSessionId ||
+      readAriaReadyFromStorage(expectedSessionId),
+    [readAriaReadyFromStorage]
+  );
 
   // Generate a unique session ID
   const generateSessionId = () => `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -133,36 +160,53 @@ export function UnifiedChatInterface({ properties }: Props) {
       dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : "end"
     )
   );
-  const [isSettingUp, setIsSettingUp] = useState(false);
 
-  // Price guardrails — local state so UI updates immediately after save
-  const activeListing = properties.find(p => p.id === propertyId);
-  const [priceFloor, setPriceFloor] = useState<number>(Number(activeListing?.priceFloor || 0));
-  const [priceCeiling, setPriceCeiling] = useState<number>(Number(activeListing?.priceCeiling || 0));
-  const [guardrailsSource, setGuardrailsSource] = useState<string | undefined>(activeListing?.guardrailsSource || undefined);
-  const [floorReasoning, setFloorReasoning] = useState<string | null | undefined>(activeListing?.floorReasoning);
-  const [ceilingReasoning, setCeilingReasoning] = useState<string | null | undefined>(activeListing?.ceilingReasoning);
-
-  // Keep guardrails in sync when property changes
   useEffect(() => {
-    setPriceFloor(Number(activeListing?.priceFloor || 0));
-    setPriceCeiling(Number(activeListing?.priceCeiling || 0));
-    setGuardrailsSource(activeListing?.guardrailsSource || undefined);
-    setFloorReasoning(activeListing?.floorReasoning);
-    setCeilingReasoning(activeListing?.ceilingReasoning);
-  }, [propertyId, activeListing]);
+    const today = startOfDay(new Date());
+    const maxTo = addDays(today, 30);
+
+    if (!dateRange?.from || !dateRange?.to) {
+      setDateRange({ from: today, to: maxTo });
+      return;
+    }
+
+    const from = startOfDay(dateRange.from);
+    const to = startOfDay(dateRange.to);
+    const spanDays = differenceInCalendarDays(to, from);
+    const needsClamp = from < today || to > maxTo || spanDays > 30 || to < from;
+
+    if (needsClamp) {
+      const safeFrom = from < today ? today : from;
+      const safeToCandidate = to > maxTo ? maxTo : to;
+      const safeTo =
+        safeToCandidate < safeFrom
+          ? safeFrom
+          : differenceInCalendarDays(safeToCandidate, safeFrom) > 30
+          ? addDays(safeFrom, 30)
+          : safeToCandidate;
+      setDateRange({ from: safeFrom, to: safeTo });
+    }
+  }, [dateRange?.from?.getTime(), dateRange?.to?.getTime(), setDateRange]);
+  const [isSettingUp, setIsSettingUp] = useState(false);
 
   // Fetching helper removed since it's now in GuestChatInterface
 
   // Dynamic calendar metrics (occupancy + avg price for selected date range)
   const [calendarMetrics, setCalendarMetrics] = useState<any | null>(null);
-  const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
 
   // 1. Session Initialization & Hydration
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+
+    const fromT = dateRange?.from?.getTime();
+    const toT = dateRange?.to?.getTime();
+    const prev = scopeKeyRef.current;
+    if (prev.propertyId !== propertyId || prev.from !== fromT || prev.to !== toT) {
+      ariaReadySessionRef.current = null;
+      scopeKeyRef.current = { propertyId: propertyId ?? undefined, from: fromT, to: toT };
+    }
 
     // Build the expected session ID for this property + date range combo
     const expectedSessionId = buildSessionId(
@@ -183,24 +227,27 @@ export function UnifiedChatInterface({ properties }: Props) {
             setMessages(data.messages);
             setIsChatActive(true);
             setSessionId(expectedSessionId);
+            ariaReadySessionRef.current = expectedSessionId;
+            writeAriaReadyToStorage(expectedSessionId);
           } else {
             setMessages([]);
-            setIsChatActive(false);
             setSessionId(expectedSessionId);
+            // Keep chat ONLINE if user already ran Aria for this session (fixes race with late history fetch)
+            setIsChatActive(isAriaReadyForSession(expectedSessionId));
           }
         }
       } catch (err) {
         console.error("Failed to fetch chat history", err);
         setSessionId(expectedSessionId);
         setMessages([]);
-        setIsChatActive(false);
+        setIsChatActive(isAriaReadyForSession(expectedSessionId));
       } finally {
         setIsHistoryLoading(false);
       }
     };
 
     fetchHistory();
-  }, [contextType, propertyId, dateRange?.from?.getTime(), dateRange?.to?.getTime()]);
+  }, [contextType, propertyId, dateRange?.from?.getTime(), dateRange?.to?.getTime(), isAriaReadyForSession, writeAriaReadyToStorage]);
 
   // Fetch calendar metrics when date range or property changes
   useEffect(() => {
@@ -211,7 +258,6 @@ export function UnifiedChatInterface({ properties }: Props) {
         return;
       }
 
-      setIsLoadingMetrics(true);
       try {
         const from = format(dateRange.from, "yyyy-MM-dd");
         const to = format(dateRange.to, "yyyy-MM-dd");
@@ -234,15 +280,11 @@ export function UnifiedChatInterface({ properties }: Props) {
         }
       } catch (err) {
         console.error("Failed to fetch calendar metrics:", err);
-      } finally {
-        setIsLoadingMetrics(false);
       }
     };
 
     fetchMetrics();
   }, [contextType, propertyId, dateRange?.from?.getTime(), dateRange?.to?.getTime(), setGlobalMetrics]);
-
-  const guardrailsNotSet = !priceFloor && !priceCeiling;
 
   const handleMarketSetup = async () => {
     if (isSettingUp || !dateRange?.from || !dateRange?.to) return;
@@ -306,6 +348,8 @@ export function UnifiedChatInterface({ properties }: Props) {
 
       setMessages([]);          // clear chat history for this new session
       setSessionId(newSessionId); // isolate Lyzr conversation
+      ariaReadySessionRef.current = newSessionId;
+      writeAriaReadyToStorage(newSessionId);
       setIsChatActive(true);
 
       console.log("🔍 Market Analysis Data Received:", {
@@ -329,12 +373,6 @@ export function UnifiedChatInterface({ properties }: Props) {
       });
 
       if (data.guardrailsSetByAi && data.guardrails) {
-        setPriceFloor(data.guardrails.floor);
-        setPriceCeiling(data.guardrails.ceiling);
-        setGuardrailsSource(data.guardrails.source);
-        setFloorReasoning(data.guardrails.floorReasoning);
-        setCeilingReasoning(data.guardrails.ceilingReasoning);
-
         // Wait a slight moment so they don't overlap too intensely
         setTimeout(() => {
           toast.info("Auto-Guardrails Configured", {
@@ -449,45 +487,77 @@ export function UnifiedChatInterface({ properties }: Props) {
     }
   };
 
+  // Per-proposal approve/reject decision
+  const handleProposalDecision = (messageId: string, proposalId: string, decision: "approved" | "rejected") => {
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === messageId
+          ? { ...msg, proposalDecisions: { ...msg.proposalDecisions, [proposalId]: decision } }
+          : msg
+      )
+    );
+  };
+
   const handleSaveProposals = (messageId: string, proposals: any[]) => {
-    // ── OPTIMISTIC: flip UI to "saved" immediately, don't wait for API ──
+    // Only save proposals that have been individually approved (or all if none decided yet)
+    const msg = messages.find(m => m.id === messageId);
+    const decisions = msg?.proposalDecisions || {};
+    const toSave = proposals.filter(p => {
+      const id = p.proposal_id;
+      // If user explicitly approved → save. If no decision yet + guard is APPROVED/FLAGGED → save.
+      if (decisions[id] === "rejected") return false;
+      if (decisions[id] === "approved") return true;
+      return p.guard_verdict !== "REJECTED";
+    });
+
+    if (toSave.length === 0) {
+      toast.info("No proposals to save — all were rejected.");
+      return;
+    }
+
+    // ── OPTIMISTIC: flip UI to "saved" immediately ──
     setMessages((prev) =>
       prev.map((msg) =>
         msg.id === messageId ? { ...msg, proposalStatus: "saved" } : msg
       )
     );
-    toast.success(`Deploying ${proposals.length} price updates…`, {
-      description: "Saved to Control Panel. Pricing page updated.",
+    toast.success(`Saving ${toSave.length} proposal${toSave.length > 1 ? "s" : ""} to Pricing…`, {
+      description: "They will appear in the Pricing section for review.",
     });
 
-    // ── BACKGROUND: fire-and-forget the actual DB write ──
-    const payload = JSON.stringify({
-      proposals,
-      dateRange: dateRange ? {
-        from: format(dateRange.from!, "yyyy-MM-dd"),
-        to: dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : format(dateRange.from!, "yyyy-MM-dd"),
-      } : undefined,
-    });
+    // ── BACKGROUND: fire-and-forget DB write ──
+    // Map agent snake_case fields → API camelCase fields and inject listingId from context
+    const mappedProposals = toSave.map((p: any) => ({
+      listingId: propertyId,                        // required by the API — comes from context
+      date: p.date,
+      proposedPrice: p.proposed_price ?? p.proposedPrice,
+      changePct: p.change_pct ?? p.changePct,
+      reasoning: typeof p.reasoning === "object"
+        ? Object.values(p.reasoning as Record<string, string>).filter(Boolean).join(" | ")
+        : (p.reasoning ?? ""),
+    }));
 
     fetch("/api/proposals/bulk-save", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: payload,
+      body: JSON.stringify({ proposals: mappedProposals }),
     })
       .then(async (res) => {
-        if (!res.ok) throw new Error("Save failed");
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || `Save failed (${res.status})`);
+        }
         const data = await res.json();
-        console.log(`✅ Deployed ${data.savedCount} proposals to Pricing`);
+        console.log(`✅ Saved ${data.modified ?? data.savedCount} proposals to Pricing`);
       })
       .catch((err) => {
-        console.error("Proposal deploy error:", err);
-        // Revert UI on failure
+        console.error("Proposal save error:", err);
         setMessages((prev) =>
           prev.map((msg) =>
             msg.id === messageId ? { ...msg, proposalStatus: "pending" } : msg
           )
         );
-        toast.error("Deploy failed — please try again.");
+        toast.error("Save failed — please try again.");
       });
   };
 
@@ -497,7 +567,7 @@ export function UnifiedChatInterface({ properties }: Props) {
         msg.id === messageId ? { ...msg, proposalStatus: "rejected" } : msg
       )
     );
-    toast.info("Price proposals rejected. No changes were made.");
+    toast.info("All proposals rejected. No changes were made.");
   };
 
   if (contextType === "portfolio") {
@@ -531,26 +601,6 @@ export function UnifiedChatInterface({ properties }: Props) {
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Price Guardrails Editor — shown when a property is selected */}
-            {contextType === "property" && propertyId && (
-              <div id="tour-guardrails">
-                <PriceGuardrailsEditor
-                  listingId={propertyId}
-                  initialFloor={priceFloor}
-                  initialCeiling={priceCeiling}
-                  guardrailsSource={guardrailsSource}
-                  floorReasoning={floorReasoning}
-                  ceilingReasoning={ceilingReasoning}
-                  currencyCode={activeListing?.currencyCode || "AED"}
-                  highlightIfZero
-                  onSaved={(floor, ceiling) => {
-                    setPriceFloor(floor);
-                    setPriceCeiling(ceiling);
-                    setGuardrailsSource("manual");
-                  }}
-                />
-              </div>
-            )}
             <Button
               variant={isSidebarOpen ? "secondary" : "ghost"}
               size="sm"
@@ -583,7 +633,10 @@ export function UnifiedChatInterface({ properties }: Props) {
                 date={dateRange}
                 setDate={(newRange) => {
                   setDateRange(newRange);
-                  if (!newRange?.from || !newRange?.to) setIsChatActive(false);
+                  if (!newRange?.from || !newRange?.to) {
+                    setIsChatActive(false);
+                    ariaReadySessionRef.current = null;
+                  }
                 }}
               />
             </div>
@@ -638,22 +691,170 @@ export function UnifiedChatInterface({ properties }: Props) {
                   </div>
                   {message.proposals && message.proposals.length > 0 && (
                     <div className="mt-5 border border-border/40 rounded-2xl bg-white/5 backdrop-blur-md overflow-hidden shadow-inner">
-                      <div className="bg-primary/5 px-4 py-3 text-xs font-black uppercase tracking-[0.2em] border-b border-border/40 text-primary">Live Price Proposals ({message.proposals.length})</div>
-                      <div className="p-4 text-sm space-y-4">
-                        {message.proposals.map((prop, idx) => (
-                          <div key={idx} className="flex flex-col gap-2 pb-4 border-b border-border/20 last:border-0 last:pb-0">
-                            <div className="flex justify-between font-bold items-center">
-                              <span className="text-sm tracking-tight text-foreground/80">{prop.date}</span>
-                              <div className="flex items-center gap-2">
-                                {prop.proposed_min_stay && <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest bg-primary/5 text-primary border-primary/20 scale-90 origin-right">{prop.proposed_min_stay}N Min</Badge>}
-                                <span className={`text-sm font-black tabular-nums ${prop.change_pct > 0 ? "text-emerald-500" : "text-amber-500"}`}>AED {prop.proposed_price} <span className="text-[10px] ml-1 opacity-70">({prop.change_pct > 0 ? "+" : ""}{prop.change_pct}%)</span></span>
-                              </div>
-                            </div>
-                            {/* ... reasoning omitted for brevity as it's identical ... */}
-                          </div>
-                        ))}
+                      {/* Header */}
+                      <div className="bg-primary/5 px-4 py-3 text-xs font-black uppercase tracking-[0.2em] border-b border-border/40 text-primary flex items-center justify-between">
+                        <span>Live Price Proposals ({message.proposals.length})</span>
+                        {message.proposalStatus === "saved" && (
+                          <span className="text-emerald-500 text-[10px] font-black">✓ Saved to Pricing</span>
+                        )}
+                        {message.proposalStatus === "rejected" && (
+                          <span className="text-muted-foreground text-[10px] font-black">✗ Rejected</span>
+                        )}
                       </div>
-                      {/* ... proposal status buttons omitted for brevity ... */}
+
+                      {/* Proposal rows */}
+                      <div className="p-4 text-sm space-y-4">
+                        {message.proposals.map((prop, idx) => {
+                          const decision = message.proposalDecisions?.[prop.proposal_id];
+                          const isApproved = decision === "approved";
+                          const isRejected = decision === "rejected" || prop.guard_verdict === "REJECTED";
+                          const isFlagged = prop.guard_verdict === "FLAGGED";
+                          const canApprove = (prop.action_buttons || []).includes("approve");
+                          const alreadySaved = message.proposalStatus === "saved";
+
+                          return (
+                            <div key={idx} className={`flex flex-col gap-2.5 pb-4 border-b border-border/20 last:border-0 last:pb-0 rounded-lg px-2 pt-2 transition-colors ${isApproved ? "bg-emerald-500/5" : isRejected ? "bg-red-500/5 opacity-60" : ""}`}>
+                              {/* Row 1: Date + price + verdict badge */}
+                              <div className="flex justify-between font-bold items-center">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm tracking-tight text-foreground/80">{prop.date}</span>
+                                  {prop.date_classification && (
+                                    <Badge variant="outline" className="text-[9px] font-black uppercase hidden sm:inline-flex">
+                                      {prop.date_classification}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {/* Guard verdict badge */}
+                                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
+                                    prop.guard_verdict === "APPROVED" ? "bg-emerald-500/15 text-emerald-500" :
+                                    prop.guard_verdict === "FLAGGED"  ? "bg-amber-500/15 text-amber-500" :
+                                                                        "bg-red-500/15 text-red-500"
+                                  }`}>
+                                    {prop.guard_verdict === "APPROVED" ? "✓ Approved" : prop.guard_verdict === "FLAGGED" ? "⚠ Flagged" : "✗ Blocked"}
+                                  </span>
+                                  {/* Price */}
+                                  <span className={`text-sm font-black tabular-nums ${prop.change_pct > 0 ? "text-emerald-500" : "text-amber-500"}`}>
+                                    AED {prop.proposed_price}
+                                    <span className="text-[10px] ml-1 opacity-70">({prop.change_pct > 0 ? "+" : ""}{prop.change_pct}%)</span>
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Row 2: Risk + comparisons */}
+                              <div className="flex flex-wrap gap-2 text-[10px]">
+                                <span className={`px-1.5 py-0.5 rounded-full font-bold uppercase ${
+                                  prop.risk_level === "low"    ? "bg-emerald-500/10 text-emerald-600" :
+                                  prop.risk_level === "medium" ? "bg-amber-500/10 text-amber-600" :
+                                                                 "bg-red-500/10 text-red-500"
+                                }`}>
+                                  {prop.risk_level} risk
+                                </span>
+                                {prop.comparisons?.vs_p50 && (
+                                  <span className="text-muted-foreground">vs P50 {prop.comparisons.vs_p50.diff_pct > 0 ? "+" : ""}{prop.comparisons.vs_p50.diff_pct}%</span>
+                                )}
+                                {prop.comparisons?.vs_recommended && (
+                                  <span className="text-muted-foreground">vs recommended {prop.comparisons.vs_recommended.diff_pct > 0 ? "+" : ""}{prop.comparisons.vs_recommended.diff_pct}%</span>
+                                )}
+                                {prop.comparisons?.vs_top_comp?.comp_name && (
+                                  <span className="text-muted-foreground">vs {prop.comparisons.vs_top_comp.comp_name} {prop.comparisons.vs_top_comp.diff_pct > 0 ? "+" : ""}{prop.comparisons.vs_top_comp.diff_pct}%</span>
+                                )}
+                              </div>
+
+                              {/* Row 3: Primary reasoning */}
+                              {(prop.reasoning?.reason_market || prop.reasoning?.reason_guardrails) && (
+                                <p className="text-[11px] text-muted-foreground leading-snug">
+                                  {prop.reasoning.reason_guardrails && prop.guard_verdict === "REJECTED"
+                                    ? `🛡 ${prop.reasoning.reason_guardrails}`
+                                    : prop.reasoning.reason_market
+                                      ? `📊 ${prop.reasoning.reason_market}`
+                                      : null}
+                                </p>
+                              )}
+
+                              {/* Row 4: FLAGGED caution */}
+                              {isFlagged && (
+                                <p className="text-[11px] text-amber-500/80 leading-snug bg-amber-500/5 rounded px-2 py-1">
+                                  ⚠ PriceGuard flagged this for review — outside normal range but not hard-blocked. Approve with caution.
+                                </p>
+                              )}
+
+                              {/* Row 5: Per-proposal action buttons */}
+                              {!alreadySaved && message.proposalStatus !== "rejected" && (
+                                <div className="flex items-center gap-2 pt-1">
+                                  {canApprove && !isRejected && (
+                                    <button
+                                      onClick={() => handleProposalDecision(message.id, prop.proposal_id, isApproved ? "approved" : "approved")}
+                                      className={`text-[10px] font-black px-3 py-1 rounded-full border transition-all ${
+                                        isApproved
+                                          ? "bg-emerald-500 text-white border-emerald-500"
+                                          : "border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10"
+                                      }`}
+                                    >
+                                      {isApproved ? "✓ Approved" : "Approve"}
+                                    </button>
+                                  )}
+                                  {!isRejected && (
+                                    <button
+                                      onClick={() => handleProposalDecision(message.id, prop.proposal_id, "rejected")}
+                                      className="text-[10px] font-black px-3 py-1 rounded-full border border-red-400/40 text-red-400 hover:bg-red-500/10 transition-all"
+                                    >
+                                      Reject
+                                    </button>
+                                  )}
+                                  {prop.guard_verdict === "REJECTED" && (
+                                    <span className="text-[10px] text-red-400/70 font-bold">Blocked by PriceGuard — cannot approve</span>
+                                  )}
+                                  {decision === "rejected" && (
+                                    <button
+                                      onClick={() => handleProposalDecision(message.id, prop.proposal_id, "approved")}
+                                      className="text-[10px] text-muted-foreground underline"
+                                    >
+                                      Undo
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Footer: Save all / Reject all */}
+                      {message.proposalStatus === "pending" && (
+                        <div className="px-4 py-3 border-t border-border/40 bg-muted/20 flex items-center justify-between gap-3">
+                          <p className="text-[10px] text-muted-foreground leading-snug">
+                            Approve individual proposals above, then save to the Pricing section.
+                          </p>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              onClick={() => handleRejectProposals(message.id)}
+                              className="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-border/50 text-muted-foreground hover:bg-muted transition-colors"
+                            >
+                              Reject All
+                            </button>
+                            <button
+                              onClick={() => handleSaveProposals(message.id, message.proposals!)}
+                              className="text-[11px] font-bold px-4 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm"
+                            >
+                              Save to Pricing →
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {message.proposalStatus === "saved" && (
+                        <div className="px-4 py-3 border-t border-border/40 bg-emerald-500/5 flex items-center gap-2">
+                          <span className="text-[11px] text-emerald-600 font-black">✓ Saved to Pricing section</span>
+                          <span className="text-[10px] text-muted-foreground">— review and push to Hostaway from the Pricing page</span>
+                        </div>
+                      )}
+
+                      {message.proposalStatus === "rejected" && (
+                        <div className="px-4 py-3 border-t border-border/40 bg-muted/10 flex items-center gap-2">
+                          <span className="text-[11px] text-muted-foreground font-bold">✗ All proposals rejected. No changes made.</span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

@@ -15,6 +15,7 @@
 import "dotenv/config";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import { getDemoSeedCredentials } from "@/lib/env";
 
 import { MarketTemplate } from "../models/MarketTemplate";
 import { Source } from "../models/Source";
@@ -89,8 +90,10 @@ async function seed() {
 
   // ─── 4. Demo Organization ─────────────────────────────────
   console.log("🏢 Seeding demo organization...");
-  const DEMO_EMAIL = "admin@priceos.demo";
-  const DEMO_PASSWORD = "PriceOS@2025";
+  const { email: DEMO_EMAIL, password: DEMO_PASSWORD } = getDemoSeedCredentials();
+  if (!DEMO_EMAIL || !DEMO_PASSWORD) {
+    throw new Error("Missing DEMO_EMAIL or DEMO_PASSWORD for seed run");
+  }
 
   let org = await Organization.findOne({ email: DEMO_EMAIL });
   if (org) {

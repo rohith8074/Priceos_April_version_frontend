@@ -1,16 +1,50 @@
 /**
  * GET /api/hostaway/metadata
- * 
+ *
  * Step 1 of Onboarding Wizard.
- * Validates the Hostaway API key and returns ONLY listing metadata
- * (id, name, bedrooms, location). No pricing, calendar, or reservation data.
- * This is the "Slim Fetch" — minimizes Hostaway API quota usage.
+ * Accepts Hostaway Account ID + API Secret, exchanges them for a Bearer token
+ * via OAuth2, then fetches ONLY listing metadata (id, name, bedrooms, location).
+ * No pricing, calendar, or reservation data — minimises Hostaway API quota usage.
+ *
+ * Query params (first-time entry):
+ *   accountId  — numeric Hostaway Account ID  (Hostaway → Settings → Account)
+ *   apiSecret  — Hostaway API Secret / Client Secret (Hostaway → Settings → API Keys)
+ *
+ * Stored credentials are used on subsequent calls if no params are supplied.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAccessToken } from "@/lib/auth/jwt";
 import { COOKIE_NAME } from "@/lib/auth/server";
 import { connectDB, Organization } from "@/lib/db";
+
+/**
+ * Exchange Hostaway Account ID + API Secret for a Bearer access token.
+ * POST https://api.hostaway.com/v1/auth
+ */
+async function exchangeHostawayToken(accountId: string, apiSecret: string): Promise<string> {
+  const body = new URLSearchParams({
+    grant_type: "client_credentials",
+    client_id: accountId,
+    client_secret: apiSecret,
+    scope: "general",
+  });
+
+  const res = await fetch("https://api.hostaway.com/v1/accessTokens", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Hostaway OAuth2 failed (${res.status}): ${errText}`);
+  }
+
+  const data = await res.json();
+  if (!data.access_token) throw new Error("Hostaway did not return an access token");
+  return data.access_token as string;
+}
 
 // Hostaway "slim" fields — only what we need for the property selector
 const SLIM_FIELDS = ["id", "name", "bedroomsNumber", "city", "listingType", "thumbnailUrl"];
@@ -47,25 +81,57 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Invalid session" }, { status: 401 });
     }
 
-    // 2. Get API key — either from query param (first-time entry) or stored org
+    // 2. Resolve credentials — new entry (accountId + apiSecret) or stored token
     await connectDB();
     const org = await Organization.findById(payload.orgId).lean();
     if (!org) return NextResponse.json({ error: "Organization not found" }, { status: 404 });
 
-    const inputApiKey = req.nextUrl.searchParams.get("apiKey")?.trim() || "";
-    const apiKey = inputApiKey || org.hostawayApiKey;
-    if (!apiKey) {
-      return NextResponse.json({ error: "No Hostaway API key provided" }, { status: 400 });
+    const inputAccountId = req.nextUrl.searchParams.get("accountId")?.trim() || "";
+    const inputApiSecret = req.nextUrl.searchParams.get("apiSecret")?.trim() || "";
+    const isNewEntry = !!(inputAccountId && inputApiSecret);
+
+    // Require either new credentials OR an already-stored Bearer token
+    if (!isNewEntry && !org.hostawayApiKey) {
+      return NextResponse.json(
+        { error: "No Hostaway credentials provided. Supply accountId and apiSecret." },
+        { status: 400 }
+      );
     }
 
-    // 3. Slim fetch from Hostaway — only listing metadata
+    // 3. Exchange credentials for Bearer token (only when new credentials are supplied)
+    let bearerToken = org.hostawayApiKey ?? "";
+    if (isNewEntry) {
+      try {
+        console.log("[Hostaway/Metadata] Exchanging credentials for org:", payload.orgId);
+        bearerToken = await exchangeHostawayToken(inputAccountId, inputApiSecret);
+      } catch (err) {
+        console.error("[Hostaway/Metadata] OAuth2 exchange failed:", err);
+        return NextResponse.json(
+          {
+            success: false,
+            mode: "fallback_available",
+            fallbackUsed: true,
+            reasonCode: "HOSTAWAY_AUTH_DENIED",
+            reason:
+              "Could not authenticate with Hostaway. Check your Account ID and API Secret — they must match what is shown in Hostaway → Settings → API Keys.",
+            canRetry: true,
+            message: "Authentication failed. You can continue with demo data.",
+            total: DEMO_LISTINGS.length,
+            listings: DEMO_LISTINGS,
+          },
+          { status: 200 }
+        );
+      }
+    }
+
+    // 4. Slim fetch from Hostaway — only listing metadata
     console.log("[Hostaway/Metadata] Fetching listing metadata for org:", payload.orgId);
 
     const haRes = await fetch(
       "https://api.hostaway.com/v1/listings?includeResources=false&limit=50",
       {
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${bearerToken}`,
           "Content-Type": "application/json",
           "Cache-Control": "no-cache",
         },
@@ -75,7 +141,6 @@ export async function GET(req: NextRequest) {
     if (!haRes.ok) {
       const errText = await haRes.text();
       console.error("[Hostaway/Metadata] API error:", haRes.status, errText);
-      console.log("[Hostaway/Metadata] Returning explicit fallback response.");
 
       return NextResponse.json(
         {
@@ -83,7 +148,10 @@ export async function GET(req: NextRequest) {
           mode: "fallback_available",
           fallbackUsed: true,
           reasonCode: mapHostawayStatusToReasonCode(haRes.status),
-          reason: `Hostaway authorization failed (${haRes.status}).`,
+          reason:
+            haRes.status === 403 || haRes.status === 401
+              ? "Hostaway rejected the credentials. Make sure you are using the correct Account ID and API Secret from Hostaway → Settings → API Keys."
+              : `Hostaway returned an error (${haRes.status}). Please try again.`,
           canRetry: true,
           message: "Real connection failed. You can continue with demo data.",
           total: DEMO_LISTINGS.length,
@@ -96,7 +164,7 @@ export async function GET(req: NextRequest) {
     const data = await haRes.json();
     const rawListings = data.result ?? data.listings ?? data ?? [];
 
-    // 4. Project to slim fields only
+    // 5. Project to slim fields only
     const listings = rawListings.map((l: Record<string, unknown>) => {
       const address = l.address as Record<string, unknown> | undefined;
       return {
@@ -110,11 +178,12 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    // 5. Save to org only when real validation succeeds
-    if (inputApiKey && inputApiKey !== org.hostawayApiKey) {
+    // 6. Persist credentials — save accountId + Bearer token per org (isolated by orgId)
+    if (isNewEntry) {
       await Organization.findByIdAndUpdate(payload.orgId, {
         $set: {
-          hostawayApiKey: inputApiKey,
+          hostawayAccountId: inputAccountId,
+          hostawayApiKey: bearerToken,
           "onboarding.step": "select",
         },
       });

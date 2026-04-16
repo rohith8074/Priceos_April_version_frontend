@@ -12,13 +12,14 @@ import { apiSuccess, apiError } from "@/lib/api/response";
 import { chatRequestSchema, formatZodErrors } from "@/lib/validators";
 import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/api/rate-limit";
 import { CRO_ROUTER_AGENT_ID } from "@/lib/agents/constants";
+import { getLyzrConfig, requireLyzrChatUrl } from "@/lib/env";
 import mongoose from "mongoose";
 
-const LYZR_API_URL = process.env.LYZR_API_URL || "https://agent-prod.studio.lyzr.ai/v3/inference/chat/";
-const LYZR_API_KEY = process.env.LYZR_API_KEY!;
 const AGENT_ID = process.env.AGENT_ID || CRO_ROUTER_AGENT_ID;
 
 export async function POST(req: Request) {
+    const LYZR_API_URL = requireLyzrChatUrl();
+    const { apiKey: LYZR_API_KEY } = getLyzrConfig();
     const ip = getClientIp(req);
 
     const rateCheck = checkRateLimit(`ai-chat:${ip}`, RATE_LIMITS.ai);

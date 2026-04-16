@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
+import { getAgentId, getLyzrConfig, requireLyzrChatUrl } from "@/lib/env";
 import { connectDB, GuestSummary, HostawayConversation, Listing } from "@/lib/db";
 import { getSession } from "@/lib/auth/server";
 import mongoose from "mongoose";
 
 /**
  * GET /api/hostaway/summary?listingId=X&from=YYYY-MM-DD&to=YYYY-MM-DD
+ * from/to are optional; if omitted, returns latest cached summary for listing.
  */
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
@@ -12,8 +14,8 @@ export async function GET(request: Request) {
     const dateFrom = searchParams.get("from");
     const dateTo = searchParams.get("to");
 
-    if (!listingId || !dateFrom || !dateTo) {
-        return NextResponse.json({ error: "listingId, from, to required" }, { status: 400 });
+    if (!listingId) {
+        return NextResponse.json({ error: "listingId required" }, { status: 400 });
     }
 
     console.log(`📋 [Summary] Checking cache for listing ${listingId}, ${dateFrom} → ${dateTo}`);
@@ -22,11 +24,13 @@ export async function GET(request: Request) {
         await connectDB();
 
         const listingObjectId = new mongoose.Types.ObjectId(listingId);
-        const cached = await GuestSummary.findOne({
-            listingId: listingObjectId,
-            dateFrom,
-            dateTo,
-        }).lean();
+        const query: Record<string, any> = { listingId: listingObjectId };
+        if (dateFrom && dateTo) {
+            query.dateFrom = dateFrom;
+            query.dateTo = dateTo;
+        }
+
+        const cached = await GuestSummary.findOne(query).sort({ updatedAt: -1 }).lean();
 
         if (cached) {
             console.log(`✅ [Summary] Cache HIT`);
@@ -50,8 +54,8 @@ export async function POST(request: Request) {
         const body = await request.json();
         const { listingId, dateFrom, dateTo } = body;
 
-        if (!listingId || !dateFrom || !dateTo) {
-            return NextResponse.json({ error: "listingId, dateFrom, dateTo required" }, { status: 400 });
+        if (!listingId) {
+            return NextResponse.json({ error: "listingId required" }, { status: 400 });
         }
 
         await connectDB();
@@ -64,12 +68,14 @@ export async function POST(request: Request) {
 
         console.log(`🤖 [Summary] Generating summary for listing ${listingId}, ${dateFrom} → ${dateTo}`);
 
+        const conversationQuery: Record<string, any> = { listingId: listingObjectId };
+        if (dateFrom && dateTo) {
+            conversationQuery.dateFrom = { $lte: dateTo };
+            conversationQuery.dateTo = { $gte: dateFrom };
+        }
+
         // Load cached conversations
-        const conversations = await HostawayConversation.find({
-            listingId: listingObjectId,
-            dateFrom: { $lte: dateTo },
-            dateTo: { $gte: dateFrom },
-        }).lean();
+        const conversations = await HostawayConversation.find(conversationQuery).lean();
 
         // Deduplicate
         const uniqueMap = new Map<string, typeof conversations[0]>();
@@ -99,9 +105,9 @@ export async function POST(request: Request) {
         let summaryData: any;
 
         try {
-            const lyzrAgentId = process.env.LYZR_Conversation_Summary_Agent_ID;
-            const lyzrApiKey = process.env.LYZR_API_KEY;
-            const lyzrApiUrl = process.env.LYZR_API_URL || "https://agent-prod.studio.lyzr.ai/v3/inference/chat/";
+            const lyzrAgentId = getAgentId("LYZR_CONVERSATION_SUMMARY_AGENT_ID", "LYZR_Conversation_Summary_Agent_ID");
+            const { apiKey: lyzrApiKey } = getLyzrConfig();
+            const lyzrApiUrl = requireLyzrChatUrl();
 
             if (!lyzrAgentId || !lyzrApiKey) throw new Error("Lyzr not configured");
 
@@ -134,7 +140,8 @@ export async function POST(request: Request) {
                     })
                     .join("\n\n");
 
-                const prompt = `You are a hospitality operations analyst. Analyze guest conversations for "${listing?.name || "Property"}" (${dateFrom} to ${dateTo}).
+                const analysisWindow = dateFrom && dateTo ? `${dateFrom} to ${dateTo}` : "all available dates";
+                const prompt = `You are a hospitality operations analyst. Analyze guest conversations for "${listing?.name || "Property"}" (${analysisWindow}).
 
 CONVERSATIONS:
 ${conversationText}
@@ -149,7 +156,7 @@ Respond in this exact JSON format:
   "needsReplyCount": number
 }`;
 
-                const responseText = await callLyzr(prompt, `${dateFrom}-${dateTo}`);
+                const responseText = await callLyzr(prompt, `${dateFrom || "all"}-${dateTo || "all"}`);
                 if (responseText) {
                     const jsonMatch = responseText.match(/\{[\s\S]*\}/);
                     if (jsonMatch) summaryData = JSON.parse(jsonMatch[0]);
@@ -168,14 +175,14 @@ Respond in this exact JSON format:
 
                     const result = await callLyzr(
                         `Summarize ${chunk.length} conversations: ${conversationText}`,
-                        `chunk-${idx}-${dateFrom}`
+                        `chunk-${idx}-${dateFrom || "all"}`
                     );
                     chunkSummaries.push(result || `Batch ${idx + 1}: ${chunk.length} conversations`);
                 }
 
                 const reduceResult = await callLyzr(
                     `Merge into one JSON: {"sentiment":"...","themes":[],"actionItems":[],"bulletPoints":[],"totalConversations":${uniqueConversations.length},"needsReplyCount":0}\n\nBatches:\n${chunkSummaries.join("\n\n")}`,
-                    `reduce-${dateFrom}-${dateTo}`
+                    `reduce-${dateFrom || "all"}-${dateTo || "all"}`
                 );
                 if (reduceResult) {
                     const jsonMatch = reduceResult.match(/\{[\s\S]*\}/);
@@ -207,12 +214,14 @@ Respond in this exact JSON format:
         }
 
         // Upsert summary
-        await GuestSummary.deleteOne({ listingId: listingObjectId, dateFrom, dateTo });
+        const normalizedFrom = dateFrom || "all";
+        const normalizedTo = dateTo || "all";
+        await GuestSummary.deleteOne({ listingId: listingObjectId, dateFrom: normalizedFrom, dateTo: normalizedTo });
         await GuestSummary.create({
             orgId,
             listingId: listingObjectId,
-            dateFrom,
-            dateTo,
+            dateFrom: normalizedFrom,
+            dateTo: normalizedTo,
             sentiment: summaryData.sentiment,
             themes: summaryData.themes,
             actionItems: summaryData.actionItems,

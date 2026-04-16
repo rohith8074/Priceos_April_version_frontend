@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2, ArrowRight, ArrowLeft, Globe2, Building2, Key,
@@ -8,11 +8,35 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { PricingRulesStudio } from "@/components/pricing/pricing-rules-studio";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type WizardStep = "connect" | "select" | "market" | "strategy" | "complete";
 type StrategyMode = "conservative" | "balanced" | "aggressive";
+
+interface PricingDefaults {
+  weekendUpliftPct: number;
+  lastMinuteDiscountPct: number;
+  farOutMarkupPct: number;
+}
+
+type RuleSetupMode = "individual" | "group" | "default";
+
+interface GroupRuleDraft {
+  ruleType: "SEASON" | "EVENT" | "ADMIN_BLOCK" | "LOS_DISCOUNT";
+  ruleCategory?: "GUARDRAILS" | "SEASONS" | "LEAD_TIME" | "GAP_LOGIC" | "LOS_DISCOUNTS" | "DATE_OVERRIDES" | "OCCUPANCY";
+  name: string;
+  priceAdjPct?: number;
+  startDate?: string;
+  endDate?: string;
+}
+
+interface GroupDraft {
+  name: string;
+  listingIds: string[];
+  color: string;
+}
 
 interface Listing {
   id: string;
@@ -77,6 +101,11 @@ async function saveProgress(data: Partial<{
   marketCode: string;
   listings: Listing[];
   strategy: StrategyMode;
+  pricingDefaults: PricingDefaults;
+  ruleSetupMode: RuleSetupMode;
+  groupRuleDrafts: GroupRuleDraft[];
+  groupRuleDraftsByGroup: GroupRuleDraft[][];
+  groupDrafts: GroupDraft[];
 }>) {
   await fetch("/api/onboarding", {
     method: "PATCH",
@@ -88,19 +117,25 @@ async function saveProgress(data: Partial<{
 // ── Step Components ────────────────────────────────────────────────────────────
 
 function StepConnect({ onNext }: { onNext: (listings: Listing[]) => void }) {
-  const [apiKey, setApiKey] = useState("");
+  const [accountId, setAccountId] = useState("");
+  const [apiSecret, setApiSecret] = useState("");
   const [loading, setLoading] = useState(false);
   const [demoLoading, setDemoLoading] = useState(false);
   const [fallbackReason, setFallbackReason] = useState<string | null>(null);
   const [fallbackListings, setFallbackListings] = useState<Listing[] | null>(null);
 
   const handleValidate = async () => {
-    if (!apiKey.trim()) { toast.error("Please enter your Hostaway API Key"); return; }
+    if (!accountId.trim()) { toast.error("Please enter your Hostaway Account ID"); return; }
+    if (!apiSecret.trim()) { toast.error("Please enter your Hostaway API Secret"); return; }
     setLoading(true);
     setFallbackReason(null);
     setFallbackListings(null);
     try {
-      const res = await fetch(`/api/hostaway/metadata?apiKey=${encodeURIComponent(apiKey.trim())}`);
+      const params = new URLSearchParams({
+        accountId: accountId.trim(),
+        apiSecret: apiSecret.trim(),
+      });
+      const res = await fetch(`/api/hostaway/metadata?${params.toString()}`);
       const data = await res.json();
 
       if (!res.ok) throw new Error(data.error || data.message || "Connection failed");
@@ -179,31 +214,61 @@ function StepConnect({ onNext }: { onNext: (listings: Listing[]) => void }) {
         </div>
       </div>
 
-      <div className="space-y-2">
-        <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Hostaway API Key</label>
-        <div className="relative">
-          <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleValidate()}
-            placeholder="ha_live_xxxxxxxxxxxx"
-            className="w-full h-12 bg-zinc-900 border border-zinc-700 rounded-xl px-4 pr-12 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 font-mono"
-          />
-          {apiKey && (
-            <button onClick={() => setApiKey("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400">
-              <X className="h-4 w-4" />
-            </button>
-          )}
+      <div className="space-y-4">
+        {/* Account ID */}
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+            Hostaway Account ID
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              value={accountId}
+              onChange={(e) => setAccountId(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleValidate()}
+              placeholder="145065"
+              className="w-full h-12 bg-zinc-900 border border-zinc-700 rounded-xl px-4 pr-12 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 font-mono"
+            />
+            {accountId && (
+              <button onClick={() => setAccountId("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400">
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-zinc-600">
+            Hostaway → Settings → Account → Account ID (numeric)
+          </p>
         </div>
-        <p className="text-xs text-zinc-600">
-          Hostaway → Settings → API Keys → Create new key
-        </p>
+
+        {/* API Secret */}
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+            Hostaway API Secret
+          </label>
+          <div className="relative">
+            <input
+              type="password"
+              value={apiSecret}
+              onChange={(e) => setApiSecret(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleValidate()}
+              placeholder="••••••••••••••••••••••••••••••••"
+              className="w-full h-12 bg-zinc-900 border border-zinc-700 rounded-xl px-4 pr-12 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/20 font-mono"
+            />
+            {apiSecret && (
+              <button onClick={() => setApiSecret("")} className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400">
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-zinc-600">
+            Hostaway → Settings → API Keys → Create new key → copy the <strong className="text-zinc-400">Client Secret</strong>
+          </p>
+        </div>
       </div>
 
       <button
         onClick={handleValidate}
-        disabled={loading || !apiKey.trim()}
+        disabled={loading || !accountId.trim() || !apiSecret.trim()}
         className="w-full h-12 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold rounded-xl flex items-center justify-center gap-2 transition-all"
       >
         {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Key className="h-4 w-4" />}
@@ -451,21 +516,162 @@ const STRATEGY_OPTIONS: {
 ];
 
 function StepStrategy({
-  selectedCount,
+  listings,
+  selectedIds,
   marketCode,
   strategy,
+  pricingDefaults,
+  onPricingDefaultsChange,
+  ruleSetupMode,
+  onRuleSetupModeChange,
+  groupRuleDrafts,
+  groupRuleDraftsByGroup,
+  onGroupRuleDraftsByGroupChange,
+  onGroupRuleDraftsChange,
+  groupDrafts,
+  onGroupDraftsChange,
   onStrategyChange,
   onActivate,
 }: {
-  selectedCount: number;
+  listings: Listing[];
+  selectedIds: string[];
   marketCode: string;
   strategy: StrategyMode;
+  pricingDefaults: PricingDefaults;
+  onPricingDefaultsChange: (patch: Partial<PricingDefaults>) => void;
+  ruleSetupMode: RuleSetupMode;
+  onRuleSetupModeChange: (mode: RuleSetupMode) => void;
+  groupRuleDrafts: GroupRuleDraft[];
+  groupRuleDraftsByGroup: GroupRuleDraft[][];
+  onGroupRuleDraftsByGroupChange: (next: GroupRuleDraft[][]) => void;
+  onGroupRuleDraftsChange: (next: GroupRuleDraft[]) => void;
+  groupDrafts: GroupDraft[];
+  onGroupDraftsChange: (next: GroupDraft[]) => void;
   onStrategyChange: (s: StrategyMode) => void;
   onActivate: () => void;
 }) {
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("Activating pricing engine...");
   const market = MARKETS.find(m => m.code === marketCode) ?? MARKETS[0];
   const selected = STRATEGY_OPTIONS.find(s => s.mode === strategy) ?? STRATEGY_OPTIONS[0];
+  const selectedListings = listings.filter((l) => selectedIds.includes(l.id));
+  const selectedListingOptions = selectedListings.map((l) => ({
+    id: l.id,
+    name: l.name,
+    currencyCode: market.currency,
+  }));
+
+  const toggleGroupListing = (groupIdx: number, listingId: string) => {
+    const next = [...groupDrafts];
+    const set = new Set(next[groupIdx]?.listingIds ?? []);
+    if (set.has(listingId)) set.delete(listingId);
+    else set.add(listingId);
+    next[groupIdx] = { ...next[groupIdx], listingIds: Array.from(set) };
+    onGroupDraftsChange(next);
+  };
+
+  const addGroupDraft = () => {
+    const next = [
+      ...groupDrafts,
+      { name: `Group ${groupDrafts.length + 1}`, listingIds: [], color: "#8b5cf6" },
+    ];
+    onGroupDraftsChange(next);
+    onGroupRuleDraftsByGroupChange([...(groupRuleDraftsByGroup || []), []]);
+  };
+
+  const removeGroupDraft = (idx: number) => {
+    const next = groupDrafts.filter((_, i) => i !== idx);
+    onGroupDraftsChange(next);
+    onGroupRuleDraftsByGroupChange((groupRuleDraftsByGroup || []).filter((_, i) => i !== idx));
+  };
+
+  const buildGroupsBy = (mode: "city" | "type" | "city_type") => {
+    const bucket = new Map<string, string[]>();
+    for (const l of selectedListings) {
+      const city = l.city || "Unknown";
+      const typeLabel =
+        l.bedrooms > 0 ? `${l.bedrooms}BR` : l.type?.toUpperCase() || "Studio";
+      const key =
+        mode === "city"
+          ? city
+          : mode === "type"
+          ? typeLabel
+          : `${city} · ${typeLabel}`;
+      if (!bucket.has(key)) bucket.set(key, []);
+      bucket.get(key)!.push(l.id);
+    }
+    const generated = Array.from(bucket.entries()).map(([name, listingIds]) => ({
+      name: `${name} Group`,
+      listingIds,
+      color: "#8b5cf6",
+    }));
+    onGroupDraftsChange(generated);
+    onGroupRuleDraftsByGroupChange(generated.map(() => []));
+  };
+
+  const addGroupRuleDraft = () => {
+    onGroupRuleDraftsChange([
+      ...groupRuleDrafts,
+      { ruleType: "SEASON", ruleCategory: "SEASONS", name: "Group Rule", priceAdjPct: 0 },
+    ]);
+  };
+
+  const updateGroupRuleDraft = (idx: number, patch: Partial<GroupRuleDraft>) => {
+    const next = [...groupRuleDrafts];
+    next[idx] = { ...next[idx], ...patch };
+    onGroupRuleDraftsChange(next);
+  };
+
+  const removeGroupRuleDraft = (idx: number) => {
+    onGroupRuleDraftsChange(groupRuleDrafts.filter((_, i) => i !== idx));
+  };
+  const CATEGORY_TO_RULE_TYPE: Record<string, GroupRuleDraft["ruleType"]> = {
+    GUARDRAILS: "EVENT",
+    SEASONS: "SEASON",
+    LEAD_TIME: "EVENT",
+    GAP_LOGIC: "EVENT",
+    LOS_DISCOUNTS: "LOS_DISCOUNT",
+    DATE_OVERRIDES: "ADMIN_BLOCK",
+    OCCUPANCY: "EVENT",
+  };
+  const addRuleForGroup = (groupIdx: number) => {
+    const next = [...(groupRuleDraftsByGroup || [])];
+    const current = next[groupIdx] || [];
+    next[groupIdx] = [...current, { ruleType: "SEASON", ruleCategory: "SEASONS", name: "Group Rule", priceAdjPct: 0 }];
+    onGroupRuleDraftsByGroupChange(next);
+  };
+  const updateRuleForGroup = (groupIdx: number, ruleIdx: number, patch: Partial<GroupRuleDraft>) => {
+    const next = [...(groupRuleDraftsByGroup || [])];
+    const current = [...(next[groupIdx] || [])];
+    current[ruleIdx] = { ...current[ruleIdx], ...patch };
+    next[groupIdx] = current;
+    onGroupRuleDraftsByGroupChange(next);
+  };
+  const removeRuleForGroup = (groupIdx: number, ruleIdx: number) => {
+    const next = [...(groupRuleDraftsByGroup || [])];
+    next[groupIdx] = (next[groupIdx] || []).filter((_, i) => i !== ruleIdx);
+    onGroupRuleDraftsByGroupChange(next);
+  };
+
+  useEffect(() => {
+    if (!loading) {
+      setLoadingMessage("Activating pricing engine...");
+      return;
+    }
+    const phases = [
+      "Syncing calendar baseline...",
+      "Applying strategy guardrails...",
+      "Seeding market intelligence...",
+      "Finalizing your portfolio setup...",
+    ];
+    let idx = 0;
+    setLoadingMessage(phases[idx]);
+    const timer = setInterval(() => {
+      idx = (idx + 1) % phases.length;
+      setLoadingMessage(phases[idx]);
+    }, 2200);
+    return () => clearInterval(timer);
+  }, [loading]);
 
   const handleActivate = async () => {
     setLoading(true);
@@ -486,7 +692,7 @@ function StepStrategy({
         <div>
           <p className="text-sm font-bold text-white">Choose your pricing strategy</p>
           <p className="text-xs text-zinc-500">
-            {selectedCount} {selectedCount === 1 ? "property" : "properties"} · {market.name} market
+            {selectedIds.length} {selectedIds.length === 1 ? "property" : "properties"} · {market.name} market
           </p>
         </div>
       </div>
@@ -562,6 +768,201 @@ function StepStrategy({
         ))}
       </div>
 
+      <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 space-y-3">
+        <p className="text-xs font-bold text-white">Choose one rules setup mode</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {[
+            { id: "individual" as RuleSetupMode, label: "1) Individual", desc: "Set rules property by property" },
+            { id: "group" as RuleSetupMode, label: "2) Group Rules", desc: "Set one rule set per group" },
+            { id: "default" as RuleSetupMode, label: "3) Use Defaults", desc: "Use market defaults and go live fast" },
+          ].map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={() => onRuleSetupModeChange(m.id)}
+              className={cn(
+                "rounded-lg border px-3 py-3 text-left",
+                ruleSetupMode === m.id
+                  ? "border-amber-500 bg-amber-500/10"
+                  : "border-zinc-800 bg-zinc-950 hover:border-zinc-700"
+              )}
+            >
+              <p className="text-xs font-semibold text-white">{m.label}</p>
+              <p className="text-[11px] text-zinc-400 mt-1">{m.desc}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {ruleSetupMode === "individual" && (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 space-y-3">
+          <p className="text-xs font-bold text-white">Pricing Rules (same fields as Pricing page)</p>
+          <p className="text-[11px] text-zinc-500">
+            Configure Guardrails, Seasons, Lead Time, Gap Logic, LOS Discounts, Date Overrides, and Occupancy exactly like Pricing Rules Studio.
+          </p>
+          <PricingRulesStudio listings={selectedListingOptions} />
+        </div>
+      )}
+
+      {ruleSetupMode === "group" && (
+        <>
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-white">Grouping</p>
+              <button
+                type="button"
+                onClick={addGroupDraft}
+                className="text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+              >
+                Add group
+              </button>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button type="button" onClick={() => buildGroupsBy("city")} className="text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:bg-zinc-800">Auto by location</button>
+              <button type="button" onClick={() => buildGroupsBy("type")} className="text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:bg-zinc-800">Auto by type (1BR/2BR)</button>
+              <button type="button" onClick={() => buildGroupsBy("city_type")} className="text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:bg-zinc-800">Auto by location + type</button>
+            </div>
+            <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+              {groupDrafts.length === 0 && (
+                <p className="text-[11px] text-zinc-600">No groups configured.</p>
+              )}
+              {groupDrafts.map((g, idx) => (
+                <div key={`${g.name}-${idx}`} className="rounded-lg border border-zinc-800 p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={g.name}
+                      onChange={(e) => {
+                        const next = [...groupDrafts];
+                        next[idx] = { ...next[idx], name: e.target.value };
+                        onGroupDraftsChange(next);
+                      }}
+                      className="flex-1 h-8 bg-zinc-950 border border-zinc-700 rounded px-2 text-xs text-white"
+                      placeholder="Group name"
+                    />
+                    <button type="button" onClick={() => removeGroupDraft(idx)} className="text-zinc-500 hover:text-zinc-300">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-1 max-h-28 overflow-y-auto">
+                    {selectedListings.map((l) => (
+                      <label key={`${g.name}-${l.id}`} className="text-[11px] text-zinc-400 flex items-center gap-2">
+                        <input type="checkbox" checked={g.listingIds.includes(l.id)} onChange={() => toggleGroupListing(idx, l.id)} />
+                        <span className="truncate">{l.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-bold text-white">Group Rules (same as Groups section)</p>
+            </div>
+            {groupDrafts.length === 0 ? (
+              <p className="text-[11px] text-zinc-500">Create groups first, then set rules per group.</p>
+            ) : (
+              <div className="space-y-3">
+                {groupDrafts.map((g, groupIdx) => {
+                  const rulesForGroup = groupRuleDraftsByGroup[groupIdx] || [];
+                  return (
+                    <div key={`${g.name}-${groupIdx}`} className="rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-white truncate">{g.name}</p>
+                        <button
+                          type="button"
+                          onClick={() => addRuleForGroup(groupIdx)}
+                          className="text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                        >
+                          Add rule
+                        </button>
+                      </div>
+                      {rulesForGroup.length === 0 ? (
+                        <p className="text-[11px] text-zinc-500">No rules yet for this group.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {rulesForGroup.map((r, idx) => (
+                            <div key={`${g.name}-${r.name}-${idx}`} className="rounded-lg border border-zinc-800 bg-zinc-950/70 p-3 space-y-2">
+                              <div className="grid grid-cols-2 gap-2">
+                                <select
+                                  value={r.ruleCategory || "SEASONS"}
+                                  onChange={(e) => {
+                                    const category = e.target.value as NonNullable<GroupRuleDraft["ruleCategory"]>;
+                                    updateRuleForGroup(groupIdx, idx, {
+                                      ruleCategory: category,
+                                      ruleType: CATEGORY_TO_RULE_TYPE[category],
+                                    });
+                                  }}
+                                  className="h-8 bg-zinc-950 border border-zinc-700 rounded px-2 text-xs text-white"
+                                >
+                                  <option value="GUARDRAILS">Guardrails</option>
+                                  <option value="SEASONS">Seasons</option>
+                                  <option value="LEAD_TIME">Lead Time</option>
+                                  <option value="GAP_LOGIC">Gap Logic</option>
+                                  <option value="LOS_DISCOUNTS">LOS Discounts</option>
+                                  <option value="DATE_OVERRIDES">Date Overrides</option>
+                                  <option value="OCCUPANCY">Occupancy</option>
+                                </select>
+                                <input
+                                  value={r.name}
+                                  onChange={(e) => updateRuleForGroup(groupIdx, idx, { name: e.target.value })}
+                                  className="h-8 bg-zinc-950 border border-zinc-700 rounded px-2 text-xs text-white"
+                                  placeholder="Rule name"
+                                />
+                              </div>
+                              <div className="grid grid-cols-3 gap-2">
+                                <input
+                                  type="number"
+                                  value={r.priceAdjPct ?? 0}
+                                  onChange={(e) => updateRuleForGroup(groupIdx, idx, { priceAdjPct: Number(e.target.value || 0) })}
+                                  className="h-8 bg-zinc-950 border border-zinc-700 rounded px-2 text-xs text-white"
+                                  placeholder="Price adj %"
+                                />
+                                <input
+                                  type="date"
+                                  value={r.startDate || ""}
+                                  onChange={(e) => updateRuleForGroup(groupIdx, idx, { startDate: e.target.value || undefined })}
+                                  className="h-8 bg-zinc-950 border border-zinc-700 rounded px-2 text-xs text-white"
+                                />
+                                <input
+                                  type="date"
+                                  value={r.endDate || ""}
+                                  onChange={(e) => updateRuleForGroup(groupIdx, idx, { endDate: e.target.value || undefined })}
+                                  className="h-8 bg-zinc-950 border border-zinc-700 rounded px-2 text-xs text-white"
+                                />
+                              </div>
+                              <div className="flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => removeRuleForGroup(groupIdx, idx)}
+                                  className="text-[11px] px-2 py-1 rounded border border-zinc-700 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {ruleSetupMode === "default" && (
+        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-4">
+          <p className="text-xs font-bold text-white mb-1">Using Default Rules</p>
+          <p className="text-[11px] text-zinc-500">
+            PriceOS will apply market template defaults + selected strategy guardrails. You can edit rules later in Pricing and Groups.
+          </p>
+        </div>
+      )}
+
       <button
         onClick={handleActivate}
         disabled={loading}
@@ -571,8 +972,15 @@ function StepStrategy({
         {loading ? "Activating Pricing Engine…" : `Go Live — ${selected.label} Strategy`}
       </button>
 
+      {loading && (
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+          <p className="text-xs font-semibold text-amber-300">Working in background</p>
+          <p className="text-xs text-zinc-400 mt-1">{loadingMessage}</p>
+        </div>
+      )}
+
       <p className="text-center text-xs text-zinc-600">
-        You can switch strategy mode at any time in Settings.
+        Strategy cards stay the same. Choose exactly one setup path above.
       </p>
     </div>
   );
@@ -628,6 +1036,15 @@ export function OnboardingWizard({ initialStep = "connect" }: { initialStep?: Wi
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [marketCode, setMarketCode] = useState("UAE_DXB");
   const [strategy, setStrategy] = useState<StrategyMode>("conservative");
+  const [pricingDefaults, setPricingDefaults] = useState<PricingDefaults>({
+    weekendUpliftPct: 20,
+    lastMinuteDiscountPct: 10,
+    farOutMarkupPct: 5,
+  });
+  const [ruleSetupMode, setRuleSetupMode] = useState<RuleSetupMode>("default");
+  const [groupRuleDrafts, setGroupRuleDrafts] = useState<GroupRuleDraft[]>([]);
+  const [groupRuleDraftsByGroup, setGroupRuleDraftsByGroup] = useState<GroupRuleDraft[][]>([]);
+  const [groupDrafts, setGroupDrafts] = useState<GroupDraft[]>([]);
   const currentIndex = STEPS.findIndex(s => s.id === step);
 
   const goToStep = useCallback((next: WizardStep) => setStep(next), []);
@@ -641,9 +1058,18 @@ export function OnboardingWizard({ initialStep = "connect" }: { initialStep?: Wi
   // Step 2 → 3
   const handleSelect = useCallback(async (ids: string[]) => {
     setSelectedIds(ids);
+    const selectedListings = listings.filter((l) => ids.includes(l.id));
+    const cityBasedGroups = Array.from(new Set(selectedListings.map((l) => l.city).filter(Boolean))).slice(0, 3);
+    setGroupDrafts(
+      cityBasedGroups.map((city, idx) => ({
+        name: `${city} Group`,
+        listingIds: selectedListings.filter((l) => l.city === city).map((l) => l.id),
+        color: ["#6366f1", "#8b5cf6", "#ec4899"][idx % 3],
+      }))
+    );
     await saveProgress({ step: "market", selectedListingIds: ids });
     goToStep("market");
-  }, [goToStep]);
+  }, [goToStep, listings]);
 
   // Step 3 → 4
   const handleMarket = useCallback(async (code: string) => {
@@ -652,10 +1078,9 @@ export function OnboardingWizard({ initialStep = "connect" }: { initialStep?: Wi
     goToStep("strategy");
   }, [goToStep]);
 
-  // Step 4 → 5: Activation — sends listing snapshot + strategy, refreshes JWT, then navigates
+  // Step 4 → 5: Activation — sends ALL listings (so all are seeded to DB) +
+  // activatedListingIds (so backend knows which ones to mark active)
   const handleActivate = useCallback(async () => {
-    const activatedListings = listings.filter(l => selectedIds.includes(l.id));
-
     // Trigger calendar sync (non-blocking)
     try {
       fetch("/api/sync/run", {
@@ -665,16 +1090,23 @@ export function OnboardingWizard({ initialStep = "connect" }: { initialStep?: Wi
       });
     } catch { /* non-fatal */ }
 
-    // Save completion + seed listings + strategy mode + get fresh JWT
+    // Save completion + seed ALL listings + strategy mode + get fresh JWT.
+    // Sending all listings ensures every Hostaway property is stored in the DB.
+    // The backend uses activatedListingIds to decide which ones get isActive=true.
     await saveProgress({
       step: "complete",
       activatedListingIds: selectedIds,
-      listings: activatedListings,
+      listings,                // ← ALL fetched listings, not just selected
       strategy,
+      pricingDefaults,
+      ruleSetupMode,
+      groupRuleDrafts,
+      groupRuleDraftsByGroup,
+      groupDrafts,
     });
 
     goToStep("complete");
-  }, [listings, selectedIds, strategy, goToStep]);
+  }, [listings, selectedIds, strategy, pricingDefaults, ruleSetupMode, groupRuleDrafts, groupRuleDraftsByGroup, groupDrafts, goToStep]);
 
   const handleBack = () => {
     const prevIndex = Math.max(0, currentIndex - 1);
@@ -689,7 +1121,7 @@ export function OnboardingWizard({ initialStep = "connect" }: { initialStep?: Wi
 
   return (
     <div className="min-h-screen bg-[#0a0a0c] flex items-center justify-center p-6">
-      <div className="w-full max-w-lg">
+      <div className={cn("w-full", step === "strategy" ? "max-w-6xl" : "max-w-lg")}>
         {/* Logo */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 mb-4">
@@ -736,15 +1168,26 @@ export function OnboardingWizard({ initialStep = "connect" }: { initialStep?: Wi
         )}
 
         {/* Card */}
-        <div className="bg-zinc-950 border border-zinc-800/80 rounded-2xl p-7 shadow-2xl">
+        <div className={cn("bg-zinc-950 border border-zinc-800/80 rounded-2xl shadow-2xl", step === "strategy" ? "p-5" : "p-7")}>
           {step === "connect"  && <StepConnect onNext={handleConnect} />}
           {step === "select"   && <StepSelect listings={listings} onNext={handleSelect} />}
           {step === "market"   && <StepMarket initialMarket={marketCode} onNext={handleMarket} />}
           {step === "strategy" && (
             <StepStrategy
-              selectedCount={selectedIds.length}
+              listings={listings}
+              selectedIds={selectedIds}
               marketCode={marketCode}
               strategy={strategy}
+              pricingDefaults={pricingDefaults}
+              onPricingDefaultsChange={(patch) => setPricingDefaults((prev) => ({ ...prev, ...patch }))}
+              ruleSetupMode={ruleSetupMode}
+              onRuleSetupModeChange={setRuleSetupMode}
+              groupRuleDrafts={groupRuleDrafts}
+              groupRuleDraftsByGroup={groupRuleDraftsByGroup}
+              onGroupRuleDraftsByGroupChange={setGroupRuleDraftsByGroup}
+              onGroupRuleDraftsChange={setGroupRuleDrafts}
+              groupDrafts={groupDrafts}
+              onGroupDraftsChange={setGroupDrafts}
               onStrategyChange={setStrategy}
               onActivate={handleActivate}
             />

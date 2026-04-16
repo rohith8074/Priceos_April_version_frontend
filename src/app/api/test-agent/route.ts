@@ -1,11 +1,14 @@
 import { NextResponse } from 'next/server';
+import { getAgentId, getLyzrConfig, requireLyzrChatUrl } from '@/lib/env';
 
-const LYZR_API_URL = 'https://agent-prod.studio.lyzr.ai/v3/inference/chat/';
-const LYZR_API_KEY = process.env.LYZR_API_KEY || '';
-const CRO_AGENT_ID = '6992c6ade9c656b13d173dc2';
+const NOT_FOUND = NextResponse.json({ error: "Not found" }, { status: 404 });
 
 export async function GET() {
+  if (process.env.NODE_ENV === "production") return NOT_FOUND;
   try {
+    const LYZR_API_URL = requireLyzrChatUrl();
+    const { apiKey: LYZR_API_KEY } = getLyzrConfig();
+    const CRO_AGENT_ID = getAgentId('LYZR_CRO_ROUTER_AGENT_ID', 'AGENT_ID') || '';
     if (!LYZR_API_KEY) {
       return NextResponse.json({
         success: false,

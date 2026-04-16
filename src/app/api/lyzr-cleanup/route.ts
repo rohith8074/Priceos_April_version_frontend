@@ -6,14 +6,15 @@
  */
 
 import { NextResponse } from "next/server";
+import { getLyzrConfig, requireLyzrBaseUrl } from "@/lib/env";
 
-const LYZR_BASE_URL = "https://agent-prod.studio.lyzr.ai/v3";
 const STALE_NAMES = ["active_property_data", "active_property_data_test"];
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-    const apiKey = process.env.LYZR_API_KEY;
+    const LYZR_BASE_URL = requireLyzrBaseUrl();
+    const { apiKey } = getLyzrConfig();
     if (!apiKey) {
         return NextResponse.json({ error: "LYZR_API_KEY not set" }, { status: 500 });
     }

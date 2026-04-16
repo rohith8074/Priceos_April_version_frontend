@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from '@/lib/auth/server'
-
-const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || 'http://localhost:8000'
+import { requirePythonBackendUrl } from "@/lib/env";
 
 export async function POST(req: NextRequest) {
   try {
+    const PYTHON_BACKEND_URL = requirePythonBackendUrl()
     const { context, propertyId } = await req.json();
 
     if (!context) {

@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
+import { getAgentId, getLyzrConfig, requireLyzrBaseUrl } from '@/lib/env';
+
+const NOT_FOUND = NextResponse.json({ error: "Not found" }, { status: 404 });
 
 // Alternative endpoint: /v3/inference/{agent_id}/chat/completions
-const LYZR_API_KEY = process.env.LYZR_API_KEY || '';
-const CRO_AGENT_ID = '6992c6ade9c656b13d173dc2';
-const LYZR_API_URL = `https://agent-prod.studio.lyzr.ai/v3/inference/${CRO_AGENT_ID}/chat/completions`;
 
 export async function GET() {
+  if (process.env.NODE_ENV === "production") return NOT_FOUND;
   try {
+    const { apiKey: LYZR_API_KEY } = getLyzrConfig();
+    const CRO_AGENT_ID = getAgentId('LYZR_CRO_ROUTER_AGENT_ID', 'AGENT_ID') || '';
+    const LYZR_API_URL = `${requireLyzrBaseUrl()}/inference/${CRO_AGENT_ID}/chat/completions`;
     if (!LYZR_API_KEY) {
       return NextResponse.json({
         success: false,

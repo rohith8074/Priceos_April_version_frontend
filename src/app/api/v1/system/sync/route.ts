@@ -1,8 +1,7 @@
 import { apiSuccess, apiError } from "@/lib/api/response";
 import { triggerSyncSchema, formatZodErrors } from "@/lib/validators";
 import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/api/rate-limit";
-
-const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || "http://localhost:8000";
+import { requirePythonBackendUrl } from "@/lib/env";
 
 /**
  * POST /api/v1/system/sync
@@ -10,6 +9,7 @@ const PYTHON_BACKEND_URL = process.env.PYTHON_BACKEND_URL || "http://localhost:8
  * Proxies a sync request to the Python backend.
  */
 export async function POST(req: Request) {
+    const PYTHON_BACKEND_URL = requirePythonBackendUrl();
     const ip = getClientIp(req);
 
     // ── Rate Limiting (Heavy Tier) ──

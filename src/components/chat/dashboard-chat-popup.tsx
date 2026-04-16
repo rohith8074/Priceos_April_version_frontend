@@ -1,21 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Send, Loader2, RefreshCw, User, Sparkles } from "lucide-react";
+import { Bot, Send, Loader2, RefreshCw, X, Maximize2, Minimize2 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { readSSEStream } from "@/lib/chat/sse-reader";
+import { cn } from "@/lib/utils";
 
 interface Message {
   id: string;
@@ -35,33 +29,41 @@ export function DashboardChatPopup({ isOpen, onOpenChange }: DashboardChatPopupP
   const [isLoading, setIsLoading] = useState(false);
   const [statusText, setStatusText] = useState("");
   const [sessionId, setSessionId] = useState<string>("");
+  const [isExpanded, setIsExpanded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Initialize a new session when the chat is first opened
   useEffect(() => {
     if (isOpen && !sessionId) {
       startNewSession();
     }
   }, [isOpen]);
 
-  // Auto-scroll to bottom
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: "smooth" });
-    }
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   const startNewSession = () => {
     const newSessionId = `dash-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     setSessionId(newSessionId);
-    setMessages([
-      {
-        id: "welcome",
-        role: "assistant",
-        content: "Hi! I'm your PriceOS Portfolio Assistant. I can help you with insights about today's journey, underperforming properties, or revenue summaries. How can I help you today?",
-        timestamp: new Date(),
-      },
-    ]);
+    setMessages([]);
+  };
+
+  const getDisplayMessage = (raw: string): string => {
+    const trimmed = (raw || "").trim();
+    if (!trimmed) return "I couldn't process that request. Please try again.";
+    if (!(trimmed.startsWith("{") || trimmed.startsWith("["))) return trimmed;
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (typeof parsed?.chat_response === "string" && parsed.chat_response.trim()) {
+        return parsed.chat_response.trim();
+      }
+      if (typeof parsed?.message === "string" && parsed.message.trim()) {
+        return parsed.message.trim();
+      }
+      return trimmed;
+    } catch {
+      return trimmed;
+    }
   };
 
   const handleSend = async (e?: React.FormEvent) => {
@@ -76,6 +78,7 @@ export function DashboardChatPopup({ isOpen, onOpenChange }: DashboardChatPopupP
     };
 
     setMessages((prev) => [...prev, userMessage]);
+    const outgoing = input;
     setInput("");
     setIsLoading(true);
     setStatusText("Connecting to PriceOS…");
@@ -85,7 +88,7 @@ export function DashboardChatPopup({ isOpen, onOpenChange }: DashboardChatPopupP
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: input,
+          message: outgoing,
           sessionId: sessionId,
         }),
       });
@@ -99,7 +102,7 @@ export function DashboardChatPopup({ isOpen, onOpenChange }: DashboardChatPopupP
           const assistantMessage: Message = {
             id: (Date.now() + 1).toString(),
             role: "assistant",
-            content: data.message || "I couldn't process that request. Please try again.",
+            content: getDisplayMessage(data.message || ""),
             timestamp: new Date(),
           };
           setMessages((prev) => [...prev, assistantMessage]);
@@ -117,113 +120,128 @@ export function DashboardChatPopup({ isOpen, onOpenChange }: DashboardChatPopupP
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <Sheet open={isOpen} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-[500px] flex flex-col p-0 bg-background/95 backdrop-blur-xl border-l border-white/5">
-        <SheetHeader className="p-6 border-b border-white/5 bg-surface-1/50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-amber/10 border border-amber/20 flex items-center justify-center">
-                <Bot className="h-6 w-6 text-amber" />
-              </div>
-              <div>
-                <SheetTitle className="text-xl font-bold text-amber">Ask Agent</SheetTitle>
-                <SheetDescription className="text-xs text-text-tertiary">
-                  Portfolio Assistant • Real-time Intelligence
-                </SheetDescription>
-              </div>
-            </div>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={startNewSession}
-              className="h-8 w-8 text-text-tertiary hover:text-amber"
-              title="New Session"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
+    <div
+      className={cn(
+        "fixed bottom-20 right-6 z-50 flex flex-col rounded-xl border border-border-default bg-surface-1 shadow-2xl transition-all duration-300 origin-bottom-right",
+        isExpanded
+          ? "w-[min(860px,calc(100vw-2rem))] h-[min(82vh,calc(100vh-5rem))]"
+          : "w-[min(380px,calc(100vw-2rem))] h-[min(520px,calc(100vh-8rem))]",
+        "scale-100 opacity-100 pointer-events-auto"
+      )}
+      role="dialog"
+      aria-label="Portfolio assistant chat"
+    >
+      {/* Header — same structure as Guest Inbox Aria panel */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="h-7 w-7 rounded-lg bg-amber/10 border border-amber/20 flex items-center justify-center shrink-0">
+            <Bot className="h-4 w-4 text-amber" />
           </div>
-        </SheetHeader>
-
-        <ScrollArea className="flex-1 p-6">
-          <div className="space-y-6">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex flex-col ${
-                  message.role === "user" ? "items-end" : "items-start"
-                }`}
-              >
-                <div
-                  className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm leading-relaxed ${
-                    message.role === "user"
-                      ? "bg-amber text-black font-medium rounded-tr-none shadow-lg shadow-amber/10"
-                      : "bg-surface-2 border border-white/5 text-text-primary rounded-tl-none"
-                  }`}
-                >
-                  <div className="prose prose-sm dark:prose-invert max-w-none">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {message.content}
-                    </ReactMarkdown>
-                  </div>
-                </div>
-                <span className="text-[10px] text-text-disabled mt-1 px-1">
-                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-            ))}
-            {isLoading && (
-              <div className="flex items-center gap-2 text-text-tertiary">
-                <Loader2 className="h-4 w-4 animate-spin text-amber" />
-                <span className="text-xs font-medium animate-pulse">{statusText || "Agent is thinking…"}</span>
-              </div>
-            )}
-            <div ref={scrollRef} />
-          </div>
-        </ScrollArea>
-
-        <div className="p-6 bg-surface-1/50 border-t border-white/5">
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap gap-2 mb-1">
-              {["Underperforming", "Revenue Summary", "Market Trends"].map((suggestion) => (
-                <button
-                  key={suggestion}
-                  onClick={() => {
-                    setInput(suggestion);
-                    // We don't auto-send because the user might want to edit
-                  }}
-                  className="text-[10px] px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-text-secondary hover:border-amber/50 hover:text-amber transition-colors font-semibold"
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
-            <form onSubmit={handleSend} className="relative flex items-center">
-              <Input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about your portfolio..."
-                className="pr-12 h-12 bg-background/50 border-white/10 focus:border-amber/50 focus:ring-amber/20 rounded-xl"
-              />
-              <Button
-                type="submit"
-                size="icon"
-                disabled={!input.trim() || isLoading}
-                className="absolute right-1.5 h-9 w-9 bg-amber text-black hover:bg-amber-dim rounded-lg shadow-lg"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-              </Button>
-            </form>
-            <p className="text-[9px] text-center text-text-disabled uppercase tracking-widest font-bold">
-              AI-Powered Portfolio Analysis
-            </p>
+          <div className="min-w-0">
+            <p className="text-body-xs font-semibold text-text-primary truncate">Aria</p>
+            <p className="text-[10px] text-text-tertiary truncate">Portfolio Assistant</p>
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={startNewSession}
+            title="New session"
+            className="p-1.5 rounded-md text-text-tertiary hover:text-amber transition-colors"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsExpanded((v) => !v)}
+            title={isExpanded ? "Collapse" : "Expand"}
+            className="p-1.5 rounded-md text-text-tertiary hover:text-foreground transition-colors"
+          >
+            {isExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            title="Close"
+            className="p-1.5 rounded-md text-text-tertiary hover:text-foreground transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="px-4 py-2 border-b border-border-subtle/50 shrink-0">
+        <p className="text-[10px] text-text-disabled leading-relaxed">
+          Ask about portfolio performance, revenue trends, or which properties need attention
+        </p>
+      </div>
+
+      <ScrollArea className="flex-1 min-h-0 px-4 py-3">
+        <div className="flex flex-col gap-3">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={cn("flex flex-col", message.role === "user" ? "items-end" : "items-start")}
+            >
+              <div
+                className={cn(
+                  "max-w-[85%] px-3 py-2 rounded-xl text-body-xs leading-relaxed",
+                  message.role === "user"
+                    ? "bg-amber text-black font-medium rounded-tr-none"
+                    : "bg-surface-2 border border-border-subtle text-text-primary rounded-tl-none"
+                )}
+              >
+                <div className="prose prose-sm dark:prose-invert max-w-none">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{message.content}</ReactMarkdown>
+                </div>
+              </div>
+              <span className="text-[9px] text-text-disabled mt-0.5 px-1">
+                {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            </div>
+          ))}
+          {isLoading && (
+            <div className="flex items-center gap-2 text-text-tertiary">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <span className="text-[10px]">{statusText || "Aria is thinking…"}</span>
+            </div>
+          )}
+          <div ref={scrollRef} />
+        </div>
+      </ScrollArea>
+
+      <div className="px-4 pt-2 flex flex-wrap gap-1.5 shrink-0 border-t border-border-subtle/50">
+        {["Underperforming properties", "Revenue summary", "Market trends"].map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setInput(s)}
+            className="text-[10px] px-2 py-1 rounded-full bg-surface-2 border border-border-subtle text-text-secondary hover:border-amber/40 hover:text-amber transition-colors"
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+
+      <form onSubmit={handleSend} className="flex items-center gap-2 px-4 py-3 border-t border-border-subtle shrink-0">
+        <Input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Ask Aria anything..."
+          className="h-9 text-body-xs bg-surface-2 border-border-subtle focus:border-amber/50"
+        />
+        <Button
+          type="submit"
+          size="icon"
+          disabled={!input.trim() || isLoading}
+          className="h-9 w-9 bg-amber text-black hover:bg-amber/80 shrink-0"
+        >
+          {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+        </Button>
+      </form>
+    </div>
   );
 }

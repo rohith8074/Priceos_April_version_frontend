@@ -1,10 +1,7 @@
 import jwt from "jsonwebtoken";
+import { getJwtSecrets } from "@/lib/env";
 
-const JWT_SECRET =
-  process.env.JWT_SECRET || "priceos_dev_secret_replace_in_production";
-const JWT_REFRESH_SECRET =
-  process.env.JWT_REFRESH_SECRET ||
-  "priceos_dev_refresh_secret_replace_in_production";
+const { access: JWT_SECRET, refresh: JWT_REFRESH_SECRET } = getJwtSecrets();
 
 export interface TokenPayload {
   userId: string;

@@ -26,9 +26,9 @@ export function DateRangePicker({
     setDate,
 }: DateRangePickerProps) {
     // Today (start of day) is the minimum selectable date.
-    // Max selectable date is 2 weeks (14 days) from today.
+    // Max selectable date is 1 month (30 days) from today.
     const today = startOfDay(new Date());
-    const maxDate = addDays(today, 14);
+    const maxDate = addDays(today, 30);
 
     return (
         <div className={cn("grid gap-2", className)}>
@@ -80,7 +80,7 @@ export function DateRangePicker({
                             <span className="text-amber-600 font-bold">
                                 {format(maxDate, "LLL dd, y")}
                             </span>{" "}
-                            (Next 2 weeks only)
+                            (Next 1 month only)
                         </p>
                     </div>
                 </PopoverContent>

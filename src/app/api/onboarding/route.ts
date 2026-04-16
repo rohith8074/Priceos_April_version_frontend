@@ -11,8 +11,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAccessToken, signAccessToken } from "@/lib/auth/jwt";
 import { COOKIE_NAME } from "@/lib/auth/server";
-import { connectDB, Organization, Listing, InventoryMaster, Reservation, MarketEvent, PricingRule } from "@/lib/db";
+import { connectDB, Organization, Listing, InventoryMaster, Reservation, MarketEvent, PricingRule, PropertyGroup } from "@/lib/db";
 import mongoose from "mongoose";
+import { getLyzrConfig, requireLyzrChatUrl } from "@/lib/env";
 import { MARKET_RESEARCH_ID, BENCHMARK_AGENT_ID } from "@/lib/agents/constants";
 
 // ── Helper: detect demo mode ────────────────────────────────────────────────────
@@ -245,7 +246,7 @@ async function seedMarketTemplate(orgId: string, marketCode: string, activatedLi
           console.warn(`[Onboarding] Could not resolve listingId "${listingId}" to a MongoDB ObjectId. Skipping rules.`);
           continue;
         }
-        listingObjectId = found._id as mongoose.Types.ObjectId;
+        listingObjectId = (Array.isArray(found) ? found[0]._id : found._id) as mongoose.Types.ObjectId;
       }
 
       for (const rule of template.rules) {
@@ -271,8 +272,8 @@ async function seedMarketTemplate(orgId: string, marketCode: string, activatedLi
 // Calls Lyzr Studio API directly from the Node.js server (no Python backend needed
 // for onboarding since there is no authenticated browser session at this point).
 async function callLyzrAgent(agentId: string, message: string): Promise<string> {
-  const LYZR_API_URL = process.env.LYZR_API_URL || "https://agent-prod.studio.lyzr.ai/v3/inference/chat/";
-  const LYZR_API_KEY = process.env.LYZR_API_KEY;
+  const LYZR_API_URL = requireLyzrChatUrl();
+  const { apiKey: LYZR_API_KEY } = getLyzrConfig();
 
   if (!LYZR_API_KEY) {
     throw new Error("LYZR_API_KEY not configured in environment");
@@ -359,13 +360,22 @@ Only return the JSON array. No explanation.`;
     const eventsRaw = await callLyzrAgent(MARKET_RESEARCH_ID, eventsPrompt);
     console.log(`[Onboarding/Lyzr] ✅ Market Research Agent responded (${eventsRaw.length} chars).`);
 
-    // Parse the JSON array from the agent response
+    // Parse the JSON array from the agent response.
+    // Use bracket counting to extract exactly the first complete [...] block
+    // rather than a greedy regex that can match trailing non-JSON text.
     let parsedEvents: any[] = [];
     try {
-      // Strip markdown code fences if the agent wrapped in them
       const jsonStr = eventsRaw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      const match = jsonStr.match(/\[[\s\S]*\]/);
-      if (match) parsedEvents = JSON.parse(match[0]);
+      const start = jsonStr.indexOf("[");
+      if (start !== -1) {
+        let depth = 0;
+        let end = -1;
+        for (let i = start; i < jsonStr.length; i++) {
+          if (jsonStr[i] === "[") depth++;
+          else if (jsonStr[i] === "]") { depth--; if (depth === 0) { end = i; break; } }
+        }
+        if (end !== -1) parsedEvents = JSON.parse(jsonStr.slice(start, end + 1));
+      }
     } catch (parseErr) {
       console.warn("[Onboarding/Lyzr] Could not parse events JSON from agent, falling back to static.", parseErr);
     }
@@ -420,7 +430,8 @@ Return a JSON object (no markdown) with:
       const ratesRaw = await callLyzrAgent(BENCHMARK_AGENT_ID, ratesPrompt);
       console.log(`[Onboarding/Lyzr] ✅ Benchmark Agent responded: ${ratesRaw.substring(0, 200)}`);
     } catch (benchErr) {
-      console.warn("[Onboarding/Lyzr] Benchmark Agent call failed (non-fatal):", benchErr);
+      const msg = benchErr instanceof Error ? benchErr.message : String(benchErr);
+      console.warn(`[Onboarding/Lyzr] Benchmark Agent call failed (non-fatal): ${msg}`);
     }
 
   } catch (agentErr) {
@@ -592,7 +603,19 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { step, selectedListingIds, activatedListingIds, marketCode, listings, strategy } = body;
+    const {
+      step,
+      selectedListingIds,
+      activatedListingIds,
+      marketCode,
+      listings,
+      strategy,
+      pricingDefaults,
+      ruleSetupMode,
+      groupRuleDrafts,
+      groupRuleDraftsByGroup,
+      groupDrafts
+    } = body;
 
     await connectDB();
 
@@ -642,6 +665,9 @@ export async function PATCH(req: NextRequest) {
 
       console.log(`[Onboarding] Guardrails applied — strategy: ${strategyKey}, market: ${finalMarketCode}`, appliedGuardrails);
 
+      let canonicalActivatedIds: string[] = [];
+      const rawToCanonical = new Map<string, string>();
+
       if (listings && Array.isArray(listings) && listings.length > 0) {
         // Market-specific base price defaults
         const BASE_PRICES: Record<string, { price: number; priceFloor: number; priceCeiling: number }> = {
@@ -689,16 +715,65 @@ export async function PATCH(req: NextRequest) {
           console.warn("[Onboarding] Listing upsert warning:", listingErr);
         }
 
+        // Remove demo listings that were created by a previous demo-mode onboarding run.
+        // Demo listings have hostawayId matching `${orgSuffix}_demo-*`.
+        await Listing.deleteMany({
+          orgId: new mongoose.Types.ObjectId(payload.orgId),
+          hostawayId: { $regex: `^${orgSuffix}_demo-` },
+        });
+
+        // Fetch all listings that were just upserted (all real Hostaway listings)
         const hostawayIds = listings.map((l: { id: string }) => `${orgSuffix}_${l.id}`);
         const seededListings = await Listing.find({
           orgId: new mongoose.Types.ObjectId(payload.orgId),
           hostawayId: { $in: hostawayIds },
-        }).select("_id").lean();
+        }).select("_id hostawayId").lean();
 
-        if (seededListings.length > 0) {
+        // Determine which of the seeded listings the user actually selected.
+        // activatedListingIds from the wizard are raw Hostaway IDs (e.g. "12345").
+        // In the DB they're stored as `${orgSuffix}_12345`.
+        const selectedHostawayIdSet = new Set(
+          (activatedListingIds || []).map((id: string) => `${orgSuffix}_${id}`)
+        );
+        const activatedSeeded = seededListings.filter(
+          (l) => selectedHostawayIdSet.has(String((l as any).hostawayId))
+        );
+
+        for (const l of seededListings) {
+          const hostawayId = String((l as any).hostawayId || "");
+          const rawId = hostawayId.startsWith(`${orgSuffix}_`)
+            ? hostawayId.slice(`${orgSuffix}_`.length)
+            : hostawayId;
+          rawToCanonical.set(rawId, String(l._id));
+        }
+
+        canonicalActivatedIds = activatedSeeded.map((l) => String(l._id));
+        updates["onboarding.activatedListingIds"] = canonicalActivatedIds;
+        updates["onboarding.selectedListingIds"] = canonicalActivatedIds;
+
+        const activatedObjectIds = activatedSeeded.map((l) => l._id as mongoose.Types.ObjectId);
+
+        // Set ALL org listings inactive, then activate only the user's selection.
+        await Listing.updateMany(
+          { orgId: new mongoose.Types.ObjectId(payload.orgId) },
+          { $set: { isActive: false } }
+        );
+
+        if (activatedObjectIds.length > 0) {
+          await Listing.updateMany(
+            {
+              orgId: new mongoose.Types.ObjectId(payload.orgId),
+              _id: { $in: activatedObjectIds },
+            },
+            { $set: { isActive: true } }
+          );
+        }
+
+        // Seed demo inventory/reservations only for activated listings
+        if (activatedSeeded.length > 0) {
           await seedDemoData(
             payload.orgId,
-            seededListings.map(l => l._id as mongoose.Types.ObjectId)
+            activatedSeeded.map(l => l._id as mongoose.Types.ObjectId)
           );
         }
       }
@@ -706,7 +781,9 @@ export async function PATCH(req: NextRequest) {
       // ── Seed market data: Live Agents vs Demo mode ─────────────────────────
       const orgForMode = await Organization.findById(payload.orgId).select("hostawayApiKey").lean();
       const hostawayKey = orgForMode?.hostawayApiKey;
-      const resolvedListingIds = activatedListingIds || selectedListingIds || [];
+      const resolvedListingIds = canonicalActivatedIds.length > 0
+        ? canonicalActivatedIds
+        : (activatedListingIds || selectedListingIds || []);
       const rawListingIds = listings?.map((l: { id: string }) => l.id) ?? resolvedListingIds;
       const demo = isDemoMode(hostawayKey, rawListingIds);
 
@@ -716,6 +793,111 @@ export async function PATCH(req: NextRequest) {
       } else {
         console.log("[Onboarding] 🔴 Live mode — invoking Lyzr agents for real market data.");
         await seedLiveMarketData(payload.orgId, finalMarketCode, resolvedListingIds, orgForMode?.hostawayApiKey);
+      }
+
+      // Apply onboarding pricing logic customization defaults (individual mode only)
+      if ((ruleSetupMode === "individual" || !ruleSetupMode) && pricingDefaults && Array.isArray(resolvedListingIds) && resolvedListingIds.length > 0) {
+        const weekendUpliftPct = Number(pricingDefaults.weekendUpliftPct ?? 20);
+        const lastMinuteDiscountPct = Math.abs(Number(pricingDefaults.lastMinuteDiscountPct ?? 10));
+        const farOutMarkupPct = Number(pricingDefaults.farOutMarkupPct ?? 5);
+
+        for (const listingId of resolvedListingIds) {
+          if (!mongoose.Types.ObjectId.isValid(listingId)) continue;
+          const listingObjectId = new mongoose.Types.ObjectId(listingId);
+
+          await PricingRule.updateOne(
+            { orgId: new mongoose.Types.ObjectId(payload.orgId), listingId: listingObjectId, name: "Weekend Uplift" },
+            { $set: { scope: "listing", ruleType: "EVENT", priority: 1, daysOfWeek: [4, 5], priceAdjPct: weekendUpliftPct, enabled: true } },
+            { upsert: true }
+          );
+          await PricingRule.updateOne(
+            { orgId: new mongoose.Types.ObjectId(payload.orgId), listingId: listingObjectId, name: "Last-Minute Discount" },
+            { $set: { scope: "listing", ruleType: "SEASON", priority: 2, priceAdjPct: -lastMinuteDiscountPct, enabled: true } },
+            { upsert: true }
+          );
+          await PricingRule.updateOne(
+            { orgId: new mongoose.Types.ObjectId(payload.orgId), listingId: listingObjectId, name: "Far-out Markup" },
+            { $set: { scope: "listing", ruleType: "SEASON", priority: 3, priceAdjPct: farOutMarkupPct, enabled: true } },
+            { upsert: true }
+          );
+        }
+      }
+
+      // Create onboarding groups if configured
+      if (Array.isArray(groupDrafts) && groupDrafts.length > 0) {
+        const createdGroups: Array<{ id: mongoose.Types.ObjectId; index: number }> = [];
+        for (let groupIdx = 0; groupIdx < groupDrafts.length; groupIdx++) {
+          const draft = groupDrafts[groupIdx];
+          const name = String(draft?.name || "").trim();
+          if (!name) continue;
+          const listingObjectIds = (Array.isArray(draft?.listingIds) ? draft.listingIds : [])
+            .map((rawId: string) => rawToCanonical.get(String(rawId)) || String(rawId))
+            .filter((id: string) => mongoose.Types.ObjectId.isValid(id))
+            .map((id: string) => new mongoose.Types.ObjectId(id));
+
+          if (!listingObjectIds.length) continue;
+
+          await PropertyGroup.updateOne(
+            { orgId: new mongoose.Types.ObjectId(payload.orgId), name },
+            {
+              $set: {
+                description: "Created in onboarding",
+                color: String(draft?.color || "#6366f1"),
+                listingIds: listingObjectIds,
+              },
+            },
+            { upsert: true }
+          );
+          const groupDoc = await PropertyGroup.findOne({ orgId: new mongoose.Types.ObjectId(payload.orgId), name }).select("_id").lean();
+          if (groupDoc?._id) createdGroups.push({ id: groupDoc._id as mongoose.Types.ObjectId, index: groupIdx });
+        }
+
+        // Group mode: apply onboarding group rule drafts per group (same behavior as Groups section)
+        if (ruleSetupMode === "group" && createdGroups.length > 0) {
+          const groupedDrafts: any[][] =
+            Array.isArray(groupRuleDraftsByGroup) && groupRuleDraftsByGroup.length > 0
+              ? groupRuleDraftsByGroup
+              : [];
+          const fallbackDrafts = Array.isArray(groupRuleDrafts) ? groupRuleDrafts : [];
+
+          for (const created of createdGroups) {
+            const draftsForThisGroup = groupedDrafts[created.index] ?? fallbackDrafts;
+            const normalizedDrafts = draftsForThisGroup
+              .map((r: any, idx: number) => ({
+                ruleType: String(r?.ruleType || "SEASON"),
+                ruleCategory: String(r?.ruleCategory || ""),
+                name: String(r?.name || `Group Rule ${idx + 1}`).trim(),
+                priceAdjPct: Number(r?.priceAdjPct ?? 0),
+                startDate: r?.startDate ? String(r.startDate) : undefined,
+                endDate: r?.endDate ? String(r.endDate) : undefined,
+                priority: idx + 1,
+              }))
+              .filter((r: any) => r.name.length > 0);
+
+            for (const draft of normalizedDrafts) {
+              await PricingRule.updateOne(
+                {
+                  orgId: new mongoose.Types.ObjectId(payload.orgId),
+                  groupId: created.id,
+                  scope: "group",
+                  name: draft.name,
+                },
+                {
+                  $set: {
+                    ruleType: draft.ruleType,
+                    ruleCategory: draft.ruleCategory || undefined,
+                    priority: draft.priority,
+                    priceAdjPct: draft.priceAdjPct,
+                    startDate: draft.startDate,
+                    endDate: draft.endDate,
+                    enabled: true,
+                  },
+                },
+                { upsert: true }
+              );
+            }
+          }
+        }
       }
     }
 

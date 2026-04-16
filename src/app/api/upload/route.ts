@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/server'
-
-const LYZR_UPLOAD_URL = 'https://agent-prod.studio.lyzr.ai/v3/assets/upload'
+import { getLyzrConfig, requireLyzrUploadUrl } from '@/lib/env'
 
 export async function POST(request: NextRequest) {
   try {
+    const LYZR_UPLOAD_URL = requireLyzrUploadUrl()
     const session = await getSession()
     if (!session) {
       return NextResponse.json(
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const LYZR_API_KEY = process.env.LYZR_API_KEY
+    const { apiKey: LYZR_API_KEY } = getLyzrConfig()
     if (!LYZR_API_KEY) {
       return NextResponse.json(
         {

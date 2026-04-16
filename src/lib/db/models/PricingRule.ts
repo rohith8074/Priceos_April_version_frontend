@@ -1,11 +1,22 @@
 import mongoose, { Document, Schema, Model } from "mongoose";
 
 export type RuleType = "SEASON" | "EVENT" | "ADMIN_BLOCK" | "LOS_DISCOUNT";
+export type RuleCategory =
+  | "GUARDRAILS"
+  | "SEASONS"
+  | "LEAD_TIME"
+  | "GAP_LOGIC"
+  | "LOS_DISCOUNTS"
+  | "DATE_OVERRIDES"
+  | "OCCUPANCY";
 
 export interface IPricingRule extends Document {
   orgId: mongoose.Types.ObjectId;
-  listingId: mongoose.Types.ObjectId;
+  listingId?: mongoose.Types.ObjectId;   // set when scope = "listing"
+  groupId?: mongoose.Types.ObjectId;     // set when scope = "group"
+  scope: "listing" | "group";            // determines which id is active
   ruleType: RuleType;
+  ruleCategory?: RuleCategory;
   name: string;
   enabled: boolean;
   priority: number;
@@ -32,11 +43,17 @@ export interface IPricingRule extends Document {
 const PricingRuleSchema = new Schema<IPricingRule>(
   {
     orgId: { type: Schema.Types.ObjectId, ref: "Organization", required: true, index: true },
-    listingId: { type: Schema.Types.ObjectId, ref: "Listing", required: true },
+    listingId: { type: Schema.Types.ObjectId, ref: "Listing" },
+    groupId: { type: Schema.Types.ObjectId, ref: "PropertyGroup" },
+    scope: { type: String, enum: ["listing", "group"], default: "listing" },
     ruleType: {
       type: String,
       enum: ["SEASON", "EVENT", "ADMIN_BLOCK", "LOS_DISCOUNT"],
       required: true,
+    },
+    ruleCategory: {
+      type: String,
+      enum: ["GUARDRAILS", "SEASONS", "LEAD_TIME", "GAP_LOGIC", "LOS_DISCOUNTS", "DATE_OVERRIDES", "OCCUPANCY"],
     },
     name: { type: String, required: true },
     enabled: { type: Boolean, default: true },
@@ -60,6 +77,7 @@ const PricingRuleSchema = new Schema<IPricingRule>(
 );
 
 PricingRuleSchema.index({ listingId: 1, enabled: 1 });
+PricingRuleSchema.index({ groupId: 1, enabled: 1 });
 
 export const PricingRule: Model<IPricingRule> =
   mongoose.models.PricingRule ??

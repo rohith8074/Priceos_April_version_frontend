@@ -2,6 +2,7 @@ import { connectDB, Listing } from "@/lib/db";
 import { apiSuccess, apiError } from "@/lib/api/response";
 import { suggestReplySchema, formatZodErrors } from "@/lib/validators";
 import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/api/rate-limit";
+import { getAgentId, getLyzrConfig, requireLyzrChatUrl } from "@/lib/env";
 import mongoose from "mongoose";
 
 /**
@@ -49,10 +50,9 @@ export async function POST(request: Request) {
 
     try {
         // ── Step 2: Check Lyzr configuration ──
-        const lyzrAgentId = process.env.LYZR_CHAT_RESPONSE_AGENT_ID
-            || process.env.LYZR_Chat_Response_Agent_ID; // legacy alias
-        const lyzrApiKey = process.env.LYZR_API_KEY;
-        const lyzrApiUrl = process.env.LYZR_API_URL || "https://agent-prod.studio.lyzr.ai/v3/inference/chat/";
+        const lyzrAgentId = getAgentId("LYZR_CHAT_RESPONSE_AGENT_ID", "LYZR_Chat_Response_Agent_ID");
+        const { apiKey: lyzrApiKey } = getLyzrConfig();
+        const lyzrApiUrl = requireLyzrChatUrl();
 
         if (!lyzrAgentId || !lyzrApiKey) {
             console.warn("⚠️  [v1/guests/suggest] Lyzr not configured, returning fallback");

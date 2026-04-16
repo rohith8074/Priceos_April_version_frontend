@@ -7,9 +7,8 @@ import {
 } from "@/lib/db";
 import { getSession } from "@/lib/auth/server";
 import mongoose from "mongoose";
+import { getLyzrConfig, requireLyzrChatUrl } from "@/lib/env";
 
-const LYZR_API_URL = process.env.LYZR_API_URL!;
-const LYZR_API_KEY = process.env.LYZR_API_KEY!;
 const AGENT_ID = process.env.AGENT_ID || MANAGER_AGENT_ID;
 const AGENT_TOOLS_API_KEY = process.env.AGENT_TOOLS_JWT_SECRET || "";
 
@@ -41,6 +40,8 @@ function sseEvent(type: string, data: any): string {
 }
 
 export async function POST(req: NextRequest) {
+    const LYZR_API_URL = requireLyzrChatUrl();
+    const { apiKey: LYZR_API_KEY } = getLyzrConfig();
     const startTime = performance.now();
     const encoder = new TextEncoder();
 

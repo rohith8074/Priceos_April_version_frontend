@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectDB, Listing, ChatMessage, InventoryMaster, MarketEvent } from "@/lib/db";
 import { getSession } from "@/lib/auth/server";
-import { format } from "date-fns";
+import { format, addDays } from "date-fns";
 import mongoose from "mongoose";
 import { buildAgentContext } from "@/lib/agents/db-context-builder";
+import { requirePythonBackendUrl } from "@/lib/env";
 
 export async function POST(
     req: NextRequest,
@@ -57,8 +58,8 @@ export async function POST(
             : message;
 
         // 6. Proxy to Python backend
-        const backendUrl = process.env.BACKEND_URL || "http://localhost:8000";
-        const agentResponse = await fetch(`${backendUrl}/api/agent/`, {
+        const backendUrl = requirePythonBackendUrl();
+        const agentResponse = await fetch(`${backendUrl}/api/agent`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

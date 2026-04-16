@@ -1,9 +1,10 @@
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import mongoose from "mongoose";
 import { connectDB, Listing, InventoryMaster } from "@/lib/db";
+import { verifyAccessToken } from "@/lib/auth/jwt";
 import { ContextPanel } from "@/components/layout/context-panel";
 import { GuestChatInterface } from "@/components/chat/guest-chat-interface";
-import { SidebarTabbedView } from "@/components/layout/sidebar-tabbed-view";
-import { RightSidebarLayout } from "@/components/layout/right-sidebar-layout";
-import { AriaGuestPanel } from "@/components/chat/aria-guest-panel";
 
 export const metadata = {
     title: "Guest Inbox | PriceOS Intelligence",
@@ -11,6 +12,18 @@ export const metadata = {
 };
 
 export default async function GuestChatPage() {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("priceos-session")?.value;
+    if (!token) redirect("/login");
+
+    let orgObjectId: mongoose.Types.ObjectId;
+    try {
+        const payload = verifyAccessToken(token);
+        orgObjectId = new mongoose.Types.ObjectId(payload.orgId);
+    } catch {
+        redirect("/login");
+    }
+
     await connectDB();
 
     const today = new Date();
@@ -20,12 +33,12 @@ export default async function GuestChatPage() {
     plus14.setDate(plus14.getDate() + 14);
     const plus14Str = plus14.toISOString().split("T")[0];
 
-    // 1. Fetch all listings
-    const allListings = await Listing.find().lean();
+    // 1. Fetch only active listings for this org
+    const allListings = await Listing.find({ orgId: orgObjectId!, isActive: true }).lean();
 
     // 2. Aggregate occupancy/avg_price for next 14 days per listing
     const statsResult = await InventoryMaster.aggregate([
-        { $match: { date: { $gte: todayStr, $lte: plus14Str } } },
+        { $match: { orgId: orgObjectId!, date: { $gte: todayStr, $lte: plus14Str } } },
         {
             $group: {
                 _id: "$listingId",
@@ -71,19 +84,10 @@ export default async function GuestChatPage() {
             </div>
 
             {/* Center Guest Chat Panel */}
-            <div className="flex-[2] min-w-[500px] border-r flex flex-col h-full bg-background relative z-10 transition-all duration-300">
+            <div className="flex-1 min-w-[500px] flex flex-col h-full bg-background relative z-10 transition-all duration-300">
                 <GuestChatInterface />
             </div>
 
-            {/* Right Side Stack: Executive Summary Table & Sync */}
-            <div id="tour-sidebar">
-                <RightSidebarLayout>
-                    <SidebarTabbedView />
-                </RightSidebarLayout>
-            </div>
-
-            {/* Aria floating chat panel */}
-            <AriaGuestPanel />
         </div>
     );
 }

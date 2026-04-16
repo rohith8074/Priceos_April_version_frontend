@@ -6,8 +6,7 @@ import type {
   HostawayApiError,
   HostawayRateLimit,
 } from "./types";
-
-const HOSTAWAY_API_BASE = "https://api.hostaway.com/v1";
+import { requireHostawayApiBaseUrl } from "@/lib/env";
 
 export class HostawayClient {
   private apiKey: string;
@@ -21,6 +20,7 @@ export class HostawayClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
+    const HOSTAWAY_API_BASE = requireHostawayApiBaseUrl();
     const url = `${HOSTAWAY_API_BASE}${endpoint}`;
 
     try {

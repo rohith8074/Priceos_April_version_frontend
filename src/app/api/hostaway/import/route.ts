@@ -23,14 +23,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { verifyAccessToken } from "@/lib/auth/jwt";
 import { COOKIE_NAME } from "@/lib/auth/server";
 import { connectDB, Organization, Listing, InventoryMaster } from "@/lib/db";
+import { requireHostawayApiBaseUrl } from "@/lib/env";
 import mongoose from "mongoose";
 import { format, addDays } from "date-fns";
 
-// ── Hostaway API base ─────────────────────────────────────────────────────────
-const HOSTAWAY_API = "https://api.hostaway.com/v1";
-
 // ── Helper: fetch with auth ───────────────────────────────────────────────────
 async function hostawayGet(path: string, apiKey: string): Promise<{ ok: boolean; data: unknown }> {
+  const HOSTAWAY_API = requireHostawayApiBaseUrl();
   const res = await fetch(`${HOSTAWAY_API}${path}`, {
     headers: {
       Authorization: `Bearer ${apiKey}`,

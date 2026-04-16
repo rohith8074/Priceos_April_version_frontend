@@ -121,8 +121,8 @@ function InviteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
-      <div className="relative bg-zinc-950 border border-zinc-800 rounded-2xl w-full max-w-md p-7 shadow-2xl">
-        <button onClick={onClose} className="absolute top-5 right-5 text-zinc-600 hover:text-zinc-400">
+      <div className="relative bg-card text-card-foreground border border-border rounded-2xl w-full max-w-md p-7 shadow-2xl">
+        <button onClick={onClose} className="absolute top-5 right-5 text-muted-foreground hover:text-foreground">
           <X className="h-4 w-4" />
         </button>
 
@@ -130,44 +130,44 @@ function InviteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
           <>
             <div className="flex items-center gap-3 mb-6">
               <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
-                <UserPlus className="h-5 w-5 text-amber-400" />
+                <UserPlus className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-white">Add New User</h2>
-                <p className="text-xs text-zinc-500">Admin-created users are pre-approved instantly.</p>
+                <h2 className="text-lg font-bold text-foreground">Add New User</h2>
+                <p className="text-xs text-muted-foreground">Admin-created users are pre-approved instantly.</p>
               </div>
             </div>
 
             <div className="space-y-4">
               {/* Name */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Full Name</label>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Full Name</label>
                 <Input
                   placeholder="e.g. Sarah Al-Maktoum"
                   value={form.fullName}
                   onChange={e => setForm({ ...form, fullName: e.target.value })}
-                  className="bg-zinc-900 border-zinc-700 text-white h-10"
+                  className="bg-background border-border text-foreground h-10"
                 />
               </div>
 
               {/* Email */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Email Address</label>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Email Address</label>
                 <Input
                   type="email"
                   placeholder="sarah@company.com"
                   value={form.email}
                   onChange={e => setForm({ ...form, email: e.target.value })}
-                  className="bg-zinc-900 border-zinc-700 text-white h-10"
+                  className="bg-background border-border text-foreground h-10"
                 />
               </div>
 
               {/* Role + Market side by side */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Role</label>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Role</label>
                   <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as typeof form.role })}>
-                    <SelectTrigger className="bg-zinc-900 border-zinc-700 h-10 text-sm">
+                    <SelectTrigger className="bg-background border-border h-10 text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -178,9 +178,9 @@ function InviteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Market</label>
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Market</label>
                   <Select value={form.marketCode} onValueChange={(v) => setForm({ ...form, marketCode: v })}>
-                    <SelectTrigger className="bg-zinc-900 border-zinc-700 h-10 text-sm">
+                    <SelectTrigger className="bg-background border-border h-10 text-sm">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -194,8 +194,8 @@ function InviteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
 
               {/* Temporary Password */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-                  Temporary Password <span className="text-zinc-600 normal-case font-normal">(auto-generated if blank)</span>
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Temporary Password <span className="text-muted-foreground/80 normal-case font-normal">(auto-generated if blank)</span>
                 </label>
                 <div className="relative">
                   <Input
@@ -203,11 +203,12 @@ function InviteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
                     placeholder="Leave blank to auto-generate"
                     value={form.temporaryPassword}
                     onChange={e => setForm({ ...form, temporaryPassword: e.target.value })}
-                    className="bg-zinc-900 border-zinc-700 text-white h-10 pr-10 font-mono"
+                    className="bg-background border-border text-foreground h-10 pr-10 font-mono"
                   />
                   <button
+                    type="button"
                     onClick={() => setShowPwd(v => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
                     {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -215,10 +216,10 @@ function InviteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
               </div>
 
               {/* Skip Onboarding Toggle */}
-              <div className="flex items-center justify-between p-4 rounded-xl border border-zinc-800 bg-zinc-900">
+              <div className="flex items-center justify-between p-4 rounded-xl border border-border bg-muted/50">
                 <div>
-                  <p className="text-sm font-semibold text-white">Skip Onboarding Wizard</p>
-                  <p className="text-xs text-zinc-500 mt-0.5">
+                  <p className="text-sm font-semibold text-foreground">Skip Onboarding Wizard</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     User goes directly to the dashboard. Useful for demo accounts or migrated clients.
                   </p>
                 </div>
@@ -241,38 +242,39 @@ function InviteModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: (
         ) : (
           /* Success State — show credentials */
           <div className="text-center space-y-6">
-            <div className="h-16 w-16 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="h-8 w-8 text-green-400" />
+            <div className="h-16 w-16 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
             </div>
             <div>
-              <h3 className="text-xl font-bold text-white mb-1">User Created!</h3>
-              <p className="text-sm text-zinc-400">Share these credentials with the user. The password cannot be retrieved again.</p>
+              <h3 className="text-xl font-bold text-foreground mb-1">User Created!</h3>
+              <p className="text-sm text-muted-foreground">Share these credentials with the user. The password cannot be retrieved again.</p>
             </div>
 
             <div className="space-y-3 text-left">
-              <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800">
-                <p className="text-[10px] text-zinc-600 uppercase tracking-wider mb-1">Email</p>
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-mono text-zinc-300">{created.email}</p>
-                  <button onClick={() => { navigator.clipboard.writeText(created.email); toast.success("Copied!"); }}>
-                    <Copy className="h-3.5 w-3.5 text-zinc-600 hover:text-zinc-400" />
+              <div className="p-3 rounded-xl bg-muted border border-border">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Email</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-mono text-foreground break-all">{created.email}</p>
+                  <button type="button" onClick={() => { navigator.clipboard.writeText(created.email); toast.success("Copied!"); }}>
+                    <Copy className="h-3.5 w-3.5 shrink-0 text-muted-foreground hover:text-foreground" />
                   </button>
                 </div>
               </div>
-              <div className="p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
-                <p className="text-[10px] text-amber-600 uppercase tracking-wider mb-1">⚠ Temporary Password (copy now)</p>
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-mono text-amber-300">{created.temporaryPassword}</p>
-                  <button onClick={() => { navigator.clipboard.writeText(created.temporaryPassword); toast.success("Password copied!"); }}>
-                    <Copy className="h-3.5 w-3.5 text-amber-600 hover:text-amber-400" />
+              <div className="p-3 rounded-xl bg-amber-500/10 dark:bg-amber-500/5 border border-amber-500/25">
+                <p className="text-[10px] text-amber-800 dark:text-amber-500 uppercase tracking-wider mb-1">Temporary Password (copy now)</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-mono text-amber-900 dark:text-amber-300 break-all">{created.temporaryPassword}</p>
+                  <button type="button" onClick={() => { navigator.clipboard.writeText(created.temporaryPassword); toast.success("Password copied!"); }}>
+                    <Copy className="h-3.5 w-3.5 shrink-0 text-amber-700 hover:text-amber-900 dark:text-amber-500 dark:hover:text-amber-400" />
                   </button>
                 </div>
               </div>
             </div>
 
             <button
+              type="button"
               onClick={onClose}
-              className="w-full h-10 bg-zinc-800 hover:bg-zinc-700 text-white font-semibold rounded-xl text-sm transition-all"
+              className="w-full h-10 bg-secondary text-secondary-foreground hover:bg-secondary/80 font-semibold rounded-xl text-sm transition-all"
             >
               Done
             </button>
@@ -316,14 +318,16 @@ function UserRow({ user, onRefresh }: { user: User; onRefresh: () => void }) {
   return (
     <div className={cn(
       "rounded-xl border transition-all",
-      user.isApproved ? "border-zinc-800 bg-zinc-950" : "border-amber-500/20 bg-amber-500/[0.02]"
+      user.isApproved
+        ? "border-border bg-card"
+        : "border-amber-500/20 bg-amber-500/[0.02]"
     )}>
       {/* Main Row */}
       <div className="flex items-center gap-4 px-5 py-4">
         {/* Avatar */}
         <div className={cn(
           "h-10 w-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-sm",
-          user.isApproved ? "bg-zinc-800 text-zinc-400" : "bg-amber-500/10 text-amber-400"
+          user.isApproved ? "bg-muted text-muted-foreground" : "bg-amber-500/10 text-amber-400"
         )}>
           {user.name?.charAt(0)?.toUpperCase() ?? "?"}
         </div>
@@ -331,7 +335,7 @@ function UserRow({ user, onRefresh }: { user: User; onRefresh: () => void }) {
         {/* User Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-semibold text-white truncate">{user.name}</span>
+            <span className="text-sm font-semibold text-foreground truncate">{user.name}</span>
             <RoleBadge role={user.role} />
             <OnboardingBadge step={user.onboardingStep} />
             {!user.isApproved && (
@@ -341,11 +345,11 @@ function UserRow({ user, onRefresh }: { user: User; onRefresh: () => void }) {
             )}
           </div>
           <div className="flex items-center gap-1.5 mt-0.5">
-            <Mail className="h-3 w-3 text-zinc-600" />
-            <span className="text-xs text-zinc-500">{user.email}</span>
-            <span className="text-zinc-700 text-xs">·</span>
-            <Globe2 className="h-3 w-3 text-zinc-600" />
-            <span className="text-xs text-zinc-500">{user.marketCode}</span>
+            <Mail className="h-3 w-3 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">{user.email}</span>
+            <span className="text-border text-xs">·</span>
+            <Globe2 className="h-3 w-3 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">{user.marketCode}</span>
           </div>
         </div>
 
@@ -362,7 +366,7 @@ function UserRow({ user, onRefresh }: { user: User; onRefresh: () => void }) {
           )}
           <button
             onClick={() => setExpanded(v => !v)}
-            className="h-8 w-8 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-500 hover:text-zinc-300 transition-colors"
+            className="h-8 w-8 rounded-lg bg-muted border border-border flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
           >
             {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
           </button>
@@ -371,19 +375,19 @@ function UserRow({ user, onRefresh }: { user: User; onRefresh: () => void }) {
 
       {/* Expanded Controls */}
       {expanded && (
-        <div className="border-t border-zinc-800 px-5 py-4 space-y-4 bg-zinc-900/50 rounded-b-xl">
-          <p className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Admin Controls</p>
+        <div className="border-t border-border px-5 py-4 space-y-4 bg-muted/40 rounded-b-xl">
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Admin Controls</p>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Role control */}
             <div className="space-y-1.5">
-              <label className="text-[11px] text-zinc-500 uppercase tracking-wider font-semibold">Role</label>
+              <label className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">Role</label>
               <Select
                 value={user.role}
                 onValueChange={(v) => patch({ role: v })}
                 disabled={loading}
               >
-                <SelectTrigger className="bg-zinc-900 border-zinc-700 h-9 text-xs">
+                <SelectTrigger className="bg-background border-border h-9 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -396,13 +400,13 @@ function UserRow({ user, onRefresh }: { user: User; onRefresh: () => void }) {
 
             {/* Onboarding step control */}
             <div className="space-y-1.5">
-              <label className="text-[11px] text-zinc-500 uppercase tracking-wider font-semibold">Set Onboarding Step</label>
+              <label className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">Set Onboarding Step</label>
               <Select
                 value={user.onboardingStep}
                 onValueChange={(v) => patch({ onboardingStep: v })}
                 disabled={loading}
               >
-                <SelectTrigger className="bg-zinc-900 border-zinc-700 h-9 text-xs">
+                <SelectTrigger className="bg-background border-border h-9 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -417,7 +421,7 @@ function UserRow({ user, onRefresh }: { user: User; onRefresh: () => void }) {
 
             {/* Quick actions */}
             <div className="space-y-1.5">
-              <label className="text-[11px] text-zinc-500 uppercase tracking-wider font-semibold">Quick Actions</label>
+              <label className="text-[11px] text-muted-foreground uppercase tracking-wider font-semibold">Quick Actions</label>
               <div className="flex gap-2">
                 <Button
                   size="sm"
@@ -478,8 +482,8 @@ export default function UsersPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">User Management</h1>
-          <p className="text-sm text-zinc-500 mt-1">
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">User Management</h1>
+          <p className="text-sm text-muted-foreground mt-1">
             {users.length} total · {pending.length} pending · {incomplete.length} onboarding in progress
           </p>
         </div>
@@ -497,7 +501,7 @@ export default function UsersPage() {
         placeholder="Search by name or email…"
         value={search}
         onChange={e => setSearch(e.target.value)}
-        className="bg-zinc-900 border-zinc-700 text-white h-10 max-w-sm"
+        className="bg-background border-border text-foreground h-10 max-w-sm"
       />
 
       {/* Onboarding Alert */}
@@ -523,7 +527,7 @@ export default function UsersPage() {
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Clock className="h-4 w-4 text-amber-400" />
-                <h2 className="text-sm font-bold text-white uppercase tracking-wider">Pending Approval</h2>
+                <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">Pending Approval</h2>
                 <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/20 text-[10px]">{pending.length}</Badge>
               </div>
               {pending.map(u => <UserRow key={u.id} user={u} onRefresh={fetchUsers} />)}
@@ -535,7 +539,7 @@ export default function UsersPage() {
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <Shield className="h-4 w-4 text-green-400" />
-                <h2 className="text-sm font-bold text-white uppercase tracking-wider">Active Users</h2>
+                <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">Active Users</h2>
                 <Badge className="bg-green-500/10 text-green-400 border-green-500/20 text-[10px]">{approved.length}</Badge>
               </div>
               {approved.map(u => <UserRow key={u.id} user={u} onRefresh={fetchUsers} />)}
@@ -543,7 +547,7 @@ export default function UsersPage() {
           )}
 
           {filtered.length === 0 && (
-            <div className="text-center py-20 text-zinc-600">
+            <div className="text-center py-20 text-muted-foreground">
               <p className="text-sm">No users found.</p>
             </div>
           )}

@@ -68,6 +68,7 @@ interface EngineConfig {
   farOutDaysOut: number;
   farOutMarkupPct: number;
   farOutMinStay: number | null;
+  farOutMinPrice: number;
   dowPricingEnabled: boolean;
   dowDays: number[];
   dowPriceAdjPct: number;
@@ -78,7 +79,13 @@ interface EngineConfig {
   gapFillLengthMin: number;
   gapFillLengthMax: number;
   gapFillDiscountPct: number;
+  gapFillDiscountWeekdayPct: number;
+  gapFillDiscountWeekendPct: number;
+  gapFillMaxDaysUntilCheckin: number;
   gapFillOverrideCico: boolean;
+  adjacentAdjustmentEnabled: boolean;
+  adjacentAdjustmentPct: number;
+  adjacentTurnoverCost: number;
   allowedCheckinDays: number[];
   allowedCheckoutDays: number[];
   // Occupancy-based adjustments (KB Tier 1 #4 — Revenue 9/10)
@@ -89,6 +96,27 @@ interface EngineConfig {
   occupancyLowThresholdPct: number;
   occupancyLowAdjPct: number;
   occupancyLookbackDays: number;
+  occupancyWindowProfiles: {
+    startDay: number;
+    endDay: number;
+    highThresholdPct: number;
+    highAdjPct: number;
+    lowThresholdPct: number;
+    lowAdjPct: number;
+  }[];
+  useGroupOccupancyProfile: boolean;
+  groupOccupancyWeightPct: number;
+  groupOccupancyProfiles: {
+    startDay: number;
+    endDay: number;
+    occupancyPct: number;
+    sampleSize: number;
+    groupIds: string[];
+  }[];
+  basePriceSource: "history_1y" | "benchmark" | "hostaway";
+  basePriceConfidencePct: number;
+  basePriceSampleSize: number;
+  basePriceLastComputedAt: string | null;
 }
 
 interface PricingRule {
@@ -130,6 +158,7 @@ const DEFAULT_CONFIG: EngineConfig = {
   farOutDaysOut: 90,
   farOutMarkupPct: 10,
   farOutMinStay: null,
+  farOutMinPrice: 0,
   dowPricingEnabled: false,
   dowDays: [4, 5],
   dowPriceAdjPct: 15,
@@ -140,7 +169,13 @@ const DEFAULT_CONFIG: EngineConfig = {
   gapFillLengthMin: 1,
   gapFillLengthMax: 4,
   gapFillDiscountPct: 10,
+  gapFillDiscountWeekdayPct: 0,
+  gapFillDiscountWeekendPct: 0,
+  gapFillMaxDaysUntilCheckin: 30,
   gapFillOverrideCico: false,
+  adjacentAdjustmentEnabled: false,
+  adjacentAdjustmentPct: 0,
+  adjacentTurnoverCost: 0,
   allowedCheckinDays: [1, 1, 1, 1, 1, 1, 1],
   allowedCheckoutDays: [1, 1, 1, 1, 1, 1, 1],
   occupancyEnabled: false,
@@ -150,6 +185,14 @@ const DEFAULT_CONFIG: EngineConfig = {
   occupancyLowThresholdPct: 50,
   occupancyLowAdjPct: -10,
   occupancyLookbackDays: 30,
+  occupancyWindowProfiles: [],
+  useGroupOccupancyProfile: true,
+  groupOccupancyWeightPct: 50,
+  groupOccupancyProfiles: [],
+  basePriceSource: "hostaway",
+  basePriceConfidencePct: 0,
+  basePriceSampleSize: 0,
+  basePriceLastComputedAt: null,
 };
 
 const DOW_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -614,6 +657,7 @@ function LeadTimeTab({
         farOutDaysOut: config.farOutDaysOut,
         farOutMarkupPct: config.farOutMarkupPct,
         farOutMinStay: config.farOutMinStay,
+        farOutMinPrice: config.farOutMinPrice,
       });
       toast.success("Lead time rules saved to database.");
     } catch {
@@ -820,6 +864,17 @@ function LeadTimeTab({
                 onValueChange={([v]) => onConfigChange({ farOutDaysOut: v })}
               />
             </div>
+            <div>
+              <Label className="text-xs text-text-tertiary mb-1.5 block">Far-Out Minimum Price Floor</Label>
+              <Input
+                type="number"
+                min={0}
+                value={config.farOutMinPrice ?? 0}
+                onChange={(e) => onConfigChange({ farOutMinPrice: Number(e.target.value || 0) })}
+                placeholder="0 disables explicit floor"
+                className="h-8 text-sm bg-white/5 border-white/10"
+              />
+            </div>
           </div>
         )}
       </div>
@@ -860,7 +915,13 @@ function GapLogicTab({
         gapFillLengthMin: config.gapFillLengthMin,
         gapFillLengthMax: config.gapFillLengthMax,
         gapFillDiscountPct: config.gapFillDiscountPct,
+        gapFillDiscountWeekdayPct: config.gapFillDiscountWeekdayPct,
+        gapFillDiscountWeekendPct: config.gapFillDiscountWeekendPct,
+        gapFillMaxDaysUntilCheckin: config.gapFillMaxDaysUntilCheckin,
         gapFillOverrideCico: config.gapFillOverrideCico,
+        adjacentAdjustmentEnabled: config.adjacentAdjustmentEnabled,
+        adjacentAdjustmentPct: config.adjacentAdjustmentPct,
+        adjacentTurnoverCost: config.adjacentTurnoverCost,
       });
       toast.success("Gap logic saved to database.");
     } catch {
@@ -947,6 +1008,38 @@ function GapLogicTab({
                 />
               </div>
             </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label className="text-xs text-text-tertiary mb-1.5 block">Weekday Discount % (optional)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={config.gapFillDiscountWeekdayPct ?? 0}
+                  onChange={(e) => onConfigChange({ gapFillDiscountWeekdayPct: Number(e.target.value || 0) })}
+                  className="h-8 text-sm bg-white/5 border-white/10"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-text-tertiary mb-1.5 block">Weekend Discount % (optional)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={config.gapFillDiscountWeekendPct ?? 0}
+                  onChange={(e) => onConfigChange({ gapFillDiscountWeekendPct: Number(e.target.value || 0) })}
+                  className="h-8 text-sm bg-white/5 border-white/10"
+                />
+              </div>
+              <div>
+                <Label className="text-xs text-text-tertiary mb-1.5 block">Max Days Until Check-in</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={config.gapFillMaxDaysUntilCheckin ?? 30}
+                  onChange={(e) => onConfigChange({ gapFillMaxDaysUntilCheckin: Number(e.target.value || 30) })}
+                  className="h-8 text-sm bg-white/5 border-white/10"
+                />
+              </div>
+            </div>
             <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
               <Switch
                 checked={config.gapFillOverrideCico}
@@ -954,6 +1047,35 @@ function GapLogicTab({
               />
               Override check-in/out restrictions to fill gaps
             </label>
+            <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer">
+              <Switch
+                checked={config.adjacentAdjustmentEnabled}
+                onCheckedChange={(v) => onConfigChange({ adjacentAdjustmentEnabled: v })}
+              />
+              Apply adjacent-booking adjustment (nights before/after a booking)
+            </label>
+            {config.adjacentAdjustmentEnabled && (
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-xs text-text-tertiary mb-1.5 block">Adjacent Adjustment %</Label>
+                  <Input
+                    type="number"
+                    value={config.adjacentAdjustmentPct ?? 0}
+                    onChange={(e) => onConfigChange({ adjacentAdjustmentPct: Number(e.target.value || 0) })}
+                    className="h-8 text-sm bg-white/5 border-white/10"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-text-tertiary mb-1.5 block">Turnaround Cost Add-on</Label>
+                  <Input
+                    type="number"
+                    value={config.adjacentTurnoverCost ?? 0}
+                    onChange={(e) => onConfigChange({ adjacentTurnoverCost: Number(e.target.value || 0) })}
+                    className="h-8 text-sm bg-white/5 border-white/10"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -1293,6 +1415,9 @@ function OccupancyTab({
         occupancyLowThresholdPct: config.occupancyLowThresholdPct,
         occupancyLowAdjPct: config.occupancyLowAdjPct,
         occupancyLookbackDays: config.occupancyLookbackDays,
+        occupancyWindowProfiles: config.occupancyWindowProfiles,
+        useGroupOccupancyProfile: config.useGroupOccupancyProfile,
+        groupOccupancyWeightPct: config.groupOccupancyWeightPct,
       });
       toast.success("Occupancy rules saved to database.");
     } catch {
@@ -1311,6 +1436,27 @@ function OccupancyTab({
           The single most powerful revenue lever for multi-unit operators. Adjusts prices dynamically
           based on how booked the property already is relative to a target occupancy rate.
         </span>
+      </div>
+      <div className="rounded-lg border border-white/5 bg-white/[0.02] p-4 space-y-2">
+        <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Auto Base Price Confidence</h3>
+        <p className="text-[11px] text-text-tertiary">
+          {config.basePriceSource === "history_1y"
+            ? "Base price is calculated as the average of this property's last 1-year historical prices."
+            : config.basePriceSource === "benchmark"
+              ? "Base price is currently sourced from benchmark market data (recommended weekday / p50 fallback)."
+              : "Base price is currently sourced from the listing's Hostaway base price fallback."}
+        </p>
+        <p className="text-[11px] text-text-tertiary">
+          Source: <span className="font-semibold text-text-primary">
+            {config.basePriceSource === "history_1y"
+              ? "1-year historical average"
+              : config.basePriceSource === "benchmark"
+                ? "Benchmark"
+                : "Hostaway fallback"}
+          </span> · Confidence:{" "}
+          <span className="font-semibold text-text-primary">{config.basePriceConfidencePct}%</span> · Sample size:{" "}
+          <span className="font-semibold text-text-primary">{config.basePriceSampleSize}</span>
+        </p>
       </div>
 
       {/* Master toggle */}
@@ -1331,6 +1477,82 @@ function OccupancyTab({
 
       {config.occupancyEnabled && (
         <>
+          <div className="rounded-lg border border-white/5 bg-white/[0.02] p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Booking-Window Profiles</h3>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  onConfigChange({
+                    occupancyWindowProfiles: [
+                      ...(config.occupancyWindowProfiles || []),
+                      { startDay: 0, endDay: 7, highThresholdPct: 90, highAdjPct: 10, lowThresholdPct: 50, lowAdjPct: -10 },
+                    ],
+                  })
+                }
+                className="h-7 text-[10px]"
+              >
+                Add window
+              </Button>
+            </div>
+            {(config.occupancyWindowProfiles || []).map((p, idx) => (
+              <div key={`occ-window-${idx}`} className="grid grid-cols-6 gap-2">
+                <Input type="number" value={p.startDay} onChange={(e) => {
+                  const next = [...(config.occupancyWindowProfiles || [])];
+                  next[idx] = { ...next[idx], startDay: Number(e.target.value || 0) };
+                  onConfigChange({ occupancyWindowProfiles: next });
+                }} className="h-8 text-xs bg-white/5 border-white/10" placeholder="Start" />
+                <Input type="number" value={p.endDay} onChange={(e) => {
+                  const next = [...(config.occupancyWindowProfiles || [])];
+                  next[idx] = { ...next[idx], endDay: Number(e.target.value || 0) };
+                  onConfigChange({ occupancyWindowProfiles: next });
+                }} className="h-8 text-xs bg-white/5 border-white/10" placeholder="End" />
+                <Input type="number" value={p.lowThresholdPct} onChange={(e) => {
+                  const next = [...(config.occupancyWindowProfiles || [])];
+                  next[idx] = { ...next[idx], lowThresholdPct: Number(e.target.value || 0) };
+                  onConfigChange({ occupancyWindowProfiles: next });
+                }} className="h-8 text-xs bg-white/5 border-white/10" placeholder="Low %" />
+                <Input type="number" value={p.lowAdjPct} onChange={(e) => {
+                  const next = [...(config.occupancyWindowProfiles || [])];
+                  next[idx] = { ...next[idx], lowAdjPct: Number(e.target.value || 0) };
+                  onConfigChange({ occupancyWindowProfiles: next });
+                }} className="h-8 text-xs bg-white/5 border-white/10" placeholder="Low adj%" />
+                <Input type="number" value={p.highThresholdPct} onChange={(e) => {
+                  const next = [...(config.occupancyWindowProfiles || [])];
+                  next[idx] = { ...next[idx], highThresholdPct: Number(e.target.value || 0) };
+                  onConfigChange({ occupancyWindowProfiles: next });
+                }} className="h-8 text-xs bg-white/5 border-white/10" placeholder="High %" />
+                <Input type="number" value={p.highAdjPct} onChange={(e) => {
+                  const next = [...(config.occupancyWindowProfiles || [])];
+                  next[idx] = { ...next[idx], highAdjPct: Number(e.target.value || 0) };
+                  onConfigChange({ occupancyWindowProfiles: next });
+                }} className="h-8 text-xs bg-white/5 border-white/10" placeholder="High adj%" />
+              </div>
+            ))}
+            <label className="flex items-center gap-2 text-xs text-text-secondary cursor-pointer pt-1">
+              <Switch
+                checked={config.useGroupOccupancyProfile}
+                onCheckedChange={(v) => onConfigChange({ useGroupOccupancyProfile: v })}
+              />
+              Blend with portfolio/group occupancy profile
+            </label>
+            {config.useGroupOccupancyProfile && (
+              <div className="w-72">
+                <Label className="text-xs text-text-tertiary mb-1 block">
+                  Group Occupancy Weight: <span className="font-bold text-text-primary">{config.groupOccupancyWeightPct}%</span>
+                </Label>
+                <Slider
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={[config.groupOccupancyWeightPct]}
+                  onValueChange={([v]) => onConfigChange({ groupOccupancyWeightPct: v })}
+                />
+              </div>
+            )}
+          </div>
           {/* Target + Lookback */}
           <div className="rounded-lg border border-white/5 bg-white/[0.02] p-4 space-y-4">
             <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Target Settings</h3>
@@ -1478,6 +1700,7 @@ interface Props {
 }
 
 export function PricingRulesStudio({ listings }: Props) {
+  const [activeTab, setActiveTab] = useState<string>("guardrails");
   const [selectedListingId, setSelectedListingId] = useState<string>(
     listings[0]?.id ?? ""
   );
@@ -1567,7 +1790,7 @@ export function PricingRulesStudio({ listings }: Props) {
           <span className="text-text-tertiary text-sm">Loading configuration…</span>
         </div>
       ) : (
-        <Tabs defaultValue="guardrails" className="p-5">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="p-5">
           <TooltipProvider>
             <TabsList 
               id="tour-pricing-rules"
@@ -1578,7 +1801,11 @@ export function PricingRulesStudio({ listings }: Props) {
                   <TooltipTrigger asChild>
                     <TabsTrigger
                       value={value}
-                      className="gap-1.5 text-xs font-medium transition-all border border-transparent rounded-md px-3 py-1.5 data-[state=active]:!bg-amber data-[state=active]:!text-black data-[state=active]:!border-amber data-[state=active]:shadow-md data-[state=active]:ring-2 data-[state=active]:ring-amber/40 data-[state=active]:font-bold data-[state=inactive]:text-text-secondary data-[state=inactive]:hover:bg-surface-2 data-[state=inactive]:hover:text-text-primary"
+                      className={cn(
+                        "gap-1.5 text-xs font-medium transition-all rounded-md px-3 py-1.5 border",
+                        "data-[state=active]:bg-amber-500 data-[state=active]:text-black data-[state=active]:border-amber-500 data-[state=active]:shadow-md data-[state=active]:ring-2 data-[state=active]:ring-amber-500/40",
+                        "data-[state=inactive]:bg-transparent data-[state=inactive]:text-text-secondary data-[state=inactive]:border-transparent data-[state=inactive]:hover:bg-surface-2 data-[state=inactive]:hover:text-text-primary"
+                      )}
                     >
                       <Icon className="h-3.5 w-3.5" />
                       {label}

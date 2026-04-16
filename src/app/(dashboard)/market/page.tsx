@@ -60,17 +60,19 @@ export default async function MarketPage() {
 
   // Fetch listings for benchmark selector
   const listingDocs = await Listing.find({ orgId, isActive: true })
-    .select("_id name currencyCode")
+    .select("_id name currencyCode area")
     .lean();
 
   const listings = listingDocs.map((l: any) => ({
     id: l._id.toString(),
     name: l.name as string,
     currencyCode: (l.currencyCode as string) || "AED",
+    area: (l.area as string) || "",
   }));
 
   const serializedEvents = events.map((e: any) => ({
     id: e._id.toString(),
+    listingId: e.listingId ? e.listingId.toString() : null,
     title: (e.title || e.name) as string,
     startDate: e.startDate as string,
     endDate: e.endDate as string,
@@ -79,6 +81,7 @@ export default async function MarketPage() {
     description: (e.description || "") as string,
     category: (e.category || e.source || "event") as string,
     area: (e.area || (e.areas && e.areas[0]) || "") as string,
+    source: (e.source || "ai_detected") as string,
   }));
 
   return (

@@ -11,7 +11,10 @@ import {
     BenchmarkData,
 } from "@/lib/db";
 
+const NOT_FOUND = NextResponse.json({ error: "Not found" }, { status: 404 });
+
 export async function GET() {
+    if (process.env.NODE_ENV === "production") return NOT_FOUND;
     try {
         await connectDB();
 

@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { connectDB, HostawayConversation } from "@/lib/db";
 import { getSession } from "@/lib/auth/server";
+import mongoose from "mongoose";
 
 export async function POST(request: Request) {
   try {
     const session = await getSession();
-    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session?.orgId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await request.json();
     const conversationId = String(body.conversationId || "");
@@ -16,18 +17,20 @@ export async function POST(request: Request) {
     }
 
     await connectDB();
-    await HostawayConversation.findOneAndUpdate(
-      { hostawayId: Number(conversationId) },
+    const orgId = new mongoose.Types.ObjectId(session.orgId);
+    const now = new Date().toISOString();
+
+    await HostawayConversation.updateMany(
+      { orgId, hostawayConversationId: conversationId },
       {
         $push: {
           messages: {
-            hostawayMessageId: null,
-            authorType: "host",
-            authorName: session.email,
-            body: text,
-            sentAt: new Date().toISOString(),
+            sender: "admin",
+            text,
+            timestamp: now,
           },
         },
+        $set: { needsReply: false, syncedAt: new Date() },
       }
     );
 

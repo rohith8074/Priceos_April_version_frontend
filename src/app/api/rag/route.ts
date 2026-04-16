@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth/server'
-
-const LYZR_RAG_BASE_URL = 'https://rag-prod.studio.lyzr.ai/v3'
+import {
+  getLyzrConfig,
+  requireLyzrRagBaseUrl,
+  requireLyzrRagCrawlUrl,
+} from '@/lib/env'
 
 const FILE_TYPE_MAP: Record<string, 'pdf' | 'docx' | 'txt'> = {
   'application/pdf': 'pdf',
@@ -10,12 +13,13 @@ const FILE_TYPE_MAP: Record<string, 'pdf' | 'docx' | 'txt'> = {
 }
 
 function getLyzrApiKey(): string | null {
-  return process.env.LYZR_API_KEY || null;
+  return getLyzrConfig().apiKey || null;
 }
 
 // GET - List documents in a knowledge base
 export async function GET(request: NextRequest) {
   try {
+    const LYZR_RAG_BASE_URL = requireLyzrRagBaseUrl()
     const { searchParams } = new URL(request.url)
     const ragId = searchParams.get('ragId')
 
@@ -71,6 +75,7 @@ export async function GET(request: NextRequest) {
 // POST - Upload and train a document
 export async function POST(request: NextRequest) {
   try {
+    const LYZR_RAG_BASE_URL = requireLyzrRagBaseUrl()
     const session = await getSession()
     if (!session) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
@@ -146,6 +151,7 @@ export async function POST(request: NextRequest) {
 // PATCH - Crawl a website and add content to knowledge base
 export async function PATCH(request: NextRequest) {
   try {
+    const LYZR_RAG_CRAWL_URL = requireLyzrRagCrawlUrl()
     const session = await getSession()
     if (!session) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
@@ -166,9 +172,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'ragId and url are required' }, { status: 400 })
     }
 
-    const LYZR_AGENT_BASE_URL = process.env.NEXT_PUBLIC_BASE_API_URL || 'https://agent-prod.studio.lyzr.ai'
-
-    const response = await fetch(`${LYZR_AGENT_BASE_URL}/api/v1/rag/crawl`, {
+    const response = await fetch(LYZR_RAG_CRAWL_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': LYZR_API_KEY },
       body: JSON.stringify({ url, rag_id: ragId }),
@@ -200,6 +204,7 @@ export async function PATCH(request: NextRequest) {
 // DELETE - Remove documents from knowledge base
 export async function DELETE(request: NextRequest) {
   try {
+    const LYZR_RAG_BASE_URL = requireLyzrRagBaseUrl()
     const session = await getSession()
     if (!session) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })

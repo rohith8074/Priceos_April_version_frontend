@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { connectDB, HostawayConversation } from "@/lib/db";
+import { getSession } from "@/lib/auth/server";
 import mongoose from "mongoose";
 
 /**
@@ -8,7 +9,7 @@ import mongoose from "mongoose";
  * Returns previously synced conversations from MongoDB.
  * No Hostaway API calls — purely reads from our cache.
  *
- * Query params: listingId, from, to
+ * Query params: listingId, from, to (from/to optional)
  */
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
@@ -16,12 +17,17 @@ export async function GET(request: Request) {
     const dateFrom = searchParams.get("from");
     const dateTo = searchParams.get("to");
 
-    if (!listingId || !dateFrom || !dateTo) {
-        return NextResponse.json({ error: "listingId, from, to required" }, { status: 400 });
+    if (!listingId) {
+        return NextResponse.json({ error: "listingId required" }, { status: 400 });
     }
 
     try {
         await connectDB();
+        const session = await getSession();
+        if (!session?.orgId) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+        const orgId = new mongoose.Types.ObjectId(session.orgId);
 
         let listingObjectId: mongoose.Types.ObjectId;
         try {
@@ -30,11 +36,13 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: "Invalid listingId" }, { status: 400 });
         }
 
-        const rows = await HostawayConversation.find({
-            listingId: listingObjectId,
-            dateFrom: { $lte: dateTo },
-            dateTo: { $gte: dateFrom },
-        }).lean();
+        const query: Record<string, any> = { orgId, listingId: listingObjectId };
+        if (dateFrom && dateTo) {
+            query.dateFrom = { $lte: dateTo };
+            query.dateTo = { $gte: dateFrom };
+        }
+
+        const rows = await HostawayConversation.find(query).sort({ syncedAt: -1 }).lean();
 
         if (rows.length === 0) {
             return NextResponse.json({ success: true, conversations: [] });
