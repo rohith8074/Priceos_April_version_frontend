@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Layers,
   Plus,
@@ -172,6 +172,34 @@ function GroupForm({
     new Set(initial?.listingIds ?? [])
   );
   const [saving, setSaving] = useState(false);
+  const [locationFilter, setLocationFilter] = useState<string>("all");
+  const [bedroomFilter, setBedroomFilter] = useState<string>("all");
+
+  const locations = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          safeListings
+            .map((listing) => listing.area?.trim())
+            .filter((value): value is string => Boolean(value))
+        )
+      ).sort((a, b) => a.localeCompare(b)),
+    [safeListings]
+  );
+
+  const bedroomBuckets = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          safeListings.map((listing) =>
+            listing.bedroomsNumber && listing.bedroomsNumber > 0
+              ? `${listing.bedroomsNumber}BR`
+              : "Studio / Other"
+          )
+        )
+      ).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+    [safeListings]
+  );
 
   const toggle = (id: string) => {
     setSelectedIds((prev) => {
@@ -180,6 +208,82 @@ function GroupForm({
       return next;
     });
   };
+
+  const matchesFilters = (listing: Listing) => {
+    const listingLocation = listing.area?.trim() || "Unknown";
+    const listingBedroom =
+      listing.bedroomsNumber && listing.bedroomsNumber > 0
+        ? `${listing.bedroomsNumber}BR`
+        : "Studio / Other";
+
+    const locationOk = locationFilter === "all" || listingLocation === locationFilter;
+    const bedroomOk = bedroomFilter === "all" || listingBedroom === bedroomFilter;
+    return locationOk && bedroomOk;
+  };
+
+  const applySmartGrouping = (mode: "location" | "bedrooms" | "location_bedrooms") => {
+    const matchingListings = safeListings.filter((listing) => {
+      const hasLocation = Boolean(listing.area?.trim());
+      const hasBedroomValue = typeof listing.bedroomsNumber === "number";
+
+      if (mode === "location") return hasLocation;
+      if (mode === "bedrooms") return hasBedroomValue;
+      return hasLocation && hasBedroomValue;
+    });
+
+    if (matchingListings.length === 0) {
+      toast.error("No matching properties found for that grouping.");
+      return;
+    }
+
+    const nextSelected = new Set(matchingListings.map((listing) => listing._id));
+    setSelectedIds(nextSelected);
+
+    const first = matchingListings[0];
+    if (mode === "location") {
+      const location = first.area?.trim() || "Unknown";
+      setLocationFilter(location);
+      setBedroomFilter("all");
+      if (!name.trim()) setName(`${location} Group`);
+    } else if (mode === "bedrooms") {
+      const bucket =
+        first.bedroomsNumber && first.bedroomsNumber > 0
+          ? `${first.bedroomsNumber}BR`
+          : "Studio / Other";
+      setLocationFilter("all");
+      setBedroomFilter(bucket);
+      if (!name.trim()) setName(`${bucket} Group`);
+    } else {
+      const location = first.area?.trim() || "Unknown";
+      const bucket =
+        first.bedroomsNumber && first.bedroomsNumber > 0
+          ? `${first.bedroomsNumber}BR`
+          : "Studio / Other";
+      setLocationFilter(location);
+      setBedroomFilter(bucket);
+      if (!name.trim()) setName(`${location} ${bucket} Group`);
+    }
+  };
+
+  const selectFilteredListings = () => {
+    const matching = safeListings.filter(matchesFilters);
+    if (matching.length === 0) {
+      toast.error("No properties match the selected filters.");
+      return;
+    }
+    setSelectedIds(new Set(matching.map((listing) => listing._id)));
+  };
+
+  const clearFiltersAndSelection = () => {
+    setLocationFilter("all");
+    setBedroomFilter("all");
+    setSelectedIds(new Set(initial?.listingIds ?? []));
+  };
+
+  const visibleListings = safeListings.filter((listing) => {
+    if (locationFilter === "all" && bedroomFilter === "all") return true;
+    return matchesFilters(listing);
+  });
 
   const handleSave = async () => {
     if (!name.trim()) { toast.error("Group name is required"); return; }
@@ -244,11 +348,70 @@ function GroupForm({
           <Label>Properties in this group <span className="text-text-tertiary text-xs">({selectedIds.size} selected)</span></Label>
           <span className="text-[11px] text-text-tertiary">{safeListings.length} total</span>
         </div>
+        <div className="rounded-lg border border-border-default bg-surface-0 p-3 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-medium text-text-tertiary">Quick group from onboarding:</span>
+            <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => applySmartGrouping("bedrooms")}>
+              Group by 1BR / 2BR
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => applySmartGrouping("location")}>
+              Group by location
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => applySmartGrouping("location_bedrooms")}>
+              Group by location + type
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Filter by location</Label>
+              <Select value={locationFilter} onValueChange={setLocationFilter}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="All locations" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All locations</SelectItem>
+                  {locations.map((location) => (
+                    <SelectItem key={location} value={location}>
+                      {location}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Filter by type</Label>
+              <Select value={bedroomFilter} onValueChange={setBedroomFilter}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="All types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All types</SelectItem>
+                  {bedroomBuckets.map((bucket) => (
+                    <SelectItem key={bucket} value={bucket}>
+                      {bucket}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" size="sm" className="h-8 text-xs" onClick={selectFilteredListings}>
+              Select filtered properties
+            </Button>
+            <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={clearFiltersAndSelection}>
+              Clear filters
+            </Button>
+            <span className="text-[11px] text-text-tertiary">
+              Showing {visibleListings.length} matching properties
+            </span>
+          </div>
+        </div>
         <div className="border border-border-default rounded-lg divide-y divide-border-default max-h-[26rem] overflow-y-auto">
-          {safeListings.length === 0 && (
+          {visibleListings.length === 0 && (
             <p className="p-3 text-xs text-text-tertiary">No properties found.</p>
           )}
-          {safeListings.map((l) => (
+          {visibleListings.map((l) => (
             <label
               key={l._id}
               className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-surface-2 transition-colors"
@@ -266,7 +429,7 @@ function GroupForm({
             </label>
           ))}
         </div>
-        {safeListings.length > 10 && (
+        {visibleListings.length > 10 && (
           <p className="text-[11px] text-text-tertiary">Scroll to see all properties.</p>
         )}
       </div>

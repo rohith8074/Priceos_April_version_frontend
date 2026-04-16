@@ -14,19 +14,22 @@ export default async function PricingPage() {
   }
   const orgId = new mongoose.Types.ObjectId(session.orgId);
 
-  const today = format(new Date(), "yyyy-MM-dd");
+  // 90 days back for pending proposals (so historical pending proposals are visible)
+  const past90 = new Date();
+  past90.setDate(past90.getDate() - 90);
+  const past90Str = format(past90, "yyyy-MM-dd");
 
-  // 14 days ago for showing recent approved/rejected/pushed history
-  const past14 = new Date();
-  past14.setDate(past14.getDate() - 14);
-  const past14Str = format(past14, "yyyy-MM-dd");
+  // 30 days back for approved/rejected/pushed history
+  const past30 = new Date();
+  past30.setDate(past30.getDate() - 30);
+  const past30Str = format(past30, "yyyy-MM-dd");
 
-  // Fetch all proposals: pending (today+) and recent history (past 14d)
+  // Fetch all proposals: all pending (up to 90d back) + recent history (30d)
   const rawDocs = await InventoryMaster.find({
     orgId,
     $or: [
-      { proposalStatus: "pending", date: { $gte: today } },
-      { proposalStatus: { $in: ["approved", "rejected", "pushed"] }, date: { $gte: past14Str } },
+      { proposalStatus: "pending", date: { $gte: past90Str } },
+      { proposalStatus: { $in: ["approved", "rejected", "pushed"] }, date: { $gte: past30Str } },
     ],
   })
     .sort({ date: 1 })

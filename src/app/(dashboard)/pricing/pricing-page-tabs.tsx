@@ -61,7 +61,7 @@ export function PricingPageTabs({ initialProposals, listings }: Props) {
         )}
         {activeTab === "proposals" && (
           <div className="p-8 pt-6">
-            <PricingClient initialProposals={initialProposals} />
+            <PricingClient initialProposals={initialProposals} allListings={listings} />
           </div>
         )}
         {activeTab === "rules" && (

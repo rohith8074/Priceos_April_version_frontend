@@ -36,6 +36,7 @@ import {
   Pencil,
   X,
   Upload,
+  Zap,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -201,8 +202,10 @@ function ConstraintBadges({ row }: { row: ProposalData }) {
 
 export function PricingClient({
   initialProposals,
+  allListings = [],
 }: {
   initialProposals: ProposalData[];
+  allListings?: { id: string; name: string }[];
 }) {
   const [proposals, setProposals] = useState<ProposalData[]>(initialProposals);
   const [activeTab, setActiveTab] = useState<StatusTab>("pending");
@@ -213,6 +216,31 @@ export function PricingClient({
   const [modifyingId, setModifyingId] = useState<string | null>(null);
   const [modifyPrice, setModifyPrice] = useState("");
   const [isSavingModify, setIsSavingModify] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const handleGenerateProposals = async () => {
+    setIsGenerating(true);
+    try {
+      const res = await fetch("/api/engine/run-all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trigger: "manual" }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(
+          `Generated proposals for ${data.summary?.succeeded ?? 0} properties — refreshing…`
+        );
+        setTimeout(() => window.location.reload(), 1200);
+      } else {
+        toast.error(data.error || "Failed to generate proposals.");
+      }
+    } catch {
+      toast.error("Network error — please try again.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   // Filters
   const [filterProperty, setFilterProperty] = useState("all");
@@ -220,11 +248,12 @@ export function PricingClient({
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
-  // Unique properties for filter dropdown
+  // Unique properties for filter dropdown — prefer full listings list, fall back to proposal names
   const propertyOptions = useMemo(() => {
+    if (allListings.length > 0) return [...allListings].sort((a, b) => a.name.localeCompare(b.name));
     const names = [...new Set(proposals.map((p) => p.listingName))].sort();
-    return names;
-  }, [proposals]);
+    return names.map((name) => ({ id: name, name }));
+  }, [allListings, proposals]);
 
   // Filtered + sorted proposals for current tab
   const displayProposals = useMemo(() => {
@@ -275,12 +304,14 @@ export function PricingClient({
 
   // Selection helpers
   const pendingDisplay = displayProposals.filter((p) => p.proposalStatus === "pending");
+  const rejectedDisplay = displayProposals.filter((p) => p.proposalStatus === "rejected");
   const approvedDisplay = displayProposals.filter((p) => p.proposalStatus === "approved");
+  const selectableDisplay = activeTab === "pending" ? pendingDisplay : activeTab === "rejected" ? rejectedDisplay : [];
   const toggleSelectAll = () => {
     setSelectedIds(
-      selectedIds.size === pendingDisplay.length
+      selectedIds.size === selectableDisplay.length
         ? new Set()
-        : new Set(pendingDisplay.map((p) => p.id))
+        : new Set(selectableDisplay.map((p) => p.id))
     );
   };
   const toggleSelect = (id: string) => {
@@ -445,7 +476,7 @@ export function PricingClient({
         ))}
       </div>
 
-      {/* Status Tabs */}
+      {/* Status Tabs + Generate button */}
       <div className="flex items-center gap-1 border-b border-border/70 dark:border-white/10">
         {STATUS_TABS.map(({ id, label, color }) => (
           <button
@@ -471,6 +502,19 @@ export function PricingClient({
             )}
           </button>
         ))}
+        <div className="ml-auto pb-px">
+          <Button
+            size="sm"
+            onClick={handleGenerateProposals}
+            disabled={isGenerating}
+            className="h-7 px-3 text-xs bg-amber text-black hover:bg-amber/90 gap-1.5"
+          >
+            {isGenerating
+              ? <RefreshCcw className="h-3.5 w-3.5 animate-spin" />
+              : <Zap className="h-3.5 w-3.5" />}
+            {isGenerating ? "Generating…" : "Generate Proposals"}
+          </Button>
+        </div>
       </div>
 
       {/* Filter + Sort Bar */}
@@ -482,8 +526,8 @@ export function PricingClient({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all" className="text-xs">All properties</SelectItem>
-            {propertyOptions.map((name) => (
-              <SelectItem key={name} value={name} className="text-xs">{name}</SelectItem>
+            {propertyOptions.map((p) => (
+              <SelectItem key={p.id} value={p.name} className="text-xs">{p.name}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -529,46 +573,37 @@ export function PricingClient({
         </div>
       </div>
 
-      {/* Bulk Actions (pending tab only) */}
-      {activeTab === "pending" && pendingDisplay.length > 0 && (
-        <div className="flex items-center justify-between gap-4">
-          <label className="flex items-center gap-2 text-xs text-foreground font-medium cursor-pointer rounded-lg border border-border/60 bg-background px-3 py-2 shadow-sm">
-            <Checkbox
-              checked={
-                selectedIds.size === pendingDisplay.length && pendingDisplay.length > 0
-              }
-              onCheckedChange={toggleSelectAll}
-            />
-            Select all ({pendingDisplay.length})
-          </label>
-          {selectedIds.size > 0 && (
-            <span className="text-xs text-amber font-medium">
-              {selectedIds.size} selected
-            </span>
-          )}
+      {/* Bulk action bar — shown for pending/rejected selections */}
+      {(activeTab === "pending" || activeTab === "rejected") && selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-amber/30 bg-amber/5 px-4 py-2.5">
+          <span className="text-xs font-semibold text-amber">
+            {selectedIds.size} of {selectableDisplay.length} selected
+          </span>
           <div className="flex items-center gap-2 ml-auto">
+            {activeTab === "pending" && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={isProcessing}
+                onClick={() => handleBulkAction("reject")}
+                className="h-7 px-3 text-xs border-red-500/30 text-red-400 hover:bg-red-500/10 gap-1.5"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+                Reject
+              </Button>
+            )}
             <Button
-              variant="outline"
               size="sm"
-              disabled={selectedIds.size === 0 || isProcessing}
-              onClick={() => handleBulkAction("reject")}
-              className="h-8 px-3 text-xs border-red-500/20 text-red-400 hover:bg-red-500/10 gap-1.5"
-            >
-              <XCircle className="h-3.5 w-3.5" />
-              Reject Selected
-            </Button>
-            <Button
-              size="sm"
-              disabled={selectedIds.size === 0 || isProcessing}
+              disabled={isProcessing}
               onClick={() => handleBulkAction("approve")}
-              className="h-8 px-4 text-xs bg-amber text-black hover:bg-amber/90 gap-1.5"
+              className="h-7 px-3 text-xs bg-amber text-black hover:bg-amber/90 gap-1.5"
             >
               {isProcessing ? (
                 <RefreshCcw className="h-3.5 w-3.5 animate-spin" />
               ) : (
                 <CheckCircle2 className="h-3.5 w-3.5" />
               )}
-              Approve Selected
+              {activeTab === "rejected" ? "Approve Rejected" : "Approve"}
             </Button>
           </div>
         </div>
@@ -607,13 +642,20 @@ export function PricingClient({
           <Table>
             <TableHeader className="bg-muted/50 dark:bg-white/[0.04]">
               <TableRow className="border-border/70 dark:border-white/10 hover:bg-transparent">
-                {activeTab === "pending" && <TableHead className="w-10 pl-4" />}
+                {(activeTab === "pending" || activeTab === "rejected") && (
+                  <TableHead className="w-10 pl-4">
+                    <Checkbox
+                      checked={selectedIds.size === selectableDisplay.length && selectableDisplay.length > 0}
+                      onCheckedChange={toggleSelectAll}
+                    />
+                  </TableHead>
+                )}
                 <TableHead className="w-[110px] text-xs font-semibold text-foreground pl-4">Date</TableHead>
                 <TableHead className="min-w-[180px] text-xs font-semibold text-foreground">Property</TableHead>
                 <TableHead className="w-[180px] text-xs font-semibold text-foreground">Price</TableHead>
                 <TableHead className="w-[80px] text-center text-xs font-semibold text-foreground">Risk</TableHead>
                 <TableHead className="text-xs font-semibold text-foreground">Reasoning</TableHead>
-                {(activeTab === "pending" || activeTab === "approved") && (
+                {(activeTab === "pending" || activeTab === "approved" || activeTab === "rejected") && (
                   <TableHead className="w-[200px] text-right text-xs font-semibold text-foreground pr-4">Actions</TableHead>
                 )}
               </TableRow>
@@ -631,7 +673,7 @@ export function PricingClient({
                   )}
                 >
                   {/* Checkbox */}
-                  {activeTab === "pending" && (
+                  {(activeTab === "pending" || activeTab === "rejected") && (
                     <TableCell className="w-10 pl-4">
                       <Checkbox
                         checked={selectedIds.has(row.id)}
@@ -714,7 +756,7 @@ export function PricingClient({
                   </TableCell>
 
                   {/* Row Actions */}
-                  {(activeTab === "pending" || activeTab === "approved") && (
+                  {(activeTab === "pending" || activeTab === "approved" || activeTab === "rejected") && (
                     <TableCell className="py-4 text-right align-top pr-4">
                       {activeTab === "pending" && modifyingId === row.id ? (
                         <div className="flex items-center justify-end gap-1">
@@ -777,6 +819,16 @@ export function PricingClient({
                             Reject
                           </Button>
                         </div>
+                      ) : activeTab === "rejected" ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleSingleAction(row.id, "approve")}
+                          className="h-7 px-2.5 text-xs text-green-500 hover:bg-green-500/10 hover:text-green-400 gap-1"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          Approve
+                        </Button>
                       ) : (
                         <Button
                           size="sm"

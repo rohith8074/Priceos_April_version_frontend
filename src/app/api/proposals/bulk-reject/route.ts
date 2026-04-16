@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     await connectDB();
     const result = await InventoryMaster.updateMany(
       { _id: { $in: proposalIds }, orgId: session.orgId, proposalStatus: "pending" },
-      { $set: { proposalStatus: "rejected", proposedPrice: null, changePct: null } }
+      { $set: { proposalStatus: "rejected" } }
     );
 
     return NextResponse.json({ success: true, count: result.modifiedCount });
