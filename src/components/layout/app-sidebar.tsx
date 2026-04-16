@@ -70,7 +70,7 @@ export function AppSidebar() {
         const data = await r.json();
         if (disposed || !data) return;
         const count = (data.conversations ?? []).filter(
-          (c: any) => c.unread || c.needsReply
+          (c: any) => c.unread || c.needsReply || c.status === "needs_reply"
         ).length;
         setNeedsReplyCount(count);
       } catch {

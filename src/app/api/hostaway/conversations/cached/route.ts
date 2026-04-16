@@ -9,17 +9,13 @@ import mongoose from "mongoose";
  * Returns previously synced conversations from MongoDB.
  * No Hostaway API calls — purely reads from our cache.
  *
- * Query params: listingId, from, to (from/to optional)
+ * Query params: listingId (optional), from, to (from/to optional)
  */
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const listingId = searchParams.get("listingId");
     const dateFrom = searchParams.get("from");
     const dateTo = searchParams.get("to");
-
-    if (!listingId) {
-        return NextResponse.json({ error: "listingId required" }, { status: 400 });
-    }
 
     try {
         await connectDB();
@@ -29,14 +25,14 @@ export async function GET(request: Request) {
         }
         const orgId = new mongoose.Types.ObjectId(session.orgId);
 
-        let listingObjectId: mongoose.Types.ObjectId;
-        try {
-            listingObjectId = new mongoose.Types.ObjectId(listingId);
-        } catch {
-            return NextResponse.json({ error: "Invalid listingId" }, { status: 400 });
+        const query: Record<string, any> = { orgId };
+        if (listingId) {
+            try {
+                query.listingId = new mongoose.Types.ObjectId(listingId);
+            } catch {
+                return NextResponse.json({ error: "Invalid listingId" }, { status: 400 });
+            }
         }
-
-        const query: Record<string, any> = { orgId, listingId: listingObjectId };
         if (dateFrom && dateTo) {
             query.dateFrom = { $lte: dateTo };
             query.dateTo = { $gte: dateFrom };
