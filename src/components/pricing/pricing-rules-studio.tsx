@@ -575,49 +575,69 @@ function SeasonsTab({
       {/* Add new */}
       <div className="rounded-lg border border-dashed border-white/10 p-4 space-y-4">
         <p className="text-xs font-medium text-text-secondary">Add Season Rule</p>
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-[140px]">
+        <div className="space-y-4">
+          <div className="w-full min-w-0">
             <Label className="text-xs text-text-tertiary mb-1 block">Season Name</Label>
             <Input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="e.g. Peak Winter"
-              className="h-8 text-sm bg-white/5 border-white/10"
+              className="h-8 text-sm bg-white/5 border-white/10 w-full"
             />
           </div>
-          <div className="w-32">
-            <Label className="text-xs text-text-tertiary mb-1 block">Start Date</Label>
-            <Input
-              type="date"
-              value={newFrom}
-              onChange={(e) => setNewFrom(e.target.value)}
-              className="h-8 text-sm bg-white/5 border-white/10"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="min-w-0">
+              <Label className="text-xs text-text-tertiary mb-1 block">Start Date</Label>
+              <Input
+                type="date"
+                value={newFrom}
+                onChange={(e) => setNewFrom(e.target.value)}
+                className="h-8 text-sm bg-white/5 border-white/10 w-full"
+              />
+            </div>
+            <div className="min-w-0">
+              <Label className="text-xs text-text-tertiary mb-1 block">End Date</Label>
+              <Input
+                type="date"
+                value={newTo}
+                onChange={(e) => setNewTo(e.target.value)}
+                className="h-8 text-sm bg-white/5 border-white/10 w-full"
+              />
+            </div>
           </div>
-          <div className="w-32">
-            <Label className="text-xs text-text-tertiary mb-1 block">End Date</Label>
-            <Input
-              type="date"
-              value={newTo}
-              onChange={(e) => setNewTo(e.target.value)}
-              className="h-8 text-sm bg-white/5 border-white/10"
-            />
-          </div>
-          <div className="w-44">
-            <Label className="text-xs text-text-tertiary mb-1 block">
-              Price Adjustment: <span className={cn("font-bold", newAdj > 0 ? "text-green-400" : newAdj < 0 ? "text-red-400" : "text-muted-foreground")}>{newAdj > 0 ? "+" : ""}{newAdj}%</span>
-            </Label>
-            <Slider min={-60} max={100} step={5} value={[newAdj]} onValueChange={([v]) => setNewAdj(v)} className="mt-2" />
-          </div>
-          <div className="w-24">
-            <Label className="text-xs text-text-tertiary mb-1 block">Min Stay</Label>
-            <Input
-              type="number"
-              value={newMinStay}
-              onChange={(e) => setNewMinStay(e.target.value)}
-              placeholder="optional"
-              className="h-8 text-sm bg-white/5 border-white/10"
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+            <div className="min-w-0 space-y-2">
+              <Label className="text-xs text-text-tertiary block">
+                Price Adjustment:{" "}
+                <span
+                  className={cn(
+                    "font-bold",
+                    newAdj > 0 ? "text-green-400" : newAdj < 0 ? "text-red-400" : "text-muted-foreground"
+                  )}
+                >
+                  {newAdj > 0 ? "+" : ""}
+                  {newAdj}%
+                </span>
+              </Label>
+              <Slider
+                min={-60}
+                max={100}
+                step={5}
+                value={[newAdj]}
+                onValueChange={([v]) => setNewAdj(v)}
+                className="w-full"
+              />
+            </div>
+            <div className="min-w-0 sm:max-w-xs">
+              <Label className="text-xs text-text-tertiary mb-1 block">Min Stay</Label>
+              <Input
+                type="number"
+                value={newMinStay}
+                onChange={(e) => setNewMinStay(e.target.value)}
+                placeholder="optional"
+                className="h-8 text-sm bg-white/5 border-white/10 w-full"
+              />
+            </div>
           </div>
         </div>
         <Button

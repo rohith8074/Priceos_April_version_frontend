@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import {
   Calendar,
   TrendingUp,
@@ -9,6 +10,7 @@ import {
   Star,
   BarChart2,
   Filter,
+  RefreshCw,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -79,9 +81,36 @@ function daysUntil(dateStr: string) {
 }
 
 export function MarketIntelligenceClient({ events, occupancyPct, avgNightly, listings }: Props) {
+  const router = useRouter();
   const [selectedListingId, setSelectedListingId] = useState<string>(listings[0]?.id ?? "");
   const [filterImpact, setFilterImpact] = useState<"all" | "high" | "medium" | "low">("all");
   const [filterArea, setFilterArea] = useState<string>("all");
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
+
+  async function handleSyncEvents() {
+    setSyncing(true);
+    setSyncMsg(null);
+    try {
+      const res = await fetch("/api/v1/system/events/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ daysAhead: 90, marketCity: "Dubai" }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setSyncMsg(json?.error?.message || "Sync failed");
+      } else {
+        const { inserted = 0, updated = 0 } = json.data ?? {};
+        setSyncMsg(`Synced — ${inserted} new, ${updated} updated`);
+        router.refresh();
+      }
+    } catch {
+      setSyncMsg("Network error — check connection");
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   const areas = useMemo(() => {
     const fromEvents = events.flatMap((e) => (e.area ? [e.area] : []));
@@ -111,12 +140,27 @@ export function MarketIntelligenceClient({ events, occupancyPct, avgNightly, lis
   return (
     <div className="p-8 max-w-6xl space-y-8">
       {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-white tracking-tight mb-1">Market Intelligence</h1>
-        <p className="text-text-secondary text-sm flex items-center gap-1.5">
-          <Globe className="h-3.5 w-3.5" />
-          Your market — live events, demand signals, and comp positioning
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-white tracking-tight mb-1">Market Intelligence</h1>
+          <p className="text-text-secondary text-sm flex items-center gap-1.5">
+            <Globe className="h-3.5 w-3.5" />
+            Your market — live events, demand signals, and comp positioning
+          </p>
+        </div>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <button
+            onClick={handleSyncEvents}
+            disabled={syncing}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-amber/40 bg-amber/10 text-amber text-xs font-semibold hover:bg-amber/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${syncing ? "animate-spin" : ""}`} />
+            {syncing ? "Syncing…" : "Sync Events"}
+          </button>
+          {syncMsg && (
+            <span className="text-[11px] text-muted-foreground">{syncMsg}</span>
+          )}
+        </div>
       </div>
 
       {/* KPI Cards */}

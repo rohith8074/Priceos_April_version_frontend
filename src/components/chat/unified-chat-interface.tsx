@@ -77,6 +77,7 @@ import { Tooltip, TooltipProvider, TooltipTrigger } from "@/components/ui/toolti
 
 import { toast } from "sonner";
 import { readSSEStream } from "@/lib/chat/sse-reader";
+import { normalizeChatAgentOutput, hydrateAssistantMessage } from "@/lib/chat/normalize-agent-response";
 
 interface Message {
   id: string;
@@ -224,7 +225,7 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
         if (res.ok) {
           const data = await res.json();
           if (data.messages && data.messages.length > 0) {
-            setMessages(data.messages);
+            setMessages(data.messages.map((m: Message) => hydrateAssistantMessage(m)));
             setIsChatActive(true);
             setSessionId(expectedSessionId);
             ariaReadySessionRef.current = expectedSessionId;
@@ -455,12 +456,15 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
         response,
         (msg) => setStatusText(msg),
         (data) => {
+          const normalized = normalizeChatAgentOutput(data.message || "");
+          const proposals =
+            data.proposals && data.proposals.length > 0 ? data.proposals : normalized.proposals;
           const assistantMessage: Message = {
             id: (Date.now() + 1).toString(),
             role: "assistant",
-            content: data.message || "Sorry, I couldn't get a response.",
-            proposals: data.proposals || undefined,
-            proposalStatus: data.proposals ? "pending" : undefined,
+            content: normalized.displayMessage || data.message || "Sorry, I couldn't get a response.",
+            proposals: proposals && proposals.length > 0 ? proposals : undefined,
+            proposalStatus: proposals && proposals.length > 0 ? "pending" : undefined,
           };
           setMessages((prev) => [...prev, assistantMessage]);
         },
@@ -762,6 +766,9 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
                               </div>
 
                               {/* Row 3: Primary reasoning */}
+                              {typeof prop.reasoning === "string" && prop.reasoning.trim() && (
+                                <p className="text-[11px] text-muted-foreground leading-snug">{prop.reasoning}</p>
+                              )}
                               {(prop.reasoning?.reason_market || prop.reasoning?.reason_guardrails) && (
                                 <p className="text-[11px] text-muted-foreground leading-snug">
                                   {prop.reasoning.reason_guardrails && prop.guard_verdict === "REJECTED"

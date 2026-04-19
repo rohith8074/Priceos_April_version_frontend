@@ -7,7 +7,8 @@ import {
 } from "@/lib/db";
 import { getSession } from "@/lib/auth/server";
 import mongoose from "mongoose";
-import { callLyzrAgent, extractLyzrMessage, extractJson } from "@/lib/lyzr/client";
+import { callLyzrAgent } from "@/lib/lyzr/client";
+import { normalizeChatAgentOutput } from "@/lib/chat/normalize-agent-response";
 
 const AGENT_ID = process.env.AGENT_ID || MANAGER_AGENT_ID;
 const AGENT_TOOLS_API_KEY = process.env.AGENT_TOOLS_JWT_SECRET || "";
@@ -195,12 +196,12 @@ export async function POST(req: NextRequest) {
 
                 const duration = Math.round(performance.now() - startTime);
                 const agentReply = lyzrResult.response;
-                const parsedJson = lyzrResult.parsedJson as any;
+                const normalized = normalizeChatAgentOutput(agentReply);
 
                 // Server-side guardrails
                 const floorPrice = Number(listingGuardrails?.floorPrice || 0);
                 const ceilingPrice = Number(listingGuardrails?.ceilingPrice || 0);
-                let enforcedProposals = parsedJson?.proposals || null;
+                let enforcedProposals = normalized.proposals || null;
 
                 if (
                     enforcedProposals &&
@@ -211,13 +212,17 @@ export async function POST(req: NextRequest) {
                     console.log(`🛡️ [Guardrails] Enforced floor=${floorPrice} ceiling=${ceilingPrice} on ${enforcedProposals.length} proposals`);
                 }
 
-                // Save assistant reply (fire-and-forget)
-                if (agentReply) {
+                // Save assistant reply (fire-and-forget) — store readable text, not raw agent JSON
+                const assistantContent =
+                    normalized.displayMessage || agentReply || "No message received from agent";
+                const shouldPersist =
+                    Boolean(agentReply?.trim()) || Boolean(enforcedProposals && enforcedProposals.length > 0);
+                if (shouldPersist) {
                     ChatMessage.create({
                         orgId,
                         sessionId: lyzrSessionId,
                         role: "assistant",
-                        content: agentReply,
+                        content: assistantContent,
                         context:
                             context.type === "property" && context.propertyId
                                 ? { type: "property", propertyId: new mongoose.Types.ObjectId(context.propertyId) }
@@ -229,8 +234,8 @@ export async function POST(req: NextRequest) {
                 console.log(`✅ AGENT REPLY — ${duration}ms`);
 
                 send("complete", {
-                    message: agentReply || "No message received from agent",
-                    proposals: enforcedProposals,
+                    message: assistantContent,
+                    proposals: enforcedProposals || undefined,
                     duration,
                 });
             } catch (error) {

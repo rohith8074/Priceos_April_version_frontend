@@ -32,7 +32,7 @@ export default async function MarketPage() {
     endDate: { $gte: todayStr },
   })
     .sort({ startDate: 1 })
-    .limit(20)
+    .limit(200)
     .lean();
 
   // Fetch portfolio occupancy next 30 days

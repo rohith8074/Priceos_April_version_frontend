@@ -911,26 +911,35 @@ function StepStrategy({
                                   placeholder="Rule name"
                                 />
                               </div>
-                              <div className="grid grid-cols-3 gap-2">
-                                <input
-                                  type="number"
-                                  value={r.priceAdjPct ?? 0}
-                                  onChange={(e) => updateRuleForGroup(groupIdx, idx, { priceAdjPct: Number(e.target.value || 0) })}
-                                  className="h-8 bg-zinc-950 border border-zinc-700 rounded px-2 text-xs text-white"
-                                  placeholder="Price adj %"
-                                />
-                                <input
-                                  type="date"
-                                  value={r.startDate || ""}
-                                  onChange={(e) => updateRuleForGroup(groupIdx, idx, { startDate: e.target.value || undefined })}
-                                  className="h-8 bg-zinc-950 border border-zinc-700 rounded px-2 text-xs text-white"
-                                />
-                                <input
-                                  type="date"
-                                  value={r.endDate || ""}
-                                  onChange={(e) => updateRuleForGroup(groupIdx, idx, { endDate: e.target.value || undefined })}
-                                  className="h-8 bg-zinc-950 border border-zinc-700 rounded px-2 text-xs text-white"
-                                />
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                <div className="min-w-0 space-y-1">
+                                  <label className="text-[11px] text-zinc-500 block">Price adjustment %</label>
+                                  <input
+                                    type="number"
+                                    value={r.priceAdjPct ?? 0}
+                                    onChange={(e) => updateRuleForGroup(groupIdx, idx, { priceAdjPct: Number(e.target.value || 0) })}
+                                    className="h-8 w-full min-w-0 bg-zinc-950 border border-zinc-700 rounded px-2 text-xs text-white"
+                                    placeholder="e.g. 10"
+                                  />
+                                </div>
+                                <div className="min-w-0 space-y-1">
+                                  <label className="text-[11px] text-zinc-500 block">Start date</label>
+                                  <input
+                                    type="date"
+                                    value={r.startDate || ""}
+                                    onChange={(e) => updateRuleForGroup(groupIdx, idx, { startDate: e.target.value || undefined })}
+                                    className="h-8 w-full min-w-0 bg-zinc-950 border border-zinc-700 rounded px-2 text-xs text-white"
+                                  />
+                                </div>
+                                <div className="min-w-0 space-y-1">
+                                  <label className="text-[11px] text-zinc-500 block">End date</label>
+                                  <input
+                                    type="date"
+                                    value={r.endDate || ""}
+                                    onChange={(e) => updateRuleForGroup(groupIdx, idx, { endDate: e.target.value || undefined })}
+                                    className="h-8 w-full min-w-0 bg-zinc-950 border border-zinc-700 rounded px-2 text-xs text-white"
+                                  />
+                                </div>
                               </div>
                               <div className="flex justify-end">
                                 <button
