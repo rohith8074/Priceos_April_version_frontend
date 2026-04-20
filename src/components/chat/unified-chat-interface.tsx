@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Send, Loader2, Settings,
-  PanelRightClose, PanelRightOpen, Building2,
+  PanelRightClose, PanelRightOpen, Building2, MessageSquarePlus,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -78,6 +78,14 @@ import { Tooltip, TooltipProvider, TooltipTrigger } from "@/components/ui/toolti
 import { toast } from "sonner";
 import { readSSEStream } from "@/lib/chat/sse-reader";
 import { normalizeChatAgentOutput, hydrateAssistantMessage } from "@/lib/chat/normalize-agent-response";
+import { buildBaseScopeId, generateThreadSessionId } from "@/lib/chat/agent-session-id";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface Message {
   id: string;
@@ -87,6 +95,12 @@ interface Message {
   proposalStatus?: "pending" | "saved" | "rejected";
   // per-proposal approve/reject decisions keyed by proposal_id
   proposalDecisions?: Record<string, "approved" | "rejected">;
+}
+
+interface ChatSessionRow {
+  sessionId: string;
+  lastMessageAt: string;
+  messageCount: number;
 }
 
 interface Props {
@@ -117,10 +131,11 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
   const [isChatActive, setIsChatActive] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   /** After "Run Aria" succeeds, history may still be empty — async /api/chat/history must not flip chat back to OFFLINE. */
-  const ariaReadySessionRef = useRef<string | null>(null);
+  const ariaReadyScopeRef = useRef<string | null>(null);
   const scopeKeyRef = useRef<{ propertyId?: string; from?: number; to?: number }>({});
 
   const ARIA_READY_STORAGE_PREFIX = "priceos-aria-chat-ready:";
+  const THREAD_PREF_STORAGE_PREFIX = "priceos-agent-thread:";
 
   const readAriaReadyFromStorage = useCallback((sessionKey: string) => {
     if (typeof window === "undefined") return false;
@@ -140,27 +155,79 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
     }
   }, []);
 
-  const isAriaReadyForSession = useCallback(
-    (expectedSessionId: string) =>
-      ariaReadySessionRef.current === expectedSessionId ||
-      readAriaReadyFromStorage(expectedSessionId),
+  const readThreadPref = useCallback((baseScopeId: string): string => {
+    if (typeof window === "undefined") return "";
+    try {
+      return sessionStorage.getItem(`${THREAD_PREF_STORAGE_PREFIX}${baseScopeId}`) || "";
+    } catch {
+      return "";
+    }
+  }, []);
+
+  const writeThreadPref = useCallback((baseScopeId: string, threadSessionId: string) => {
+    if (typeof window === "undefined") return;
+    try {
+      sessionStorage.setItem(`${THREAD_PREF_STORAGE_PREFIX}${baseScopeId}`, threadSessionId);
+    } catch {
+      /* quota / private mode */
+    }
+  }, []);
+
+  const loadThreadMessages = useCallback(
+    async (threadSessionId: string): Promise<number> => {
+      const propParam = contextType === "property" && propertyId ? propertyId : "null";
+      const res = await fetch(
+        `/api/chat/history?propertyId=${propParam}&sessionId=${encodeURIComponent(threadSessionId)}`
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const list = data.messages || [];
+        if (list.length > 0) {
+          setMessages(list.map((m: Message) => hydrateAssistantMessage(m)));
+          return list.length;
+        }
+        setMessages([]);
+        return 0;
+      }
+      setMessages([]);
+      return 0;
+    },
+    [contextType, propertyId]
+  );
+
+  const isAriaReadyForScope = useCallback(
+    (baseScopeId: string) =>
+      ariaReadyScopeRef.current === baseScopeId ||
+      readAriaReadyFromStorage(baseScopeId),
     [readAriaReadyFromStorage]
   );
 
-  // Generate a unique session ID
-  const generateSessionId = () => `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-
-  // Session is keyed to property + date range so each Market Analysis run gets an isolated chat
-  const buildSessionId = (pid: string | undefined, from: string, to: string) =>
-    pid ? `property-${pid}-${from}-${to}` : generateSessionId();
-
   const [sessionId, setSessionId] = useState<string>(() =>
-    buildSessionId(
+    buildBaseScopeId(
       propertyId || undefined,
       dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : "start",
       dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : "end"
     )
   );
+
+  const [chatSessions, setChatSessions] = useState<ChatSessionRow[]>([]);
+
+  const sessionSelectOptions = useMemo(() => {
+    const map = new Map<string, ChatSessionRow>();
+    for (const s of chatSessions) {
+      map.set(s.sessionId, s);
+    }
+    if (sessionId && !map.has(sessionId)) {
+      map.set(sessionId, {
+        sessionId,
+        lastMessageAt: new Date().toISOString(),
+        messageCount: 0,
+      });
+    }
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+    );
+  }, [chatSessions, sessionId]);
 
   useEffect(() => {
     const today = startOfDay(new Date());
@@ -205,50 +272,83 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
     const toT = dateRange?.to?.getTime();
     const prev = scopeKeyRef.current;
     if (prev.propertyId !== propertyId || prev.from !== fromT || prev.to !== toT) {
-      ariaReadySessionRef.current = null;
+      ariaReadyScopeRef.current = null;
       scopeKeyRef.current = { propertyId: propertyId ?? undefined, from: fromT, to: toT };
     }
 
-    // Build the expected session ID for this property + date range combo
-    const expectedSessionId = buildSessionId(
+    const fromStr = dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : "start";
+    const toStr = dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : "end";
+    const baseScopeId = buildBaseScopeId(
       contextType === "property" && propertyId ? propertyId : undefined,
-      dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : "start",
-      dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : "end"
+      fromStr,
+      toStr
     );
 
     const fetchHistory = async () => {
       setIsHistoryLoading(true);
       try {
         const propParam = contextType === "property" && propertyId ? propertyId : "null";
-        const res = await fetch(`/api/chat/history?propertyId=${propParam}&sessionId=${encodeURIComponent(expectedSessionId)}`);
+
+        let sessions: ChatSessionRow[] = [];
+        if (contextType === "property" && propertyId && fromStr !== "start" && toStr !== "end") {
+          const sessionsRes = await fetch(
+            `/api/chat/sessions?propertyId=${encodeURIComponent(propertyId)}&from=${encodeURIComponent(fromStr)}&to=${encodeURIComponent(toStr)}`
+          );
+          if (sessionsRes.ok) {
+            const sd = await sessionsRes.json();
+            sessions = sd.sessions || [];
+            setChatSessions(sessions);
+          }
+        } else {
+          setChatSessions([]);
+        }
+
+        const pref = readThreadPref(baseScopeId);
+        const chosen =
+          pref && sessions.some((s) => s.sessionId === pref)
+            ? pref
+            : sessions[0]?.sessionId ?? baseScopeId;
+
+        setSessionId(chosen);
+        writeThreadPref(baseScopeId, chosen);
+
+        const res = await fetch(
+          `/api/chat/history?propertyId=${propParam}&sessionId=${encodeURIComponent(chosen)}`
+        );
 
         if (res.ok) {
           const data = await res.json();
           if (data.messages && data.messages.length > 0) {
             setMessages(data.messages.map((m: Message) => hydrateAssistantMessage(m)));
             setIsChatActive(true);
-            setSessionId(expectedSessionId);
-            ariaReadySessionRef.current = expectedSessionId;
-            writeAriaReadyToStorage(expectedSessionId);
+            ariaReadyScopeRef.current = baseScopeId;
+            writeAriaReadyToStorage(baseScopeId);
           } else {
             setMessages([]);
-            setSessionId(expectedSessionId);
-            // Keep chat ONLINE if user already ran Aria for this session (fixes race with late history fetch)
-            setIsChatActive(isAriaReadyForSession(expectedSessionId));
+            setIsChatActive(isAriaReadyForScope(baseScopeId));
           }
         }
       } catch (err) {
         console.error("Failed to fetch chat history", err);
-        setSessionId(expectedSessionId);
+        setSessionId(baseScopeId);
         setMessages([]);
-        setIsChatActive(isAriaReadyForSession(expectedSessionId));
+        setIsChatActive(isAriaReadyForScope(baseScopeId));
       } finally {
         setIsHistoryLoading(false);
       }
     };
 
     fetchHistory();
-  }, [contextType, propertyId, dateRange?.from?.getTime(), dateRange?.to?.getTime(), isAriaReadyForSession, writeAriaReadyToStorage]);
+  }, [
+    contextType,
+    propertyId,
+    dateRange?.from?.getTime(),
+    dateRange?.to?.getTime(),
+    isAriaReadyForScope,
+    writeAriaReadyToStorage,
+    readThreadPref,
+    writeThreadPref,
+  ]);
 
   // Fetch calendar metrics when date range or property changes
   useEffect(() => {
@@ -342,16 +442,22 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
         throw new Error(data.error || "Analysis failed");
       }
 
-      // ── New session per date range: clear chat history and generate a fresh session ID ──
+      // ── New Lyzr thread for this property + date range (keeps history of older threads in DB) ──
       const newFrom = format(dateRange.from, "yyyy-MM-dd");
       const newTo = format(dateRange.to, "yyyy-MM-dd");
-      const newSessionId = buildSessionId(propertyId || undefined, newFrom, newTo);
+      const baseScopeId = buildBaseScopeId(propertyId || undefined, newFrom, newTo);
+      const newSessionId = generateThreadSessionId(baseScopeId);
 
-      setMessages([]);          // clear chat history for this new session
-      setSessionId(newSessionId); // isolate Lyzr conversation
-      ariaReadySessionRef.current = newSessionId;
-      writeAriaReadyToStorage(newSessionId);
+      setMessages([]);
+      setSessionId(newSessionId);
+      writeThreadPref(baseScopeId, newSessionId);
+      ariaReadyScopeRef.current = baseScopeId;
+      writeAriaReadyToStorage(baseScopeId);
       setIsChatActive(true);
+      setChatSessions((prev) => [
+        { sessionId: newSessionId, lastMessageAt: new Date().toISOString(), messageCount: 0 },
+        ...prev.filter((s) => s.sessionId !== newSessionId),
+      ]);
 
       console.log("🔍 Market Analysis Data Received:", {
         eventsCount: data.eventsCount,
@@ -574,6 +680,56 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
     toast.info("All proposals rejected. No changes were made.");
   };
 
+  const handleNewChat = useCallback(() => {
+    if (contextType !== "property" || !propertyId || !dateRange?.from || !dateRange?.to) {
+      toast.error("Select a property and date range first.");
+      return;
+    }
+    const fromStr = format(dateRange.from, "yyyy-MM-dd");
+    const toStr = format(dateRange.to, "yyyy-MM-dd");
+    const baseScopeId = buildBaseScopeId(propertyId, fromStr, toStr);
+    const newId = generateThreadSessionId(baseScopeId);
+    setSessionId(newId);
+    writeThreadPref(baseScopeId, newId);
+    setMessages([]);
+    setIsChatActive(isAriaReadyForScope(baseScopeId));
+    setChatSessions((prev) => [
+      { sessionId: newId, lastMessageAt: new Date().toISOString(), messageCount: 0 },
+      ...prev.filter((s) => s.sessionId !== newId),
+    ]);
+    toast.success("New chat started", {
+      description: "Same property and dates — a fresh thread. Older chats stay in history.",
+    });
+  }, [contextType, propertyId, dateRange, writeThreadPref, isAriaReadyForScope]);
+
+  const handleSessionSelect = useCallback(
+    async (nextId: string) => {
+      if (nextId === sessionId) return;
+      if (contextType !== "property" || !propertyId || !dateRange?.from || !dateRange?.to) return;
+      const fromStr = format(dateRange.from, "yyyy-MM-dd");
+      const toStr = format(dateRange.to, "yyyy-MM-dd");
+      const baseScopeId = buildBaseScopeId(propertyId, fromStr, toStr);
+      setIsHistoryLoading(true);
+      setSessionId(nextId);
+      writeThreadPref(baseScopeId, nextId);
+      try {
+        const n = await loadThreadMessages(nextId);
+        setIsChatActive(n > 0 || isAriaReadyForScope(baseScopeId));
+      } finally {
+        setIsHistoryLoading(false);
+      }
+    },
+    [
+      sessionId,
+      contextType,
+      propertyId,
+      dateRange,
+      writeThreadPref,
+      loadThreadMessages,
+      isAriaReadyForScope,
+    ]
+  );
+
   if (contextType === "portfolio") {
     return (
       <div className="flex flex-col flex-1 items-center justify-center h-full text-muted-foreground p-8 text-center bg-muted/5">
@@ -639,7 +795,7 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
                   setDateRange(newRange);
                   if (!newRange?.from || !newRange?.to) {
                     setIsChatActive(false);
-                    ariaReadySessionRef.current = null;
+                    ariaReadyScopeRef.current = null;
                   }
                 }}
               />
@@ -663,6 +819,37 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
                 </TooltipTrigger>
               </Tooltip>
             </TooltipProvider>
+
+            {contextType === "property" && propertyId && dateRange?.from && dateRange?.to && (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNewChat}
+                  disabled={isLoading || isSettingUp}
+                  className="h-9 gap-2 bg-background hover:bg-background/80 border-border/50 font-bold shadow-sm shrink-0"
+                >
+                  <MessageSquarePlus className="h-4 w-4" />
+                  <span className="hidden sm:inline">New chat</span>
+                </Button>
+                {sessionSelectOptions.length > 0 && (
+                  <Select value={sessionId} onValueChange={handleSessionSelect}>
+                    <SelectTrigger className="h-9 w-[min(240px,42vw)] text-[10px] font-bold bg-background border-border/50 shrink-0">
+                      <SelectValue placeholder="Chat thread" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sessionSelectOptions.map((s, i) => (
+                        <SelectItem key={s.sessionId} value={s.sessionId} className="text-xs font-medium">
+                          Chat {sessionSelectOptions.length - i} · {s.messageCount} msg
+                          {s.messageCount === 1 ? "" : "s"} · {format(new Date(s.lastMessageAt), "MMM d")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </>
+            )}
 
             <div className="hidden sm:block h-6 w-px bg-border/50 mx-1" />
 

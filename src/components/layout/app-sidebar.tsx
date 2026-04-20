@@ -9,8 +9,6 @@ import {
   MessageSquare,
   Settings,
   LogOut,
-  Sun,
-  Moon,
   Users,
   MessagesSquare,
   Home,
@@ -23,7 +21,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { useTheme } from "next-themes";
 import { useState, useEffect } from "react";
 import {
   DropdownMenu,
@@ -45,8 +42,6 @@ export function AppSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
   const [needsReplyCount, setNeedsReplyCount] = useState(0);
   const [pendingGuestTarget, setPendingGuestTarget] = useState<{ propertyId: string; conversationId: string } | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
@@ -61,7 +56,6 @@ export function AppSidebar() {
   >([]);
   const [dismissedNotificationIds, setDismissedNotificationIds] = useState<Set<string>>(new Set());
 
-  useEffect(() => { setMounted(true); }, []);
 
   // Refresh badges every minute so sidebar notifications stay current.
   useEffect(() => {
@@ -509,20 +503,6 @@ export function AppSidebar() {
           <LogOut className="h-4 w-4 text-text-tertiary group-hover:text-text-secondary" />
           <span>Logout</span>
         </button>
-
-
-        {mounted && pathname !== "/guest-chat" && (
-          <button
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="group flex items-center gap-3 px-3 py-2 text-body text-text-secondary hover:bg-surface-2 hover:text-text-primary transition-colors duration-200 rounded-md mx-2 mt-2 border border-border-subtle/50"
-          >
-            <div className="relative h-4 w-4">
-              <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0 text-amber" />
-              <Moon className="absolute inset-0 h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100 text-amber" />
-            </div>
-            <span>{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>
-          </button>
-        )}
       </div>
     </div>
   );

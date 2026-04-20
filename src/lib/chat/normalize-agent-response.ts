@@ -19,6 +19,15 @@ export function normalizeChatAgentOutput(agentReply: string): {
 
   const p = parsed as Record<string, any>;
 
+  /** Pricing / Aria agent envelope: { routing, proposals, chat_response } */
+  if (typeof p.chat_response === "string" && p.chat_response.trim()) {
+    return {
+      displayMessage: p.chat_response.trim(),
+      proposals:
+        Array.isArray(p.proposals) && p.proposals.length > 0 ? p.proposals : undefined,
+    };
+  }
+
   if (Array.isArray(p.proposals) && p.proposals.length > 0) {
     return {
       displayMessage: humanMessageFromStructured(p, agentReply, true),

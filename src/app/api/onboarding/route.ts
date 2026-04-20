@@ -655,6 +655,14 @@ export async function PATCH(req: NextRequest) {
         const priceDefaults = BASE_PRICES[currency] || BASE_PRICES["USD"];
 
         const orgSuffix = payload.orgId.toString().slice(-8);
+
+        // Clear prior demo-mode listing rows BEFORE upsert. (If this runs after bulkWrite,
+        // it deletes the same `hostawayId: ${orgSuffix}_demo-*` rows we just inserted.)
+        await Listing.deleteMany({
+          orgId: new mongoose.Types.ObjectId(payload.orgId),
+          hostawayId: { $regex: `^${orgSuffix}_demo-` },
+        });
+
         const ops = listings.map((l: {
           id: string; name: string; bedrooms?: number; city?: string; type?: string;
         }) => ({
@@ -689,13 +697,6 @@ export async function PATCH(req: NextRequest) {
         } catch (listingErr) {
           console.warn("[Onboarding] Listing upsert warning:", listingErr);
         }
-
-        // Remove demo listings that were created by a previous demo-mode onboarding run.
-        // Demo listings have hostawayId matching `${orgSuffix}_demo-*`.
-        await Listing.deleteMany({
-          orgId: new mongoose.Types.ObjectId(payload.orgId),
-          hostawayId: { $regex: `^${orgSuffix}_demo-` },
-        });
 
         // Fetch all listings that were just upserted (all real Hostaway listings)
         const hostawayIds = listings.map((l: { id: string }) => `${orgSuffix}_${l.id}`);

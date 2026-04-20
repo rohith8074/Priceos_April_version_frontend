@@ -669,9 +669,11 @@ export function OverviewClient({
               </div>
 
               <TooltipProvider delayDuration={100}>
+                {/* ~7 property rows visible; scroll for the rest */}
+                <div className="max-h-[calc(7*3.5rem)] min-h-0 overflow-y-auto custom-scrollbar">
                 <div className="flex flex-col relative z-0">
                   {filteredProperties.sort((a, b) => b.revenue - a.revenue).map((property, idx) => (
-                    <div key={property.id} className={`flex border-b border-border dark:border-white/5 transition-colors hover:bg-muted/50 dark:hover:bg-white/5 ${idx % 2 === 0 ? 'bg-transparent' : 'bg-muted/20 dark:bg-black/20'}`}>
+                    <div key={property.id} className={`flex min-h-[3.5rem] border-b border-border dark:border-white/5 transition-colors hover:bg-muted/50 dark:hover:bg-white/5 ${idx % 2 === 0 ? 'bg-transparent' : 'bg-muted/20 dark:bg-black/20'}`}>
                       <div className="w-[300px] shrink-0 p-3 flex flex-col justify-center border-r border-border dark:border-white/10 sticky left-0 bg-background dark:bg-[#0c0c0e] z-10 shadow-xl">
                         <span className="text-sm font-semibold truncate text-foreground dark:text-white">{property.name}</span>
                         <span className="text-xs text-muted-foreground truncate">{property.area}</span>
@@ -766,6 +768,7 @@ export function OverviewClient({
                       </div>
                     </div>
                   ))}
+                </div>
                 </div>
               </TooltipProvider>
             </div>

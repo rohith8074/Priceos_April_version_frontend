@@ -7,9 +7,8 @@ import { BenchmarkWidget } from "@/components/signals/benchmark-widget";
 import { CalendarVisualizer } from "@/components/chat/calendar-visualizer";
 import { useContextStore } from "@/stores/context-store";
 import {
-    Sparkles, Calendar, Activity, MessageSquareQuote,
-    Loader2, CheckCircle2, AlertCircle, Sparkles as SparkleIcon,
-    ChevronLeft, Send, User
+    Sparkles, Calendar, Activity,
+    ChevronLeft, Send, User,
 } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
@@ -55,8 +54,6 @@ export function SidebarTabbedView() {
         dateRange,
         contextType,
         propertyId,
-        conversationSummary,
-        setConversationSummary,
         marketRefreshTrigger,
         propertyCurrency,
     } = useContextStore();
@@ -204,121 +201,6 @@ export function SidebarTabbedView() {
                                                     <><span className="text-3xl font-black tracking-tighter">{calendarMetrics.avgPrice.toFixed(0)}</span><span className="text-[12px] font-bold text-muted-foreground mb-0.5 ml-1">{propertyCurrency}</span></>
                                                 )}
                                             </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="border border-border/50 rounded-2xl bg-muted/10 shrink-0 relative flex flex-col shadow-inner overflow-hidden min-h-[300px]">
-                                        <div className="absolute top-0 right-0 p-6 opacity-5 pointer-events-none">
-                                            <MessageSquareQuote className="h-32 w-32" />
-                                        </div>
-
-                                        <div className="p-5 border-b border-border/30 flex items-center justify-between bg-muted/20 relative z-10">
-                                            <div>
-                                                <h3 className="text-xs font-black uppercase tracking-widest text-foreground">Guest Insights</h3>
-                                                <p className="text-[11px] font-medium text-muted-foreground mt-0.5">
-                                                    {dateRange?.from ? format(dateRange.from, 'MMM d') : ''} - {dateRange?.to ? format(dateRange.to, 'MMM d') : ''}
-                                                </p>
-                                            </div>
-                                            {conversationSummary && (
-                                                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-background border shadow-sm">
-                                                    {conversationSummary.sentiment === 'Positive' && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />}
-                                                    {conversationSummary.sentiment === 'Needs Attention' && <AlertCircle className="h-3.5 w-3.5 text-amber-500" />}
-                                                    {conversationSummary.sentiment === 'Neutral' && <Activity className="h-3.5 w-3.5 text-blue-500" />}
-                                                    <span className="text-[10px] font-bold uppercase tracking-wider">{conversationSummary.sentiment}</span>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="p-5 flex-1 relative z-10 flex flex-col overflow-y-auto">
-                                            {!conversationSummary && (
-                                                <div className="flex flex-col items-center justify-center flex-1 h-[200px] text-center">
-                                                    <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center mb-4">
-                                                        <MessageSquareQuote className="h-5 w-5 text-muted-foreground/50" />
-                                                    </div>
-                                                    <p className="text-[11px] text-muted-foreground max-w-[250px] leading-relaxed">
-                                                        Click <strong>&quot;Generate Summary&quot;</strong> in the chat area to get an AI-powered summary of all guest conversations.
-                                                    </p>
-                                                </div>
-                                            )}
-
-                                            {conversationSummary && (
-                                                <div className="space-y-5 animate-in fade-in duration-500">
-                                                    {/* Sentiment Badge */}
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Overall Sentiment</span>
-                                                        <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border shadow-sm ${conversationSummary.sentiment === 'Positive' ? 'bg-emerald-50 border-emerald-200 text-emerald-700 dark:bg-emerald-500/10 dark:border-emerald-500/20 dark:text-emerald-400' :
-                                                            conversationSummary.sentiment === 'Needs Attention' ? 'bg-rose-50 border-rose-200 text-rose-700 dark:bg-rose-500/10 dark:border-rose-500/20 dark:text-rose-400' :
-                                                                'bg-amber-50 border-amber-200 text-amber-700 dark:bg-amber-500/10 dark:border-amber-500/20 dark:text-amber-400'
-                                                            }`}>
-                                                            {conversationSummary.sentiment === 'Positive' && <CheckCircle2 className="h-3.5 w-3.5" />}
-                                                            {conversationSummary.sentiment === 'Needs Attention' && <AlertCircle className="h-3.5 w-3.5" />}
-                                                            {conversationSummary.sentiment === 'Neutral' && <Activity className="h-3.5 w-3.5" />}
-                                                            <span className="text-[10px] font-bold uppercase tracking-wider">{conversationSummary.sentiment}</span>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Stats */}
-                                                    {(conversationSummary.totalConversations || conversationSummary.needsReplyCount) && (
-                                                        <div className="flex gap-3">
-                                                            <div className="flex-1 bg-background rounded-lg p-3 border border-border/40 text-center">
-                                                                <span className="text-lg font-black">{conversationSummary.totalConversations || 0}</span>
-                                                                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mt-0.5">Conversations</p>
-                                                            </div>
-                                                            <div className="flex-1 bg-amber-50 dark:bg-amber-500/5 rounded-lg p-3 border border-amber-200 dark:border-amber-500/20 text-center">
-                                                                <span className="text-lg font-black text-amber-600 dark:text-amber-400">{conversationSummary.needsReplyCount || 0}</span>
-                                                                <p className="text-[9px] font-bold uppercase tracking-widest text-amber-600/70 dark:text-amber-400/70 mt-0.5">Needs Reply</p>
-                                                            </div>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Key Themes */}
-                                                    {conversationSummary.themes?.length > 0 && (
-                                                        <div className="space-y-2">
-                                                            <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Key Themes</h4>
-                                                            <ul className="space-y-2 bg-background/50 rounded-xl p-3 border border-border/40">
-                                                                {conversationSummary.themes.map((theme: string, i: number) => (
-                                                                    <li key={i} className="flex gap-2.5 text-[12px]">
-                                                                        <span className="text-amber-500 shrink-0 mt-0.5">•</span>
-                                                                        <span className="text-foreground/90 leading-relaxed font-medium">{theme}</span>
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Action Items */}
-                                                    {conversationSummary.actionItems?.length > 0 && (
-                                                        <div className="space-y-2">
-                                                            <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Action Items</h4>
-                                                            <ul className="space-y-2 bg-amber-500/5 rounded-xl p-3 border border-amber-500/20">
-                                                                {conversationSummary.actionItems.map((item: string, i: number) => (
-                                                                    <li key={i} className="flex items-start gap-2.5 text-[12px]">
-                                                                        <div className="h-3.5 w-3.5 rounded shrink-0 border border-amber-500/30 flex items-center justify-center mt-0.5 bg-background">
-                                                                            <div className="h-1.5 w-1.5 rounded-sm bg-amber-500/50" />
-                                                                        </div>
-                                                                        <span className="text-amber-900 dark:text-amber-200 leading-relaxed font-medium">{item}</span>
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Bullet Points */}
-                                                    {conversationSummary.bulletPoints?.length > 0 && (
-                                                        <div className="space-y-2">
-                                                            <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Conversation Summaries</h4>
-                                                            <ul className="space-y-1.5 bg-background/50 rounded-xl p-3 border border-border/40">
-                                                                {conversationSummary.bulletPoints.map((bp: string, i: number) => (
-                                                                    <li key={i} className="text-[11px] text-foreground/80 leading-snug flex gap-2">
-                                                                        <span className="shrink-0 mt-0.5 text-muted-foreground">→</span>
-                                                                        <span>{bp}</span>
-                                                                    </li>
-                                                                ))}
-                                                            </ul>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
                                         </div>
                                     </div>
                                 </div>
