@@ -1,68 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB, MarketEvent } from "@/lib/db";
-import { getSession } from "@/lib/auth/server";
+import { verifyAccessToken } from "@/lib/auth/jwt";
 
-export const dynamic = "force-dynamic";
+const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await getSession();
-    await connectDB();
-
+    const token = req.cookies.get("priceos-session")?.value;
     const { searchParams } = new URL(req.url);
-    const listingId = searchParams.get("listingId");
-    const dateFrom = searchParams.get("dateFrom");
-    const dateTo = searchParams.get("dateTo");
-    const impactLevel = searchParams.get("impactLevel");
-
-    // Build query — scope by org if authenticated, else allow portfolio view
-    const query: Record<string, unknown> = {};
-    if (session?.orgId) {
-      query.orgId = session.orgId;
+    
+    // Ensure orgId is present
+    if (!searchParams.has("orgId") && token) {
+      try {
+        const payload = verifyAccessToken(token);
+        if (payload?.orgId) {
+          searchParams.set("orgId", payload.orgId);
+        }
+      } catch (e) {
+        console.error("Token verification failed in events proxy", e);
+      }
     }
-    if (listingId) {
-      query.$or = [{ listingId }, { listingId: null }];
+
+    // Copy all search params to the backend request
+    const queryString = searchParams.toString();
+    
+    let res: Response;
+    try {
+      res = await fetch(`${BACKEND}/events?${queryString}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        cache: "no-store",
+      });
+    } catch (fetchErr) {
+      console.error("[api/events GET] backend unavailable", fetchErr);
+      return NextResponse.json({ events: [], source: "standalone" }, { status: 200 });
     }
-    if (dateFrom) query.endDate = { $gte: dateFrom };
-    if (dateTo) query.startDate = { $lte: dateTo };
-    if (impactLevel) query.impactLevel = impactLevel;
 
-    const events = await MarketEvent.find(query)
-      .sort({ startDate: 1 })
-      .limit(100)
-      .lean();
+    if (!res.ok) {
+      return NextResponse.json({ events: [], error: "Backend error", source: "proxy" }, { status: 200 });
+    }
 
-    const latestUpdatedAt = events.reduce<string | null>((latest, event: any) => {
-      const current = event?.updatedAt ? new Date(event.updatedAt).toISOString() : null;
-      if (!current) return latest;
-      if (!latest) return current;
-      return current > latest ? current : latest;
-    }, null);
-
-    return NextResponse.json({ success: true, events, latestUpdatedAt });
+    const data = await res.json();
+    return NextResponse.json(data);
   } catch (error) {
-    console.error("[Events GET]", error);
-    return NextResponse.json({ error: "Failed to fetch events" }, { status: 500 });
-  }
-}
-
-export async function POST(req: NextRequest) {
-  try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    await connectDB();
-    const body = await req.json();
-
-    const event = await MarketEvent.create({
-      ...body,
-      orgId: session.orgId,
-      source: body.source || "manual",
-    });
-
-    return NextResponse.json({ success: true, event }, { status: 201 });
-  } catch (error) {
-    console.error("[Events POST]", error);
-    return NextResponse.json({ error: "Failed to create event" }, { status: 500 });
+    console.error("[api/events GET]", error);
+    return NextResponse.json({ events: [], error: "Internal server error" }, { status: 500 });
   }
 }

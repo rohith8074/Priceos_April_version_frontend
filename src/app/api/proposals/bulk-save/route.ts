@@ -1,51 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB, InventoryMaster } from "@/lib/db";
-import { getSession } from "@/lib/auth/server";
-import mongoose from "mongoose";
+import { verifyAccessToken } from "@/lib/auth/jwt";
+
+const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const { proposals } = await req.json();
-    if (!Array.isArray(proposals) || proposals.length === 0) {
-      return NextResponse.json({ error: "No proposals provided" }, { status: 400 });
-    }
-
-    await connectDB();
-    const batchId = new mongoose.Types.ObjectId().toString();
-
-    const ops = proposals.map((p: {
-      listingId: string;
-      date: string;
-      proposedPrice: number;
-      changePct?: number;
-      reasoning?: string;
-    }) => ({
-      updateOne: {
-        filter: {
-          listingId: new mongoose.Types.ObjectId(p.listingId),
-          date: p.date,
-          orgId: new mongoose.Types.ObjectId(session!.orgId),
-        },
-        update: {
-          $set: {
-            proposedPrice: p.proposedPrice,
-            proposalStatus: "pending" as const,
-            changePct: p.changePct ?? undefined,
-            reasoning: p.reasoning ?? undefined,
-            batchId,
-          },
-        },
-        upsert: false,
-      },
-    }));
-
-    const result = await InventoryMaster.bulkWrite(ops);
-    return NextResponse.json({ success: true, batchId, modified: result.modifiedCount });
-  } catch (error) {
-    console.error("[Proposals bulk-save]", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const token = req.cookies.get("priceos-session")?.value;
+    if (!token) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    const payload = verifyAccessToken(token);
+    const body = await req.json();
+    const backendRes = await fetch(`${BACKEND}/proposals/bulk-save`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...body, orgId: payload.orgId }),
+    });
+    const data = await backendRes.json();
+    return NextResponse.json(data, { status: backendRes.status });
+  } catch (err) {
+    console.error("[bulk-save proxy]", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -1,26 +1,17 @@
-import { NextResponse } from "next/server";
-import { startBackgroundSync } from "@/lib/sync/background-sync";
-import { getSession } from "@/lib/auth/server";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function POST() {
-    const session = await getSession();
-    if (!session?.orgId) {
-        return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
-    }
+const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
-    const result = startBackgroundSync(session.orgId);
+export async function POST(_req: NextRequest) {
+  try {
+    const backendRes = await fetch(`${BACKEND}/sync/trigger`, {
+      method: "POST",
+    });
 
-    if (!result.started) {
-        return NextResponse.json({
-            success: false,
-            status: result.status,
-            message: result.message,
-        }, { status: 409 });
-    }
-
-    return NextResponse.json({
-        success: true,
-        status: result.status,
-        message: result.message,
-    }, { status: 202 });
+    const data = await backendRes.json();
+    return NextResponse.json(data, { status: backendRes.status });
+  } catch (err) {
+    console.error("[sync/trigger proxy]", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

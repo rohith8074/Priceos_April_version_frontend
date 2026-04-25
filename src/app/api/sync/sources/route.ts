@@ -1,23 +1,14 @@
 import { NextResponse } from "next/server";
-import { connectDB, Source } from "@/lib/db";
-import { SOURCES_SEED } from "@/lib/db/seed/sources-detectors";
 
-export const dynamic = "force-dynamic";
+const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
 export async function GET() {
   try {
-    await connectDB();
-
-    // Auto-seed if the collection is empty (first boot / no seed script run)
-    const count = await Source.countDocuments();
-    if (count === 0) {
-      await Source.insertMany(SOURCES_SEED);
-    }
-
-    const sources = await Source.find({}).sort({ sourceId: 1 }).lean();
-    return NextResponse.json({ success: true, sources });
-  } catch (error) {
-    console.error("[Sync/Sources GET]", error);
-    return NextResponse.json({ error: "Failed to fetch sources" }, { status: 500 });
+    const backendRes = await fetch(`${BACKEND}/sync/sources`);
+    const data = await backendRes.json();
+    return NextResponse.json(data, { status: backendRes.status });
+  } catch (err) {
+    console.error("[sync/sources proxy]", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

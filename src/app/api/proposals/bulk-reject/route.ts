@@ -1,26 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB, InventoryMaster } from "@/lib/db";
-import { getSession } from "@/lib/auth/server";
+import { verifyAccessToken } from "@/lib/auth/jwt";
+
+const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    const { proposalIds } = await req.json();
-    if (!Array.isArray(proposalIds) || proposalIds.length === 0) {
-      return NextResponse.json({ error: "Invalid proposal IDs" }, { status: 400 });
-    }
-
-    await connectDB();
-    const result = await InventoryMaster.updateMany(
-      { _id: { $in: proposalIds }, orgId: session.orgId, proposalStatus: "pending" },
-      { $set: { proposalStatus: "rejected" } }
-    );
-
-    return NextResponse.json({ success: true, count: result.modifiedCount });
-  } catch (error) {
-    console.error("[Proposals bulk-reject]", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    const token = req.cookies.get("priceos-session")?.value;
+    if (!token) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    const payload = verifyAccessToken(token);
+    const body = await req.json();
+    const backendRes = await fetch(`${BACKEND}/proposals/bulk-reject`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...body, orgId: payload.orgId }),
+    });
+    const data = await backendRes.json();
+    return NextResponse.json(data, { status: backendRes.status });
+  } catch (err) {
+    console.error("[bulk-reject proxy]", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

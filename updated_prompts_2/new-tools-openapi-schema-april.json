@@ -1,0 +1,184 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "PriceOS Proximity Market Intelligence API",
+    "version": "1.0.0",
+    "description": "API specification for PriceOS neighborhood-level competitor analysis and listing performance."
+  },
+  "servers": [
+    {
+      "url": "https://api.priceos.com/v1",
+      "description": "Production server"
+    }
+  ],
+  "paths": {
+    "/nearby-comps": {
+      "get": {
+        "summary": "Get nearby competitors and percentiles",
+        "description": "Fetches true local competitors within a 1km radius using the Haversine formula based on the target property's coordinates. Returns raw competitor listings and computed percentiles (P25/P50/P75/P90) for the specified date range.",
+        "operationId": "get_nearby_comps",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "query",
+            "description": "Organization ID (from session context)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "apiKey",
+            "in": "query",
+            "description": "API Key (from session context)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "listingId",
+            "in": "query",
+            "description": "Listing ID (from session context)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "description": "Latitude of the target property (from profile)",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "format": "float"
+            }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "description": "Longitude of the target property (from profile)",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "format": "float"
+            }
+          },
+          {
+            "name": "bedrooms",
+            "in": "query",
+            "description": "Bedroom count to filter competitors by (from profile)",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "description": "Start date for analysis in YYYY-MM-DD format",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "dateTo",
+            "in": "query",
+            "description": "End date for analysis in YYYY-MM-DD format",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response containing percentiles and competitor list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "percentiles": {
+                      "type": "object",
+                      "properties": {
+                        "p25": { "type": "number" },
+                        "p50": { "type": "number" },
+                        "p75": { "type": "number" },
+                        "p90": { "type": "number" }
+                      }
+                    },
+                    "comps": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          }
+        }
+      }
+    },
+    "/listing-perf": {
+      "get": {
+        "summary": "Get competitor listing performance",
+        "description": "Fetches the historical month-by-month performance (Occupancy %, ADR, RevPAR, Revenue) for a specific competitor's listing ID.",
+        "operationId": "get_listing_perf",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "query",
+            "description": "Organization ID (from session context)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "apiKey",
+            "in": "query",
+            "description": "API Key (from session context)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "competitorListingId",
+            "in": "query",
+            "description": "The listing_id of the competitor property to analyze",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response containing historical performance data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request"
+          }
+        }
+      }
+    }
+  }
+}

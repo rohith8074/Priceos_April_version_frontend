@@ -1,95 +1,27 @@
-import { NextResponse } from "next/server";
-import { connectDB, HostawayConversation } from "@/lib/db";
-import { getSession } from "@/lib/auth/server";
-import mongoose from "mongoose";
+import { NextRequest, NextResponse } from "next/server";
+import { verifyAccessToken } from "@/lib/auth/jwt";
 
-/**
- * GET /api/hostaway/conversations/cached
- *
- * Returns previously synced conversations from MongoDB.
- * No Hostaway API calls — purely reads from our cache.
- *
- * Query params: listingId (optional), from, to (from/to optional)
- */
-export async function GET(request: Request) {
-    const { searchParams } = new URL(request.url);
-    const listingId = searchParams.get("listingId");
-    const dateFrom = searchParams.get("from");
-    const dateTo = searchParams.get("to");
+const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
+export async function GET(req: NextRequest) {
+  try {
+    const token = req.cookies.get("priceos-session")?.value;
+    if (!token) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    const payload = verifyAccessToken(token);
+    const listingId = req.nextUrl.searchParams.get("listingId");
+    const qs = new URLSearchParams({ orgId: payload.orgId });
+    if (listingId) qs.set("listingId", listingId);
     try {
-        await connectDB();
-        const session = await getSession();
-        if (!session?.orgId) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
-        const orgId = new mongoose.Types.ObjectId(session.orgId);
-
-        const query: Record<string, any> = { orgId };
-        if (listingId) {
-            try {
-                query.listingId = new mongoose.Types.ObjectId(listingId);
-            } catch {
-                return NextResponse.json({ error: "Invalid listingId" }, { status: 400 });
-            }
-        }
-        if (dateFrom && dateTo) {
-            query.dateFrom = { $lte: dateTo };
-            query.dateTo = { $gte: dateFrom };
-        }
-
-        const rows = await HostawayConversation.find(query).sort({ syncedAt: -1 }).lean();
-
-        if (rows.length === 0) {
-            return NextResponse.json({ success: true, conversations: [] });
-        }
-
-        // Deduplicate by hostawayConversationId
-        const uniqueRowsMap = new Map<string, typeof rows[0]>();
-        for (const row of rows) {
-            if (!uniqueRowsMap.has(row.hostawayConversationId)) {
-                uniqueRowsMap.set(row.hostawayConversationId, row);
-            }
-        }
-        const uniqueRows = Array.from(uniqueRowsMap.values());
-
-        const uiConversations = uniqueRows.map((conv) => {
-            const dbMessages = conv.messages as { sender: string; text: string; timestamp: string }[];
-
-            const allMessages = dbMessages
-                .map((m, idx) => ({
-                    id: `${conv.hostawayConversationId}_${idx}`,
-                    sender: m.sender as "guest" | "admin",
-                    text: m.text,
-                    time: m.timestamp
-                        ? new Date(m.timestamp).toLocaleTimeString("en-US", {
-                              hour: "numeric",
-                              minute: "2-digit",
-                          })
-                        : "",
-                    _ts: m.timestamp ? new Date(m.timestamp).getTime() : idx,
-                }))
-                .sort((a, b) => a._ts - b._ts);
-
-            const lastMsg = allMessages[allMessages.length - 1];
-
-            return {
-                id: conv.hostawayConversationId,
-                listingId: String(conv.listingId),
-                guestName: conv.guestName,
-                lastMessage: lastMsg?.text || "No messages",
-                status: lastMsg?.sender === "guest" ? "needs_reply" : "resolved",
-                messages: allMessages.map(({ _ts, ...rest }) => rest),
-            };
-        });
-
-        return NextResponse.json({
-            success: true,
-            conversations: uiConversations,
-            cached: true,
-        });
-    } catch (error) {
-        console.error("❌ [Cached Conversations] Error:", error);
-        return NextResponse.json({ error: "Failed to load cached conversations" }, { status: 500 });
+      const res = await fetch(`${BACKEND}/hostaway/conversations/cached?${qs.toString()}`);
+      const data = await res.json();
+      return NextResponse.json(data, { status: res.status });
+    } catch (fetchErr) {
+      // Backend not running (ECONNREFUSED) — degrade gracefully for standalone frontend usage.
+      console.error("[hostaway/conversations/cached GET] backend unavailable", fetchErr);
+      return NextResponse.json({ conversations: [], source: "standalone" }, { status: 200 });
     }
+  } catch (error) {
+    console.error("[hostaway/conversations/cached GET]", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

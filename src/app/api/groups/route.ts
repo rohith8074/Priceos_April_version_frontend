@@ -1,44 +1,37 @@
-/**
- * GET  /api/groups        — list all groups for the org
- * POST /api/groups        — create a new group
- */
-
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/auth/server";
-import { connectDB, PropertyGroup } from "@/lib/db";
-import mongoose from "mongoose";
+import { verifyAccessToken } from "@/lib/auth/jwt";
 
-export async function GET() {
-  const session = await getSession();
-  if (!session?.orgId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
-  await connectDB();
-  const groups = await PropertyGroup.find({
-    orgId: new mongoose.Types.ObjectId(session.orgId),
-  }).sort({ name: 1 }).lean();
-
-  return NextResponse.json(groups);
+export async function GET(req: NextRequest) {
+  try {
+    const token = req.cookies.get("priceos-session")?.value;
+    if (!token) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    const payload = verifyAccessToken(token);
+    const backendRes = await fetch(`${BACKEND}/groups/?orgId=${encodeURIComponent(payload.orgId)}`);
+    const data = await backendRes.json();
+    return NextResponse.json(data, { status: backendRes.status });
+  } catch (err) {
+    console.error("[groups GET proxy]", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
-  const session = await getSession();
-  if (!session?.orgId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  await connectDB();
-  const body = await req.json();
-  const { name, description, color, listingIds } = body;
-
-  if (!name?.trim()) {
-    return NextResponse.json({ error: "Group name is required" }, { status: 400 });
+  try {
+    const token = req.cookies.get("priceos-session")?.value;
+    if (!token) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    const payload = verifyAccessToken(token);
+    const body = await req.json();
+    const backendRes = await fetch(`${BACKEND}/groups/?orgId=${encodeURIComponent(payload.orgId)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await backendRes.json();
+    return NextResponse.json(data, { status: backendRes.status });
+  } catch (err) {
+    console.error("[groups POST proxy]", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
-
-  const group = await PropertyGroup.create({
-    orgId: new mongoose.Types.ObjectId(session.orgId),
-    name: name.trim(),
-    description: description?.trim() ?? "",
-    color: color ?? "#6366f1",
-    listingIds: (listingIds ?? []).map((id: string) => new mongoose.Types.ObjectId(id)),
-  });
-
-  return NextResponse.json(group, { status: 201 });
 }

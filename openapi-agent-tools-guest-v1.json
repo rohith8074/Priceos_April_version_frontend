@@ -1,39 +1,291 @@
 {
-  "openapi": "3.0.3",
+  "openapi": "3.0.0",
   "info": {
-    "title": "PriceOS Guest Inbox Agent Tools API",
-    "version": "1.3.0"
+    "title": "Guest Agent Tools API",
+    "version": "1.0.0",
+    "description": "Tools for managing guest conversation threads, reservations, operations tickets, and upsell offers."
   },
   "servers": [
-    { "url": "https://sadistically-calycine-carry.ngrok-free.dev/api/agent-tools/v1" }
+    {
+      "url": "https://sadistically-calycine-carry.ngrok-free.dev/api/guest-agent",
+      "description": "Production ngrok server"
+    }
   ],
   "paths": {
-    "/list-guest-conversations": {
+    "/threads": {
       "get": {
-        "operationId": "list_guest_conversations",
-        "description": "Returns all guest conversations for a listing with last message and reply status.",
+        "summary": "List guest threads",
+        "description": "Return guest conversation threads for this org.",
+        "operationId": "listThreads",
         "parameters": [
-          { "name": "apiKey", "in": "query", "required": true, "schema": { "type": "string" } },
-          { "name": "orgId", "in": "query", "required": true, "schema": { "type": "string" } },
-          { "name": "listingId", "in": "query", "required": true, "schema": { "type": "string" } },
-          { "name": "dateFrom", "in": "query", "required": true, "schema": { "type": "string" } },
-          { "name": "dateTo", "in": "query", "required": true, "schema": { "type": "string" } }
+          {
+            "name": "orgId",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "status_filter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["all", "open", "urgent", "pending_approval", "closed"],
+              "default": "all"
+            }
+          }
         ],
-        "responses": { "200": { "description": "OK" } }
+        "responses": {
+          "200": { "description": "List of threads returned successfully" },
+          "400": { "description": "Bad request" }
+        }
       }
     },
-    "/get-guest-summary": {
+
+    "/threads/{thread_id}": {
       "get": {
-        "operationId": "get_guest_summary",
-        "description": "Returns AI-generated summary of guest sentiment and common issues for a listing.",
+        "summary": "Read a thread",
+        "description": "Fetch conversation details and reservation context for a thread.",
+        "operationId": "readThread",
         "parameters": [
-          { "name": "apiKey", "in": "query", "required": true, "schema": { "type": "string" } },
-          { "name": "orgId", "in": "query", "required": true, "schema": { "type": "string" } },
-          { "name": "listingId", "in": "query", "required": true, "schema": { "type": "string" } },
-          { "name": "dateFrom", "in": "query", "required": true, "schema": { "type": "string" } },
-          { "name": "dateTo", "in": "query", "required": true, "schema": { "type": "string" } }
+          {
+            "name": "thread_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "include_reservation",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean", "default": true }
+          }
         ],
-        "responses": { "200": { "description": "OK" } }
+        "responses": {
+          "200": { "description": "Thread details returned successfully" },
+          "404": { "description": "Thread not found" }
+        }
+      }
+    },
+
+    "/send-reply": {
+      "post": {
+        "summary": "Send a guest message",
+        "description": "Send or draft a guest reply message.",
+        "operationId": "sendGuestMessage",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["threadId", "content"],
+                "properties": {
+                  "threadId": { "type": "string" },
+                  "content": { "type": "string" },
+                  "approvalRequired": { "type": "boolean" },
+                  "intent": { "type": "string" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Message sent or drafted successfully" },
+          "400": { "description": "Bad request" }
+        }
+      }
+    },
+
+    "/create-ops-ticket": {
+      "post": {
+        "summary": "Create an ops ticket",
+        "description": "Create a maintenance/operations ticket from a conversation.",
+        "operationId": "createOpsTicket",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["orgId", "threadId", "reservationId", "category", "description", "severity"],
+                "properties": {
+                  "orgId": { "type": "string" },
+                  "threadId": { "type": "string" },
+                  "reservationId": { "type": "string" },
+                  "listingId": { "type": "string", "description": "Optional listing/property ID." },
+                  "category": {
+                    "type": "string",
+                    "enum": ["maintenance", "housekeeping", "access", "noise", "amenity_fault", "other"]
+                  },
+                  "description": { "type": "string" },
+                  "severity": {
+                    "type": "string",
+                    "enum": ["critical", "high", "medium", "low"]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Ticket created successfully" },
+          "400": { "description": "Bad request" }
+        }
+      }
+    },
+
+    "/escalate-thread": {
+      "post": {
+        "summary": "Escalate a thread",
+        "description": "Escalate a thread to human manager and pause auto-comms.",
+        "operationId": "escalateThread",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["threadId", "reason", "urgency", "contextSummary"],
+                "properties": {
+                  "threadId": { "type": "string" },
+                  "reason": { "type": "string" },
+                  "urgency": {
+                    "type": "string",
+                    "enum": ["immediate", "high", "normal"]
+                  },
+                  "contextSummary": { "type": "string" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Thread escalated successfully" },
+          "404": { "description": "Thread not found" }
+        }
+      }
+    },
+
+    "/close-thread": {
+      "post": {
+        "summary": "Close a thread",
+        "description": "Close a guest thread.",
+        "operationId": "closeThread",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["threadId", "reason"],
+                "properties": {
+                  "threadId": { "type": "string" },
+                  "reason": { "type": "string" },
+                  "sendFarewell": { "type": "boolean", "default": false }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Thread closed successfully" },
+          "404": { "description": "Thread not found" }
+        }
+      }
+    },
+
+    "/send-access-details": {
+      "post": {
+        "summary": "Send access details",
+        "description": "Send access/wifi instructions for eligible reservations.",
+        "operationId": "sendAccessDetails",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["orgId", "listingId", "reservationId", "threadId"],
+                "properties": {
+                  "orgId": { "type": "string" },
+                  "listingId": { "type": "string" },
+                  "reservationId": { "type": "string" },
+                  "threadId": { "type": "string" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Access details sent successfully" },
+          "400": { "description": "Bad request" }
+        }
+      }
+    },
+
+    "/property-data/{listing_id}": {
+      "get": {
+        "summary": "Get property data",
+        "description": "Get current property availability and event context.",
+        "operationId": "getPropertyData",
+        "parameters": [
+          {
+            "name": "listing_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "orgId",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Property data returned successfully" },
+          "404": { "description": "Listing not found" }
+        }
+      }
+    },
+
+    "/send-upsell": {
+      "post": {
+        "summary": "Send upsell offer",
+        "description": "Send structured upsell offer to guest.",
+        "operationId": "sendUpsellOffer",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["threadId", "offerType", "price"],
+                "properties": {
+                  "threadId": { "type": "string" },
+                  "offerType": {
+                    "type": "string",
+                    "enum": ["early_checkin", "late_checkout", "extended_stay", "upgrade"]
+                  },
+                  "price": { "type": "number" },
+                  "currency": { "type": "string", "default": "AED" },
+                  "details": { "type": "string" }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Upsell offer sent successfully" },
+          "400": { "description": "Bad request" }
+        }
       }
     }
   }

@@ -4,12 +4,21 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Send, Loader2, RefreshCw, X, Maximize2, Minimize2 } from "lucide-react";
+import { Bot, Send, Loader2, RefreshCw, X, Maximize2, Minimize2, Activity } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { readSSEStream } from "@/lib/chat/sse-reader";
 import { cn } from "@/lib/utils";
+import { useLyzrAgentEvents } from "@/hooks/use-lyzr-agent-events";
+import { LiveInferenceFlowGraph, type FlowStage } from "./live-inference-flow-graph";
+import { SUPPORT_AGENT_STREAM_EVENT, type SupportAgentStreamEventPayload } from "@/lib/chat/inference-events";
+
+const DASHBOARD_STAGES: FlowStage[] = [
+  { id: "routing", label: "Portfolio Router", status: "pending" },
+  { id: "analyzing", label: "Data Analyst", status: "pending" },
+  { id: "generating", label: "Response", status: "pending" },
+];
 
 interface Message {
   id: string;
@@ -29,8 +38,13 @@ export function DashboardChatPopup({ isOpen, onOpenChange }: DashboardChatPopupP
   const [isLoading, setIsLoading] = useState(false);
   const [statusText, setStatusText] = useState("");
   const [sessionId, setSessionId] = useState<string>("");
+  const [graphQueryId, setGraphQueryId] = useState<string>("");
+  const [showGraph, setShowGraph] = useState(false);
+  const [stages, setStages] = useState<FlowStage[]>(DASHBOARD_STAGES);
   const [isExpanded, setIsExpanded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const { isConnected: isGraphConnected, events: graphEvents } = useLyzrAgentEvents(graphQueryId, isLoading);
 
   useEffect(() => {
     if (isOpen && !sessionId) {
@@ -82,6 +96,25 @@ export function DashboardChatPopup({ isOpen, onOpenChange }: DashboardChatPopupP
     setInput("");
     setIsLoading(true);
     setStatusText("Connecting to PriceOS…");
+    setShowGraph(true);
+
+    // Fresh ID per query → hook resets events, WebSocket reconnects
+    const newGraphId = `dash-gq-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    setGraphQueryId(newGraphId);
+    setStages(DASHBOARD_STAGES.map(s => ({ ...s, status: "pending" })));
+
+    const emitGraphEvent = (event: SupportAgentStreamEventPayload["event"]) => {
+      if (typeof window === "undefined") return;
+      window.dispatchEvent(new CustomEvent<SupportAgentStreamEventPayload>(SUPPORT_AGENT_STREAM_EVENT, {
+        detail: { sessionId: newGraphId, event },
+      }));
+    };
+
+    // Emit initial "routing" stage after a tick so the hook re-subscribes first
+    setTimeout(() => {
+      emitGraphEvent({ timestamp: new Date().toISOString(), event_type: "tool_called", tool_name: "Portfolio Router", agent_name: "Portfolio Router", iteration: 1, status: "active" });
+      setStages(prev => prev.map(s => s.id === "routing" ? { ...s, status: "active" } : s));
+    }, 80);
 
     try {
       const response = await fetch("/api/chat/global", {
@@ -90,6 +123,7 @@ export function DashboardChatPopup({ isOpen, onOpenChange }: DashboardChatPopupP
         body: JSON.stringify({
           message: outgoing,
           sessionId: sessionId,
+          graphSessionId: newGraphId,
         }),
       });
 
@@ -97,8 +131,20 @@ export function DashboardChatPopup({ isOpen, onOpenChange }: DashboardChatPopupP
 
       await readSSEStream(
         response,
-        (msg) => setStatusText(msg),
+        (msg, step) => {
+          setStatusText(msg);
+          if (step === "agent") {
+            emitGraphEvent({ timestamp: new Date().toISOString(), event_type: "tool_response", tool_name: "Portfolio Router", agent_name: "Portfolio Router", iteration: 1, status: "done" });
+            emitGraphEvent({ timestamp: new Date().toISOString(), event_type: "tool_called", tool_name: "Data Analyst", agent_name: "Data Analyst", iteration: 1, status: "active" });
+            setStages(prev => prev.map(s => s.id === "routing" ? { ...s, status: "done" } : s.id === "analyzing" ? { ...s, status: "active" } : s));
+          }
+        },
         (data) => {
+          emitGraphEvent({ timestamp: new Date().toISOString(), event_type: "tool_response", tool_name: "Data Analyst", agent_name: "Data Analyst", iteration: 1, status: "done" });
+          emitGraphEvent({ timestamp: new Date().toISOString(), event_type: "tool_called", tool_name: "Response", agent_name: "Portfolio Router", iteration: 1, status: "active" });
+          emitGraphEvent({ timestamp: new Date().toISOString(), event_type: "output_generated", message: "Portfolio analysis complete", status: "done" });
+          setStages(prev => prev.map(s => ({ ...s, status: "done" })));
+
           const assistantMessage: Message = {
             id: (Date.now() + 1).toString(),
             role: "assistant",
@@ -146,6 +192,16 @@ export function DashboardChatPopup({ isOpen, onOpenChange }: DashboardChatPopupP
           </div>
         </div>
         <div className="flex items-center gap-1 shrink-0">
+          {graphQueryId && (
+            <button
+              type="button"
+              onClick={() => setShowGraph(v => !v)}
+              title={showGraph ? "Hide execution graph" : "Show execution graph"}
+              className={cn("p-1.5 rounded-md transition-colors", showGraph ? "text-amber" : "text-text-tertiary hover:text-amber")}
+            >
+              <Activity className="h-3.5 w-3.5" />
+            </button>
+          )}
           <button
             type="button"
             onClick={startNewSession}
@@ -178,6 +234,30 @@ export function DashboardChatPopup({ isOpen, onOpenChange }: DashboardChatPopupP
           Ask about portfolio performance, revenue trends, or which properties need attention
         </p>
       </div>
+
+      {/* Live Execution Graph — collapses when hidden */}
+      {showGraph && graphQueryId && (
+        <div className="shrink-0 border-b border-border-subtle/50 bg-muted/10" style={{ height: isExpanded ? 320 : 220 }}>
+          <div className="flex items-center justify-between px-3 py-1.5 border-b border-border-subtle/30">
+            <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-muted-foreground">
+              <span className={cn("h-1.5 w-1.5 rounded-full", isGraphConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500")} />
+              Execution Graph
+            </span>
+            <button type="button" onClick={() => setShowGraph(false)} className="text-text-tertiary hover:text-foreground p-0.5">
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+          <div className="relative" style={{ height: isExpanded ? 280 : 180 }}>
+            <LiveInferenceFlowGraph
+              stages={stages}
+              streamEvents={graphEvents}
+              flowStatus={isLoading ? "active" : "done"}
+              onExpandChange={() => {}}
+              isExpandedInitial={false}
+            />
+          </div>
+        </div>
+      )}
 
       <ScrollArea className="flex-1 min-h-0 px-4 py-3">
         <div className="flex flex-col gap-3">

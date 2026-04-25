@@ -1,32 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB, SourceRun } from "@/lib/db";
-import { requireSession } from "@/lib/auth/server";
+import { verifyAccessToken } from "@/lib/auth/jwt";
 
-export const dynamic = "force-dynamic";
+const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
 export async function GET(req: NextRequest) {
   try {
-    const session = await requireSession();
-    await connectDB();
-
+    const token = req.cookies.get("priceos-session")?.value;
+    if (!token) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    const payload = verifyAccessToken(token);
     const { searchParams } = new URL(req.url);
+    const limit = searchParams.get("limit") || "50";
     const sourceId = searchParams.get("sourceId");
-    const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 200);
+    const params = new URLSearchParams({ orgId: payload.orgId, limit });
+    if (sourceId) params.set("sourceId", sourceId);
 
-    const query: Record<string, unknown> = { orgId: session.orgId };
-    if (sourceId) query.sourceId = sourceId;
-
-    const runs = await SourceRun.find(query)
-      .sort({ startedAt: -1 })
-      .limit(limit)
-      .lean();
-
-    return NextResponse.json({ success: true, runs });
-  } catch (e: unknown) {
-    if (e instanceof Error && e.message === "UNAUTHORIZED") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-    console.error("[Sync/Runs GET]", e);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    const backendRes = await fetch(`${BACKEND}/sync/runs?${params.toString()}`);
+    const data = await backendRes.json();
+    return NextResponse.json(data, { status: backendRes.status });
+  } catch (err) {
+    console.error("[sync/runs proxy]", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

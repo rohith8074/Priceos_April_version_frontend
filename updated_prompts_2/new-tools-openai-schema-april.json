@@ -1,0 +1,108 @@
+{
+  "name": "priceos_new_neighborhood_tools",
+  "version": "1.0.0",
+  "description": "OpenAI function/tool schemas for new CRO Router neighborhood tools.",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_nearby_comps",
+        "description": "Fetch nearby competitor listings within a radius using haversine distance, with neighborhood ADR percentiles (P25/P50/P75/P90).",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "apiKey": {
+              "type": "string",
+              "description": "Shared API key for tool authentication."
+            },
+            "orgId": {
+              "type": "string",
+              "description": "Organization id (Mongo ObjectId string)."
+            },
+            "lat": {
+              "type": "number",
+              "description": "Target property latitude."
+            },
+            "lon": {
+              "type": "number",
+              "description": "Target property longitude."
+            },
+            "bedrooms": {
+              "type": "integer",
+              "description": "Bedroom count to match competitor set."
+            },
+            "month": {
+              "type": "string",
+              "description": "Target month in YYYY-MM or YYYY-MM-01 format."
+            },
+            "radiusKm": {
+              "type": "number",
+              "description": "Search radius in kilometers.",
+              "default": 1.0
+            },
+            "marketId": {
+              "type": "string",
+              "description": "Market id used by backend market datasets.",
+              "default": "2286"
+            },
+            "limit": {
+              "type": "integer",
+              "description": "Max number of nearby competitor listings.",
+              "default": 25,
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          "required": [
+            "apiKey",
+            "orgId",
+            "lat",
+            "lon",
+            "bedrooms",
+            "month"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "get_listing_perf",
+        "description": "Fetch month-by-month performance history for one competitor listing.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "apiKey": {
+              "type": "string",
+              "description": "Shared API key for tool authentication."
+            },
+            "orgId": {
+              "type": "string",
+              "description": "Organization id (Mongo ObjectId string)."
+            },
+            "marketId": {
+              "type": "string",
+              "description": "Market id used by backend competitor performance datasets."
+            },
+            "listingId": {
+              "type": "string",
+              "description": "Airbtics listing id for a selected competitor."
+            },
+            "month": {
+              "type": "string",
+              "description": "Optional month in YYYY-MM or YYYY-MM-01; omit to return all available months."
+            }
+          },
+          "required": [
+            "apiKey",
+            "orgId",
+            "marketId",
+            "listingId"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

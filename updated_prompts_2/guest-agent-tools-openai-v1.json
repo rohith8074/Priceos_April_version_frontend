@@ -1,0 +1,171 @@
+{
+  "name": "guest_agent_tools_openai_v1",
+  "version": "1.0.0",
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "listThreads",
+        "description": "Return guest conversation threads for this org.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "orgId": { "type": "string" },
+            "status_filter": {
+              "type": "string",
+              "enum": ["all", "open", "urgent", "pending_approval", "closed"],
+              "default": "all"
+            }
+          },
+          "required": ["orgId"],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "readThread",
+        "description": "Fetch conversation details and reservation context for a thread.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "threadId": { "type": "string" },
+            "include_reservation": { "type": "boolean", "default": true }
+          },
+          "required": ["threadId"],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "sendGuestMessage",
+        "description": "Send or draft a guest reply message.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "threadId": { "type": "string" },
+            "content": { "type": "string" },
+            "approvalRequired": { "type": "boolean" },
+            "intent": { "type": "string" }
+          },
+          "required": ["threadId", "content"],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "createOpsTicket",
+        "description": "Create a maintenance/operations ticket from a conversation.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "orgId": { "type": "string" },
+            "threadId": { "type": "string" },
+            "reservationId": { "type": "string" },
+            "category": {
+              "type": "string",
+              "enum": ["maintenance", "housekeeping", "access", "noise", "amenity_fault", "other"]
+            },
+            "description": { "type": "string" },
+            "severity": { "type": "string", "enum": ["critical", "high", "medium", "low"] }
+          },
+          "required": ["orgId", "threadId", "reservationId", "category", "description", "severity"],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "escalateThread",
+        "description": "Escalate a thread to human manager and pause auto-comms.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "threadId": { "type": "string" },
+            "reason": { "type": "string" },
+            "urgency": { "type": "string", "enum": ["immediate", "high", "normal"] },
+            "contextSummary": { "type": "string" }
+          },
+          "required": ["threadId", "reason", "urgency", "contextSummary"],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "closeThread",
+        "description": "Close a guest thread.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "threadId": { "type": "string" },
+            "reason": { "type": "string" },
+            "sendFarewell": { "type": "boolean", "default": false }
+          },
+          "required": ["threadId", "reason"],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "sendAccessDetails",
+        "description": "Send access/wifi instructions for eligible reservations.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "threadId": { "type": "string" },
+            "orgId": { "type": "string" },
+            "listingId": { "type": "string" },
+            "reservationId": { "type": "string" }
+          },
+          "required": ["threadId", "orgId", "listingId", "reservationId"],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "getPropertyData",
+        "description": "Get current property availability and event context.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "listingId": { "type": "string" },
+            "orgId": { "type": "string" }
+          },
+          "required": ["listingId", "orgId"],
+          "additionalProperties": false
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "sendUpsellOffer",
+        "description": "Send structured upsell offer to guest.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "threadId": { "type": "string" },
+            "offerType": { "type": "string", "enum": ["early_checkin", "late_checkout", "extended_stay", "upgrade"] },
+            "price": { "type": "number" },
+            "currency": { "type": "string", "default": "AED" },
+            "details": { "type": "string" }
+          },
+          "required": ["threadId", "offerType", "price"],
+          "additionalProperties": false
+        }
+      }
+    }
+  ]
+}

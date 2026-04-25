@@ -34,6 +34,7 @@ const BUSINESS_GROUP = [
   { name: "Market", href: "/market", icon: Globe },
   { name: "Agent Chat", href: "/agent-chat", icon: MessagesSquare },
   { name: "Guest Inbox", href: "/guest-chat", icon: MessageSquare, showGuestBadge: true },
+  { name: "Operations", href: "/operations", icon: Clock3 },
   { name: "Properties", href: "/properties", icon: Home },
   { name: "Groups", href: "/groups", icon: Layers },
 ];
@@ -122,9 +123,7 @@ export function AppSidebar() {
               return latest;
             }, null);
         setLastUpdatedAt(
-          latestUpdatedAt
-            ? latestUpdatedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-            : null
+          (latestUpdatedAt ?? new Date()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
         );
       } catch {
         // Best-effort only.

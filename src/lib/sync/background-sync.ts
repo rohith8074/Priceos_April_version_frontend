@@ -1,4 +1,3 @@
-import { connectDB, Listing, Reservation, Organization } from "@/lib/db";
 import { HostawayClient } from "@/lib/pms/hostaway-client";
 import {
   syncListingsToDb,
@@ -6,7 +5,6 @@ import {
   syncCalendarToDb,
   syncConversationsToDb,
 } from "@/lib/sync-server-utils";
-import mongoose from "mongoose";
 
 export type GlobalSyncStatus = {
   status: "idle" | "syncing" | "complete" | "error";
@@ -32,14 +30,13 @@ export async function performBackgroundSync(orgId?: string) {
   };
 
   try {
-    await connectDB();
-    if (!orgId) {
+        if (!orgId) {
       throw new Error("Missing organization for Hostaway sync.");
     }
 
     const org = await Organization.findById(orgId)
       .select("hostawayApiKey hostawayAccountId")
-      .lean();
+      ;
 
     if (!org?.hostawayApiKey) {
       throw new Error("Save Hostaway credentials in Settings before running sync.");
@@ -58,7 +55,7 @@ export async function performBackgroundSync(orgId?: string) {
 
     await syncListingsToDb(hListings.map((l) => ({ ...l, id: Number(l.id) })));
 
-    const dbListings = await Listing.find({}, { hostawayId: 1 }).lean();
+    const dbListings = await Listing.find({}, { hostawayId: 1 });
     const hostawayToInternalIdMap = new Map<number, mongoose.Types.ObjectId>(
       dbListings
         .filter((l) => l.hostawayId)

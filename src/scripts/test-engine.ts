@@ -1,7 +1,6 @@
 import * as dotenv from "dotenv";
 dotenv.config({ path: ".env.local" });
 
-import mongoose from "mongoose";
 import { connectDB, Listing, PricingRule, InventoryMaster } from "../lib/db";
 import { runPipeline } from "../lib/engine/pipeline";
 
@@ -9,10 +8,9 @@ async function test() {
     console.log("🚀 Starting Rule Engine Verification...");
 
     try {
-        await connectDB();
-
+        
         // 1. Find a listing to test with
-        const listing = await Listing.findOne({ isActive: true }).lean();
+        const listing = await Listing.findOne({ isActive: true });
         if (!listing) {
             console.log("❌ No listings found. Please seed the database first.");
             return;
@@ -72,7 +70,7 @@ async function test() {
         const results = await InventoryMaster.find({ listingId: lid })
             .sort({ date: 1 })
             .limit(10)
-            .lean();
+            ;
 
         results.forEach((r) => {
             console.log(

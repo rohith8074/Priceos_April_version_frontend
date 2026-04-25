@@ -109,7 +109,23 @@ export const useContextStore = create<ContextStore>()(
     {
       name: "priceos-context-storage",
       skipHydration: true, // Let component hydrate properly
-      storage: createJSONStorage(() => localStorage, { reviver: dateReviver }),
+      storage: createJSONStorage(
+        () => {
+          if (typeof window === "undefined") {
+            // SSR-safe no-op storage
+            return ({
+              getItem: () => null,
+              setItem: () => {},
+              removeItem: () => {},
+              clear: () => {},
+              key: () => null,
+              length: 0,
+            } as unknown) as Storage;
+          }
+          return localStorage;
+        },
+        { reviver: dateReviver }
+      ),
     }
   )
 );

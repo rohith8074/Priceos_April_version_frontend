@@ -6,6 +6,19 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
 
+  // Some Node environments inject a non-standard `localStorage` (e.g. via `--localstorage-file`).
+  // If it's present but not web-compatible, it can crash server rendering when libraries probe it.
+  const maybeLocalStorage = (globalThis as unknown as { localStorage?: unknown }).localStorage as any;
+  if (maybeLocalStorage && typeof maybeLocalStorage.getItem !== "function") {
+    try {
+      // Prefer removing it so libs treat it as unavailable on the server.
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+      delete (globalThis as any).localStorage;
+    } catch {
+      (globalThis as any).localStorage = undefined;
+    }
+  }
+
   const required: Record<string, string> = {
     MONGODB_URI: "MongoDB connection string",
     JWT_SECRET: "JWT signing secret (access tokens)",

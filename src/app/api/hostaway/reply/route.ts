@@ -1,42 +1,24 @@
-import { NextResponse } from "next/server";
-import { connectDB, HostawayConversation } from "@/lib/db";
-import { getSession } from "@/lib/auth/server";
-import mongoose from "mongoose";
+import { NextRequest, NextResponse } from "next/server";
+import { verifyAccessToken } from "@/lib/auth/jwt";
 
-export async function POST(request: Request) {
+const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
+
+export async function POST(req: NextRequest) {
   try {
-    const session = await getSession();
-    if (!session?.orgId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const token = req.cookies.get("priceos-session")?.value;
+    if (!token) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    const payload = verifyAccessToken(token);
+    const body = await req.json();
 
-    const body = await request.json();
-    const conversationId = String(body.conversationId || "");
-    const text = String(body.text || "");
-
-    if (!conversationId || !text) {
-      return NextResponse.json({ error: "conversationId and text are required" }, { status: 400 });
-    }
-
-    await connectDB();
-    const orgId = new mongoose.Types.ObjectId(session.orgId);
-    const now = new Date().toISOString();
-
-    await HostawayConversation.updateMany(
-      { orgId, hostawayConversationId: conversationId },
-      {
-        $push: {
-          messages: {
-            sender: "admin",
-            text,
-            timestamp: now,
-          },
-        },
-        $set: { needsReply: false, syncedAt: new Date() },
-      }
-    );
-
-    return NextResponse.json({ success: true, message: "Reply saved" });
-  } catch (error: any) {
-    console.error("[hostaway/reply] Error:", error);
-    return NextResponse.json({ error: error.message || "Failed to save reply" }, { status: 500 });
+    const res = await fetch(`${BACKEND}/hostaway/reply`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...body, orgId: payload.orgId }),
+    });
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
+  } catch (error) {
+    console.error("[hostaway/reply POST]", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

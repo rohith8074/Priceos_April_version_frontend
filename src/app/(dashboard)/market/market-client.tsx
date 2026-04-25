@@ -11,6 +11,7 @@ import {
   BarChart2,
   Filter,
   RefreshCw,
+  ExternalLink,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -42,6 +43,7 @@ interface MarketEvent {
   category: string;
   area: string;
   source?: string;
+  url?: string;
 }
 
 interface Props {
@@ -335,10 +337,33 @@ export function MarketIntelligenceClient({ events, occupancyPct, avgNightly, lis
                       )}
                     </TableCell>
                     <TableCell className="align-top py-3 max-w-[min(360px,50vw)]">
-                      <div className="font-medium text-foreground leading-snug">{event.title}</div>
-                      {event.description && (
-                        <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{event.description}</div>
-                      )}
+                      {(() => {
+                        const href = event.url || (event.source?.startsWith("http") ? event.source : null);
+                        return href ? (
+                          <a
+                            href={href}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="group/link inline-flex flex-col gap-1"
+                          >
+                            <span className="font-medium text-foreground leading-snug group-hover/link:text-amber underline-offset-2 group-hover/link:underline flex items-center gap-1.5">
+                              {event.title}
+                              <ExternalLink className="h-3 w-3 shrink-0 opacity-40 group-hover/link:opacity-100 transition-opacity" />
+                            </span>
+                            {event.description && (
+                              <span className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{event.description}</span>
+                            )}
+                          </a>
+                        ) : (
+                          <>
+                            <div className="font-medium text-foreground leading-snug">{event.title}</div>
+                            {event.description && (
+                              <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{event.description}</div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </TableCell>
                     <TableCell className="align-top py-3">
                       <span

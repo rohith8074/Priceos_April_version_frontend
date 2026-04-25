@@ -1,84 +1,53 @@
+/**
+ * app/api/auth/login/route.ts
+ * Proxies POST /api/auth/login → FastAPI /api/auth/login
+ * Sets the httpOnly cookie from the backend response.
+ */
 import { NextRequest, NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
-import { connectDB, Organization } from "@/lib/db";
-import { signAccessToken, signRefreshToken } from "@/lib/auth/jwt";
-import { COOKIE_NAME } from "@/lib/auth/server";
-import { checkRateLimit, getClientIp, RATE_LIMITS } from "@/lib/api/rate-limit";
-import { apiError } from "@/lib/api/response";
+
+const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
 export async function POST(req: NextRequest) {
-  const ip = getClientIp(req);
-  const rateCheck = checkRateLimit(`auth-login:${ip}`, RATE_LIMITS.auth);
-  if (!rateCheck.allowed) {
-    return apiError("RATE_LIMITED", `Too many attempts. Try again in ${Math.ceil(rateCheck.resetMs / 1000)}s.`, 429);
-  }
-
   try {
-    const { username, password, email } = await req.json();
-    const loginEmail = (email || username || "").trim().toLowerCase();
+    const body = await req.json();
 
-    if (!loginEmail || !password) {
-      return apiError("VALIDATION_ERROR", "Email and password are required", 400);
-    }
-
-    await connectDB();
-    const org = await Organization.findOne({ email: loginEmail });
-
-    if (!org) {
-      return apiError("UNAUTHORIZED", "Invalid credentials", 401);
-    }
-
-    const isValid = await bcrypt.compare(password, org.passwordHash);
-    if (!isValid) {
-      return apiError("UNAUTHORIZED", "Invalid credentials", 401);
-    }
-
-    // Determine onboarding step:
-    // - If the field exists → use it
-    // - If missing AND no Hostaway key → user needs to onboard ("connect")
-    // - If missing AND Hostaway key is set → legacy user already set up ("complete")
-    const onboardingStep = org.onboarding?.step
-      ?? (org.hostawayApiKey ? "complete" : "connect");
-
-    const accessToken = signAccessToken({
-      userId: org._id.toString(),
-      orgId:  org._id.toString(),
-      email:  org.email,
-      role:   org.role,
-      isApproved: org.isApproved,
-      onboardingStep,
-    });
-    const refreshToken = signRefreshToken(org._id.toString());
-
-    await Organization.findByIdAndUpdate(org._id, { $set: { refreshToken } });
-
-    const response = NextResponse.json({
-      success: true,
-      pending: !org.isApproved,
-      needsOnboarding: org.isApproved && onboardingStep !== "complete",
-      user: {
-        id:             org._id.toString(),
-        email:          org.email,
-        name:           org.fullName || org.name,
-        role:           org.role,
-        orgId:          org._id.toString(),
-        plan:           org.plan,
-        isApproved:     org.isApproved,
-        onboardingStep,
-      },
+    const backendRes = await fetch(`${BACKEND}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     });
 
-    response.cookies.set(COOKIE_NAME, accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7,
-      path: "/",
-    });
+    const data = await backendRes.json();
+
+    if (!backendRes.ok) {
+      return NextResponse.json(data, { status: backendRes.status });
+    }
+
+    const response = NextResponse.json(data, { status: 200 });
+
+    // Set the session cookie so middleware can read it
+    if (data.accessToken) {
+      response.cookies.set("priceos-session", data.accessToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60, // 7 days
+        path: "/",
+      });
+    }
+    if (data.refreshToken) {
+      response.cookies.set("priceos-refresh", data.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 30 * 24 * 60 * 60, // 30 days
+        path: "/",
+      });
+    }
 
     return response;
-  } catch (e: unknown) {
-    console.error("[Auth/Login] Error:", e);
-    return apiError("INTERNAL_ERROR", "An unexpected error occurred", 500);
+  } catch (err) {
+    console.error("[auth/login proxy]", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

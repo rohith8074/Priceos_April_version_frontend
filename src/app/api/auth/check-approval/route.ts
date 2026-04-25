@@ -1,50 +1,28 @@
-import { NextResponse } from "next/server";
-import { connectDB, Organization } from "@/lib/db";
-import { getSession, COOKIE_NAME } from "@/lib/auth/server";
-import { signAccessToken } from "@/lib/auth/jwt";
+import { NextRequest, NextResponse } from "next/server";
+import { verifyAccessToken } from "@/lib/auth/jwt";
 
-export async function GET() {
-    try {
-        const session = await getSession();
+const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
-        if (!session) {
-            return NextResponse.json({ approved: false, reason: "unauthenticated" }, { status: 401 });
-        }
-
-        await connectDB();
-        const org = await Organization.findById(session.userId).select("isApproved email role").lean() as any;
-
-        if (!org) {
-            return NextResponse.json({ approved: false, reason: "not_found" }, { status: 404 });
-        }
-
-        const approved: boolean = !!org.isApproved;
-
-        // If the JWT still carries isApproved:false but DB now says true,
-        // re-issue the cookie so the next page load passes the middleware check.
-        const response = NextResponse.json({ approved, email: org.email });
-
-        if (approved && !session.isApproved) {
-            const newToken = signAccessToken({
-                userId: session.userId,
-                orgId: session.orgId,
-                email: org.email,
-                role: org.role,
-                isApproved: true,
-                onboardingStep: session.onboardingStep,
-            });
-            response.cookies.set(COOKIE_NAME, newToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
-                sameSite: "lax",
-                maxAge: 60 * 60 * 24 * 7,
-                path: "/",
-            });
-        }
-
-        return response;
-    } catch (err) {
-        console.error("[check-approval] error:", err);
-        return NextResponse.json({ approved: false, reason: "error" }, { status: 500 });
+export async function GET(req: NextRequest) {
+  try {
+    const token = req.cookies.get("priceos-session")?.value;
+    if (!token) {
+      return NextResponse.json({ approved: false, error: "Not authenticated" }, { status: 401 });
     }
+
+    const payload = verifyAccessToken(token);
+    if (!payload) {
+      return NextResponse.json({ approved: false, error: "Invalid token" }, { status: 401 });
+    }
+
+    // Check with backend for latest approval status
+    const backendRes = await fetch(`${BACKEND}/auth/check-approval?userId=${payload.userId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await backendRes.json();
+    return NextResponse.json(data, { status: backendRes.status });
+  } catch (err) {
+    console.error("[auth/check-approval proxy]", err);
+    return NextResponse.json({ approved: false }, { status: 500 });
+  }
 }

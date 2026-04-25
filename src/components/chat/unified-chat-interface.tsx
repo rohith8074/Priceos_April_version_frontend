@@ -8,6 +8,17 @@ import {
   Send, Loader2, Settings,
   PanelRightClose, PanelRightOpen, Building2, MessageSquarePlus,
 } from "lucide-react";
+import {
+  IconCircleCheck,
+} from "@tabler/icons-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Maximize2, Zap, Activity } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -87,6 +98,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
+import { LiveInferenceFlowGraph, type FlowStage } from "./live-inference-flow-graph";
+import type { LyzrAgentEvent } from "@/hooks/use-lyzr-agent-events";
+
+
+const GRAPH_STAGES: FlowStage[] = [
+  { id: "routing", label: "CRO Router", status: "pending" },
+  { id: "analyzing", label: "Property Analyst", status: "pending" },
+  { id: "validating", label: "PriceGuard", status: "pending" },
+  { id: "generating", label: "Response", status: "pending" },
+];
+
 interface Message {
   id: string;
   role: "user" | "assistant";
@@ -95,6 +117,7 @@ interface Message {
   proposalStatus?: "pending" | "saved" | "rejected";
   // per-proposal approve/reject decisions keyed by proposal_id
   proposalDecisions?: Record<string, "approved" | "rejected">;
+  metadata?: any;
 }
 
 interface ChatSessionRow {
@@ -105,13 +128,14 @@ interface ChatSessionRow {
 
 interface Props {
   properties: PropertyWithMetrics[];
+  orgId: string;
 }
 
 // Pricing Agent Interface
 
 // Focused Pricing Agent Interface
 
-export function UnifiedChatInterface({ properties: _properties }: Props) {
+export function UnifiedChatInterface({ properties: _properties, orgId }: Props) {
   const {
     contextType,
     propertyId,
@@ -129,7 +153,30 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
   const [isLoading, setIsLoading] = useState(false);
   const [statusText, setStatusText] = useState("");
   const [isChatActive, setIsChatActive] = useState(false);
+  const [showLiveGraph, setShowLiveGraph] = useState(false);
+  const [stages, setStages] = useState<FlowStage[]>(GRAPH_STAGES);
+  const [graphEvents, setGraphEvents] = useState<LyzrAgentEvent[]>([]);
+  const [graphFlowStatus, setGraphFlowStatus] = useState<string>("pending");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Sync stages with constant when initialized
+  useEffect(() => {
+    setStages(GRAPH_STAGES.map(s => ({ ...s, status: "pending" })));
+  }, []);
+
+  const [sessionId, setSessionId] = useState<string>("");
+
+  // Sync sessionId with context
+  useEffect(() => {
+    const newId = buildBaseScopeId(
+      propertyId || undefined,
+      dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : "start",
+      dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : "end"
+    );
+    setSessionId(newId);
+  }, [propertyId, dateRange]);
+
+  const [lastThinkingMessage, setLastThinkingMessage] = useState<string | null>(null);
   /** After "Run Aria" succeeds, history may still be empty — async /api/chat/history must not flip chat back to OFFLINE. */
   const ariaReadyScopeRef = useRef<string | null>(null);
   const scopeKeyRef = useRef<{ propertyId?: string; from?: number; to?: number }>({});
@@ -202,13 +249,7 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
     [readAriaReadyFromStorage]
   );
 
-  const [sessionId, setSessionId] = useState<string>(() =>
-    buildBaseScopeId(
-      propertyId || undefined,
-      dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : "start",
-      dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : "end"
-    )
-  );
+
 
   const [chatSessions, setChatSessions] = useState<ChatSessionRow[]>([]);
 
@@ -250,8 +291,8 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
         safeToCandidate < safeFrom
           ? safeFrom
           : differenceInCalendarDays(safeToCandidate, safeFrom) > 30
-          ? addDays(safeFrom, 30)
-          : safeToCandidate;
+            ? addDays(safeFrom, 30)
+            : safeToCandidate;
       setDateRange({ from: safeFrom, to: safeTo });
     }
   }, [dateRange?.from?.getTime(), dateRange?.to?.getTime(), setDateRange]);
@@ -524,6 +565,23 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
     setInput("");
     setIsLoading(true);
     setStatusText("Connecting to PriceOS…");
+    setShowLiveGraph(true);
+
+    // Reset graph state immediately for new query
+    setGraphEvents([]);
+    setGraphFlowStatus("active");
+    setLastThinkingMessage(null);
+    setStages(prev => prev.map(s => ({ ...s, status: "pending" })));
+
+    // Seed the initial "pipeline started" event
+    setGraphEvents([{
+      event_type: "agent_process_start",
+      message: "Starting Agentic Pipeline...",
+      thinking: "Analyzing context and routing request...",
+      status: "active",
+      timestamp: new Date().toISOString(),
+      iteration: 1,
+    }]);
 
     try {
       const response = await fetch("/api/chat", {
@@ -533,8 +591,8 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
           message: input,
           context: {
             type: contextType,
-            propertyId: contextType === "property" ? propertyId : undefined,
-            propertyName: contextType === "property" ? propertyName : undefined,
+            propertyId: propertyId || undefined,
+            propertyName: propertyName || undefined,
             metrics: calendarMetrics ? {
               occupancy: calendarMetrics.occupancy,
               bookedDays: calendarMetrics.bookedDays,
@@ -550,7 +608,7 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
             to: dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : format(dateRange.from!, "yyyy-MM-dd"),
           } : undefined,
           isChatActive,
-          sessionId,
+          sessionId: sessionId,
         }),
       });
 
@@ -558,33 +616,174 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
         throw new Error(`API Error: ${response.status}`);
       }
 
+      const stepAgentMap: Record<string, { tool: string; agent: string }> = {
+        routing:    { tool: "CRO Router",         agent: "CRO Router" },
+        analyzing:  { tool: "Property Analyst",   agent: "Property Analyst" },
+        validating: { tool: "PriceGuard",         agent: "PriceGuard" },
+        generating: { tool: "Response Generator", agent: "CRO Router" },
+      };
+
       await readSSEStream(
         response,
-        (msg) => setStatusText(msg),
+        (msg, step) => {
+          setStatusText(msg);
+          if (msg) setLastThinkingMessage(msg);
+
+          if (step && stepAgentMap[step]) {
+            const { tool, agent } = stepAgentMap[step];
+            const stepKeys = Object.keys(stepAgentMap);
+            const stepIdx = stepKeys.indexOf(step);
+            const now = new Date().toISOString();
+
+            setStages(prev => prev.map(s => {
+              if (s.id === step) return { ...s, status: "active" };
+              const allStages = ["routing", "analyzing", "validating", "generating"];
+              if (allStages.indexOf(s.id) < allStages.indexOf(step)) return { ...s, status: "done" };
+              return s;
+            }));
+
+            // Push completed-stage events for all steps before current
+            const completedEvents: LyzrAgentEvent[] = stepKeys.slice(0, stepIdx).map((prevStep) => ({
+              event_type: "tool_response",
+              tool_name: stepAgentMap[prevStep].tool,
+              agent_name: stepAgentMap[prevStep].agent,
+              status: "completed",
+              timestamp: now,
+              iteration: 1,
+            }));
+
+            // Push the active event for current step
+            const activeEvent: LyzrAgentEvent = {
+              event_type: "tool_called",
+              tool_name: tool,
+              agent_name: agent,
+              message: msg,
+              thinking: msg,
+              status: "active",
+              timestamp: now,
+              iteration: 1,
+            };
+
+            setGraphEvents(prev => {
+              // Remove any previous events for steps already represented, then add current snapshot
+              const base = prev.filter(e =>
+                !Object.values(stepAgentMap).some(m => m.tool === e.tool_name)
+              );
+              return [...base, ...completedEvents, activeEvent];
+            });
+          }
+        },
         (data) => {
-          const normalized = normalizeChatAgentOutput(data.message || "");
-          const proposals =
-            data.proposals && data.proposals.length > 0 ? data.proposals : normalized.proposals;
-          const assistantMessage: Message = {
-            id: (Date.now() + 1).toString(),
+          setStages(prev => prev.map(s => ({ ...s, status: "done" })));
+          setGraphFlowStatus("done");
+          setGraphEvents(prev => [
+            ...prev,
+            {
+              event_type: "output_generated",
+              message: "Analysis Complete",
+              status: "done",
+              timestamp: new Date().toISOString(),
+              iteration: 1,
+            },
+          ]);
+
+          const assistantMsg: Message = {
+            id: Date.now().toString(),
             role: "assistant",
-            content: normalized.displayMessage || data.message || "Sorry, I couldn't get a response.",
-            proposals: proposals && proposals.length > 0 ? proposals : undefined,
-            proposalStatus: proposals && proposals.length > 0 ? "pending" : undefined,
+            content: data.message,
+            metadata: data.metadata,
+            proposals: data.proposals && data.proposals.length > 0 ? data.proposals : undefined,
+            proposalStatus: data.proposals && data.proposals.length > 0 ? "pending" : undefined,
           };
-          setMessages((prev) => [...prev, assistantMessage]);
+
+          setMessages(prev => {
+            const filtered = prev.filter(m => m.id !== "streaming-temp");
+            return [...filtered, assistantMsg];
+          });
+
+          if (data.proposals && data.proposals.length > 0) {
+            // ── Auto-save to Pricing section immediately as 'pending' ──
+            const mappedProposals = data.proposals.map((p: any) => ({
+              listingId: propertyId,
+              date: p.date,
+              proposedPrice: p.proposed_price ?? p.proposedPrice,
+              changePct: p.change_pct ?? p.changePct,
+              reasoning: typeof p.reasoning === "object"
+                ? Object.values(p.reasoning as Record<string, string>).filter(Boolean).join(" | ")
+                : (p.reasoning ?? ""),
+              status: "pending"
+            }));
+
+            fetch("/api/proposals/bulk-save", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orgId, proposals: mappedProposals }),
+            }).then(res => {
+              if (res.ok) console.log("✅ Auto-saved proposals as pending");
+            }).catch(err => console.error("Auto-save failed", err));
+          }
         },
-        (errMsg) => {
-          const errorMessage: Message = {
-            id: (Date.now() + 1).toString(),
-            role: "assistant",
-            content: errMsg || "Sorry, something went wrong.",
-          };
-          setMessages((prev) => [...prev, errorMessage]);
+        (err) => {
+          toast.error(`Agent Error: ${err}`);
         },
+        (evt) => {
+          if (evt.type === "agent_event" && evt.payload) {
+            setGraphEvents(prev => [...prev, evt.payload as LyzrAgentEvent]);
+          }
+        },
+        (chunk) => {
+          setMessages(prev => {
+            const last = prev[prev.length - 1];
+            
+            // 💎 CLEANUP LOGIC: Extract ONLY the message/reply if it's Maya's JSON
+            let cleanChunk = chunk;
+            const isMayaOutput = chunk.includes('{"triage"') || chunk.includes('{\\"triage\\"');
+            
+            if (isMayaOutput) {
+               // Extract suggested_reply.content or chat_response
+               const extractContent = (full: string) => {
+                  const patterns = [
+                     /\\?"suggested_reply\\?":\s*{\s*\\?"content\\?":\s*\\?"([\s\S]*?)(?=\\?",\s*\\?"approval_required\\?")/,
+                     /\\?"chat_response\\?":\s*\\?"([\s\S]*?)(?=\\?"})/,
+                     /\\?"reply\\?":\s*\\?"([\s\S]*?)(?=\\?"})/
+                  ];
+                  for (const p of patterns) {
+                     const m = full.match(p);
+                     if (m && m[1]) {
+                        return m[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+                     }
+                  }
+                  // If we are still in the triage block and haven't reached content yet, show nothing
+                  if (full.includes('{"triage"') || full.includes('{\\"triage\\"')) {
+                     const contentKey = full.includes('content') || full.includes('chat_response');
+                     if (!contentKey) return "";
+                  }
+                  return full;
+               };
+               cleanChunk = extractContent(chunk);
+            }
+
+            if (last && last.id === "streaming-temp") {
+              return [
+                ...prev.slice(0, -1),
+                { ...last, content: cleanChunk }
+              ];
+            } else {
+              return [
+                ...prev,
+                {
+                  id: "streaming-temp",
+                  role: "assistant",
+                  content: cleanChunk,
+                }
+              ];
+            }
+          });
+        }
       );
     } catch (error) {
       console.error(`Chat Error:`, error);
+      setGraphFlowStatus("failed");
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
@@ -597,87 +796,104 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
     }
   };
 
-  // Per-proposal approve/reject decision
+  // Per-proposal approve/reject — permanent, no toggle. Approve saves immediately.
   const handleProposalDecision = (messageId: string, proposalId: string, decision: "approved" | "rejected") => {
+    const msg = messages.find(m => m.id === messageId);
+    // Once decided, don't allow changes
+    if (msg?.proposalDecisions?.[proposalId]) return;
+
+    // Update UI — mark this proposal as decided
     setMessages((prev) =>
-      prev.map((msg) =>
-        msg.id === messageId
-          ? { ...msg, proposalDecisions: { ...msg.proposalDecisions, [proposalId]: decision } }
-          : msg
+      prev.map((m) =>
+        m.id !== messageId
+          ? m
+          : { ...m, proposalDecisions: { ...(m.proposalDecisions || {}), [proposalId]: decision } }
       )
     );
-  };
 
-  const handleSaveProposals = (messageId: string, proposals: any[]) => {
-    // Only save proposals that have been individually approved (or all if none decided yet)
-    const msg = messages.find(m => m.id === messageId);
-    const decisions = msg?.proposalDecisions || {};
-    const toSave = proposals.filter(p => {
-      const id = p.proposal_id;
-      // If user explicitly approved → save. If no decision yet + guard is APPROVED/FLAGGED → save.
-      if (decisions[id] === "rejected") return false;
-      if (decisions[id] === "approved") return true;
-      return p.guard_verdict !== "REJECTED";
-    });
-
-    if (toSave.length === 0) {
-      toast.info("No proposals to save — all were rejected.");
-      return;
+    // When approved, mark the whole message as saved immediately
+    if (decision === "approved") {
+      setMessages((prev) =>
+        prev.map((m) => (m.id !== messageId ? m : { ...m, proposalStatus: "saved" as const }))
+      );
     }
 
-    // ── OPTIMISTIC: flip UI to "saved" immediately ──
+    // ── SYNC: Save to Pricing section in DB ──
+    const prop = msg?.proposals?.find(p => p.proposal_id === proposalId);
+    if (prop) {
+      const reasoning = typeof prop.reasoning === "object"
+        ? Object.values(prop.reasoning as Record<string, string>).filter(Boolean).join(" | ")
+        : (prop.reasoning ?? "");
+
+      const mapped = {
+        date: prop.date,
+        currentPrice: prop.current_price ?? prop.currentPrice,
+        proposedPrice: prop.proposed_price ?? prop.proposedPrice,
+        changePct: prop.change_pct ?? prop.changePct,
+        reasoning,
+        status: decision,
+        listingId: prop.listing_id || prop.listingId || propertyId,
+      };
+
+      const finalOrgId = orgId || (msg?.metadata?.orgId as string);
+      if (!finalOrgId) {
+        console.error("Cannot sync decision: missing orgId");
+        return;
+      }
+
+      fetch("/api/proposals/bulk-save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orgId: finalOrgId, proposals: [mapped] }),
+      }).then(res => {
+        if (res.ok) {
+          toast.success(
+            decision === "approved"
+              ? "Proposal approved & saved to Pricing section"
+              : "Proposal rejected"
+          );
+        } else {
+          toast.error("Failed to sync decision to Pricing section");
+        }
+      }).catch(err => {
+        console.error("Failed to sync decision", err);
+        toast.error("Network error syncing decision");
+      });
+    }
+  };
+
+  const handleRejectProposals = (messageId: string) => {
+    const msg = messages.find((m) => m.id === messageId);
+    if (!msg || !msg.proposals) return;
+
     setMessages((prev) =>
-      prev.map((msg) =>
-        msg.id === messageId ? { ...msg, proposalStatus: "saved" } : msg
+      prev.map((m) =>
+        m.id === messageId ? { ...m, proposalStatus: "rejected" } : m
       )
     );
-    toast.success(`Saving ${toSave.length} proposal${toSave.length > 1 ? "s" : ""} to Pricing…`, {
-      description: "They will appear in the Pricing section for review.",
-    });
 
-    // ── BACKGROUND: fire-and-forget DB write ──
-    // Map agent snake_case fields → API camelCase fields and inject listingId from context
-    const mappedProposals = toSave.map((p: any) => ({
-      listingId: propertyId,                        // required by the API — comes from context
+    // ── SYNC: Update all as rejected in DB ──
+    const mapped = msg.proposals.map((p) => ({
+      listingId: p.listing_id || p.listingId || propertyId,
       date: p.date,
       proposedPrice: p.proposed_price ?? p.proposedPrice,
       changePct: p.change_pct ?? p.changePct,
-      reasoning: typeof p.reasoning === "object"
-        ? Object.values(p.reasoning as Record<string, string>).filter(Boolean).join(" | ")
-        : (p.reasoning ?? ""),
+      reasoning: p.reasoning,
+      status: "rejected"
     }));
 
     fetch("/api/proposals/bulk-save", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ proposals: mappedProposals }),
+      body: JSON.stringify({ orgId, proposals: mapped }),
     })
-      .then(async (res) => {
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || `Save failed (${res.status})`);
-        }
-        const data = await res.json();
-        console.log(`✅ Saved ${data.modified ?? data.savedCount} proposals to Pricing`);
+      .then(() => {
+        toast.info("All proposals rejected. Status synced to inventory.");
       })
       .catch((err) => {
-        console.error("Proposal save error:", err);
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === messageId ? { ...msg, proposalStatus: "pending" } : msg
-          )
-        );
-        toast.error("Save failed — please try again.");
+        console.error("Failed to sync reject all", err);
+        toast.error("Failed to sync rejection to database");
       });
-  };
-
-  const handleRejectProposals = (messageId: string) => {
-    setMessages((prev) =>
-      prev.map((msg) =>
-        msg.id === messageId ? { ...msg, proposalStatus: "rejected" } : msg
-      )
-    );
-    toast.info("All proposals rejected. No changes were made.");
   };
 
   const handleNewChat = useCallback(() => {
@@ -761,6 +977,15 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
           </div>
 
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowLiveGraph((v) => !v)}
+              className="h-9 gap-2 bg-background hover:bg-background/80 border-border/50 font-bold shadow-sm"
+            >
+              <Activity className="h-4 w-4" />
+              <span className="hidden sm:inline">{showLiveGraph ? "Hide Graph" : "Live Graph"}</span>
+            </Button>
             <Button
               variant={isSidebarOpen ? "secondary" : "ghost"}
               size="sm"
@@ -872,7 +1097,63 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
       <div className="flex flex-1 overflow-hidden">
         <div className="flex flex-col flex-1 overflow-hidden relative">
 
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          {/* LIVE GRAPH OVERLAY */}
+          {showLiveGraph && (
+            <div className="absolute top-0 right-0 left-0 sm:left-auto h-[400px] w-full sm:w-[500px] z-40 bg-background/95 backdrop-blur-xl border-l border-b border-border shadow-2xl sm:rounded-bl-3xl overflow-hidden flex flex-col transition-all duration-300">
+              <div className="px-4 py-2 bg-muted/30 border-b border-border/50 flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full ${isLoading ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-amber-500'}`} />
+                  Execution Graph
+                </span>
+                <div className="flex items-center gap-1">
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-7 px-2 gap-1.5 text-[10px] font-bold text-muted-foreground hover:text-foreground">
+                        <Maximize2 className="h-3 w-3" />
+                        Expand
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-[95vw] w-[1400px] h-[90vh] p-0 overflow-hidden flex flex-col">
+                      <DialogHeader className="px-6 py-4 border-b shrink-0 bg-muted/20">
+                        <DialogTitle className="flex items-center gap-3">
+                          <Activity className="h-5 w-5 text-emerald-600" />
+                          <div className="flex flex-col">
+                            <span className="text-base font-black tracking-tight">Full Execution Trace</span>
+                            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground">Detailed Agent & Tool Interaction Lineage</span>
+                          </div>
+                        </DialogTitle>
+                      </DialogHeader>
+                      <div className="flex-1 relative bg-grid-black/[0.01]">
+                        <LiveInferenceFlowGraph
+                          stages={stages}
+                          streamEvents={graphEvents}
+                          flowStatus={graphFlowStatus}
+                        />
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0 rounded-full hover:bg-muted" onClick={() => setShowLiveGraph(false)}>
+                    ✕
+                  </Button>
+                </div>
+              </div>
+              <div className="flex-1 relative w-full h-full bg-grid-black/[0.02]">
+                <LiveInferenceFlowGraph
+                  stages={stages}
+                  streamEvents={graphEvents}
+                  flowStatus={graphFlowStatus}
+                />
+              </div>
+              {lastThinkingMessage && (
+                <div className="absolute bottom-0 left-0 right-0 bg-background/80 backdrop-blur-sm border-t border-border/50 p-2 px-3 text-[10px] text-muted-foreground truncate">
+                  <span className="font-bold text-foreground">Thinking: </span>
+                  {lastThinkingMessage}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className={`flex-1 overflow-y-auto p-6 space-y-4 transition-all duration-300 ${showLiveGraph ? "pt-[420px] sm:pt-6 sm:pr-[520px]" : ""}`}>
             {isHistoryLoading && <div className="flex justify-center p-4"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>}
             {messages.map((message) => (
               <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -895,13 +1176,31 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
 
                       {/* Proposal rows */}
                       <div className="p-4 text-sm space-y-4">
-                        {message.proposals.map((prop, idx) => {
+                          {message.proposals.map((prop, idx) => {
                           const decision = message.proposalDecisions?.[prop.proposal_id];
                           const isApproved = decision === "approved";
                           const isRejected = decision === "rejected" || prop.guard_verdict === "REJECTED";
+                          const isDecided = isApproved || decision === "rejected";
                           const isFlagged = prop.guard_verdict === "FLAGGED";
-                          const canApprove = (prop.action_buttons || []).includes("approve");
-                          const alreadySaved = message.proposalStatus === "saved";
+                          const canApprove = prop.guard_verdict !== "REJECTED";
+
+                          // Build full reasoning text from object or string
+                          const reasoningText = (() => {
+                            if (!prop.reasoning) return null;
+                            if (typeof prop.reasoning === "string") return prop.reasoning.trim() || null;
+                            const parts: string[] = [];
+                            const r = prop.reasoning as Record<string, string>;
+                            if (r.reason_market) parts.push(`📊 ${r.reason_market}`);
+                            if (r.reason_event) parts.push(`🗓 ${r.reason_event}`);
+                            if (r.reason_seasonality) parts.push(`🌤 ${r.reason_seasonality}`);
+                            if (r.reason_guardrails) parts.push(`🛡 ${r.reason_guardrails}`);
+                            const others = Object.entries(r)
+                              .filter(([k]) => !["reason_market","reason_event","reason_seasonality","reason_guardrails"].includes(k))
+                              .map(([, v]) => v)
+                              .filter(Boolean);
+                            parts.push(...others);
+                            return parts.join(" | ") || null;
+                          })();
 
                           return (
                             <div key={idx} className={`flex flex-col gap-2.5 pb-4 border-b border-border/20 last:border-0 last:pb-0 rounded-lg px-2 pt-2 transition-colors ${isApproved ? "bg-emerald-500/5" : isRejected ? "bg-red-500/5 opacity-60" : ""}`}>
@@ -916,16 +1215,31 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
                                   )}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  {/* Guard verdict badge */}
-                                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
-                                    prop.guard_verdict === "APPROVED" ? "bg-emerald-500/15 text-emerald-500" :
-                                    prop.guard_verdict === "FLAGGED"  ? "bg-amber-500/15 text-amber-500" :
-                                                                        "bg-red-500/15 text-red-500"
-                                  }`}>
-                                    {prop.guard_verdict === "APPROVED" ? "✓ Approved" : prop.guard_verdict === "FLAGGED" ? "⚠ Flagged" : "✗ Blocked"}
-                                  </span>
+                                  {/* User Decision Badge */}
+                                  {isApproved && (
+                                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 flex items-center gap-1">
+                                      <IconCircleCheck className="size-2.5" />
+                                      Approved & Saved
+                                    </span>
+                                  )}
+                                  {decision === "rejected" && (
+                                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider bg-red-500/10 text-red-600 border border-red-500/20">
+                                      Rejected
+                                    </span>
+                                  )}
+
+                                  {/* Guard verdict badge (shown only when no user decision yet) */}
+                                  {!isDecided && (
+                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider ${prop.guard_verdict === "APPROVED" ? "bg-emerald-500/15 text-emerald-500" :
+                                        prop.guard_verdict === "FLAGGED" ? "bg-amber-500/15 text-amber-500" :
+                                          "bg-red-500/15 text-red-500"
+                                      }`}>
+                                      {prop.guard_verdict === "APPROVED" ? "✓ Approved" : prop.guard_verdict === "FLAGGED" ? "⚠ Flagged" : "✗ Blocked"}
+                                    </span>
+                                  )}
+
                                   {/* Price */}
-                                  <span className={`text-sm font-black tabular-nums ${prop.change_pct > 0 ? "text-emerald-500" : "text-amber-500"}`}>
+                                  <span className="text-sm font-black tabular-nums text-amber-600">
                                     AED {prop.proposed_price}
                                     <span className="text-[10px] ml-1 opacity-70">({prop.change_pct > 0 ? "+" : ""}{prop.change_pct}%)</span>
                                   </span>
@@ -934,11 +1248,10 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
 
                               {/* Row 2: Risk + comparisons */}
                               <div className="flex flex-wrap gap-2 text-[10px]">
-                                <span className={`px-1.5 py-0.5 rounded-full font-bold uppercase ${
-                                  prop.risk_level === "low"    ? "bg-emerald-500/10 text-emerald-600" :
-                                  prop.risk_level === "medium" ? "bg-amber-500/10 text-amber-600" :
-                                                                 "bg-red-500/10 text-red-500"
-                                }`}>
+                                <span className={`px-1.5 py-0.5 rounded-full font-bold uppercase ${prop.risk_level === "low" ? "bg-emerald-500/10 text-emerald-600" :
+                                    prop.risk_level === "medium" ? "bg-amber-500/10 text-amber-600" :
+                                      "bg-red-500/10 text-red-500"
+                                  }`}>
                                   {prop.risk_level} risk
                                 </span>
                                 {prop.comparisons?.vs_p50 && (
@@ -952,60 +1265,40 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
                                 )}
                               </div>
 
-                              {/* Row 3: Primary reasoning */}
-                              {typeof prop.reasoning === "string" && prop.reasoning.trim() && (
-                                <p className="text-[11px] text-muted-foreground leading-snug">{prop.reasoning}</p>
-                              )}
-                              {(prop.reasoning?.reason_market || prop.reasoning?.reason_guardrails) && (
-                                <p className="text-[11px] text-muted-foreground leading-snug">
-                                  {prop.reasoning.reason_guardrails && prop.guard_verdict === "REJECTED"
-                                    ? `🛡 ${prop.reasoning.reason_guardrails}`
-                                    : prop.reasoning.reason_market
-                                      ? `📊 ${prop.reasoning.reason_market}`
-                                      : null}
-                                </p>
+                              {/* Row 3: Full reasoning */}
+                              {reasoningText && (
+                                <div className="bg-muted/30 rounded-md px-2.5 py-2 border border-border/30">
+                                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Reasoning</p>
+                                  <p className="text-[11px] text-foreground/80 leading-snug">{reasoningText}</p>
+                                </div>
                               )}
 
                               {/* Row 4: FLAGGED caution */}
-                              {isFlagged && (
+                              {isFlagged && !isDecided && (
                                 <p className="text-[11px] text-amber-500/80 leading-snug bg-amber-500/5 rounded px-2 py-1">
                                   ⚠ PriceGuard flagged this for review — outside normal range but not hard-blocked. Approve with caution.
                                 </p>
                               )}
 
-                              {/* Row 5: Per-proposal action buttons */}
-                              {!alreadySaved && message.proposalStatus !== "rejected" && (
+                              {/* Row 5: Action buttons — hidden once decided */}
+                              {!isDecided && message.proposalStatus !== "rejected" && (
                                 <div className="flex items-center gap-2 pt-1">
-                                  {canApprove && !isRejected && (
-                                    <button
-                                      onClick={() => handleProposalDecision(message.id, prop.proposal_id, isApproved ? "approved" : "approved")}
-                                      className={`text-[10px] font-black px-3 py-1 rounded-full border transition-all ${
-                                        isApproved
-                                          ? "bg-emerald-500 text-white border-emerald-500"
-                                          : "border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10"
-                                      }`}
-                                    >
-                                      {isApproved ? "✓ Approved" : "Approve"}
-                                    </button>
-                                  )}
-                                  {!isRejected && (
-                                    <button
-                                      onClick={() => handleProposalDecision(message.id, prop.proposal_id, "rejected")}
-                                      className="text-[10px] font-black px-3 py-1 rounded-full border border-red-400/40 text-red-400 hover:bg-red-500/10 transition-all"
-                                    >
-                                      Reject
-                                    </button>
-                                  )}
-                                  {prop.guard_verdict === "REJECTED" && (
-                                    <span className="text-[10px] text-red-400/70 font-bold">Blocked by PriceGuard — cannot approve</span>
-                                  )}
-                                  {decision === "rejected" && (
+                                  {canApprove && (
                                     <button
                                       onClick={() => handleProposalDecision(message.id, prop.proposal_id, "approved")}
-                                      className="text-[10px] text-muted-foreground underline"
+                                      className="text-[10px] font-black px-3 py-1 rounded-full border border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 transition-all"
                                     >
-                                      Undo
+                                      Approve
                                     </button>
+                                  )}
+                                  <button
+                                    onClick={() => handleProposalDecision(message.id, prop.proposal_id, "rejected")}
+                                    className="text-[10px] font-black px-3 py-1 rounded-full border border-red-400/40 text-red-400 hover:bg-red-500/10 transition-all"
+                                  >
+                                    Reject
+                                  </button>
+                                  {prop.guard_verdict === "REJECTED" && (
+                                    <span className="text-[10px] text-red-400/70 font-bold">Blocked by PriceGuard — cannot approve</span>
                                   )}
                                 </div>
                               )}
@@ -1014,26 +1307,18 @@ export function UnifiedChatInterface({ properties: _properties }: Props) {
                         })}
                       </div>
 
-                      {/* Footer: Save all / Reject all */}
+                      {/* Footer: Reject All (only when still pending) */}
                       {message.proposalStatus === "pending" && (
                         <div className="px-4 py-3 border-t border-border/40 bg-muted/20 flex items-center justify-between gap-3">
                           <p className="text-[10px] text-muted-foreground leading-snug">
-                            Approve individual proposals above, then save to the Pricing section.
+                            Approve or reject each proposal — approved ones are saved to Pricing instantly.
                           </p>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <button
-                              onClick={() => handleRejectProposals(message.id)}
-                              className="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-border/50 text-muted-foreground hover:bg-muted transition-colors"
-                            >
-                              Reject All
-                            </button>
-                            <button
-                              onClick={() => handleSaveProposals(message.id, message.proposals!)}
-                              className="text-[11px] font-bold px-4 py-1.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-sm"
-                            >
-                              Save to Pricing →
-                            </button>
-                          </div>
+                          <button
+                            onClick={() => handleRejectProposals(message.id)}
+                            className="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-border/50 text-muted-foreground hover:bg-muted transition-colors shrink-0"
+                          >
+                            Reject All
+                          </button>
                         </div>
                       )}
 

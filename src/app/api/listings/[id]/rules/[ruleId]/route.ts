@@ -1,58 +1,63 @@
-import { connectDB, PricingRule } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
-import mongoose from "mongoose";
+import { verifyAccessToken } from "@/lib/auth/jwt";
 
-const ALLOWED_FIELDS = [
-  "name", "enabled", "priority", "startDate", "endDate", "daysOfWeek", "minNights",
-  "priceOverride", "priceAdjPct", "minPriceOverride", "maxPriceOverride", "minStayOverride",
-  "isBlocked", "closedToArrival", "closedToDeparture", "suspendLastMinute", "suspendGapFill",
-];
+const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
-export async function PUT(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string; ruleId: string }> }
-) {
+type Params = Promise<{ id: string; ruleId: string }>;
+
+export async function PUT(req: NextRequest, { params }: { params: Params }) {
   try {
-    const { id, ruleId } = await params;
-    await connectDB();
+    const token = req.cookies.get("priceos-session")?.value;
+    if (!token) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    const payload = verifyAccessToken(token);
 
+    const { ruleId } = await params;
     const body = await req.json();
-    const updateFields: Record<string, unknown> = {};
-    for (const key of ALLOWED_FIELDS) {
-      if (body[key] !== undefined) updateFields[key] = body[key];
+
+    const res = await fetch(`${BACKEND}/rules/${ruleId}?orgId=${payload.orgId}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      return NextResponse.json(error, { status: res.status });
     }
 
-    const rule = await PricingRule.findOneAndUpdate(
-      {
-        _id: new mongoose.Types.ObjectId(ruleId),
-        listingId: new mongoose.Types.ObjectId(id),
-      },
-      { $set: updateFields },
-      { new: true }
-    );
-
-    if (!rule) return NextResponse.json({ error: "Rule not found" }, { status: 404 });
-    return NextResponse.json(rule);
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const data = await res.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("[api/listings/[id]/rules/[ruleId] PUT]", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
 
-export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string; ruleId: string }> }
-) {
+export async function DELETE(req: NextRequest, { params }: { params: Params }) {
   try {
-    const { id, ruleId } = await params;
-    await connectDB();
+    const token = req.cookies.get("priceos-session")?.value;
+    if (!token) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    const payload = verifyAccessToken(token);
 
-    await PricingRule.deleteOne({
-      _id: new mongoose.Types.ObjectId(ruleId),
-      listingId: new mongoose.Types.ObjectId(id),
+    const { ruleId } = await params;
+
+    const res = await fetch(`${BACKEND}/rules/${ruleId}?orgId=${payload.orgId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
     });
 
-    return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      return NextResponse.json(error, { status: res.status });
+    }
+
+    const data = await res.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error("[api/listings/[id]/rules/[ruleId] DELETE]", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

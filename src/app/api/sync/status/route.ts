@@ -1,70 +1,34 @@
-import { connectDB, Listing, Reservation, InventoryMaster } from "@/lib/db";
-import mongoose from "mongoose";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { verifyAccessToken } from "@/lib/auth/jwt";
 
-export const dynamic = "force-dynamic";
+const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
+  try {
+    const token = req.cookies.get("priceos-session")?.value;
+    if (!token) {
+      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    }
+
+    const payload = verifyAccessToken(token);
+    if (!payload?.orgId) {
+      return NextResponse.json({ error: "Invalid token payload" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(req.url);
-    const context = searchParams.get("context") || "portfolio";
     const propertyId = searchParams.get("propertyId");
 
-    try {
-        // Global sync status (in-memory)
-        const globalSyncStatus = (globalThis as any).syncStatus || { status: "idle", message: "" };
-
-        if (
-            (globalSyncStatus.status === "complete" || globalSyncStatus.status === "error") &&
-            globalSyncStatus.startedAt
-        ) {
-            if (Date.now() - globalSyncStatus.startedAt > 30000) {
-                (globalThis as any).syncStatus = { status: "idle", message: "" };
-            }
-        }
-
-        await connectDB();
-
-        let listingsCount = 0;
-        let reservationsCount = 0;
-        let calendarCount = 0;
-        let reservationsLastSynced: Date | null = null;
-
-        if (context === "portfolio") {
-            [listingsCount, reservationsCount, calendarCount] = await Promise.all([
-                Listing.countDocuments(),
-                Reservation.countDocuments(),
-                InventoryMaster.countDocuments(),
-            ]);
-            const lastRes = await Reservation.findOne().sort({ createdAt: -1 }).select("createdAt").lean();
-            reservationsLastSynced = lastRes?.createdAt || null;
-        } else if (propertyId) {
-            let lid: mongoose.Types.ObjectId;
-            try {
-                lid = new mongoose.Types.ObjectId(propertyId);
-            } catch {
-                return NextResponse.json({ error: "Invalid propertyId" }, { status: 400 });
-            }
-
-            [listingsCount, reservationsCount, calendarCount] = await Promise.all([
-                Listing.countDocuments({ _id: lid }),
-                Reservation.countDocuments({ listingId: lid }),
-                InventoryMaster.countDocuments({ listingId: lid }),
-            ]);
-            const lastRes = await Reservation.findOne({ listingId: lid })
-                .sort({ createdAt: -1 })
-                .select("createdAt")
-                .lean();
-            reservationsLastSynced = lastRes?.createdAt || null;
-        }
-
-        return NextResponse.json({
-            ...globalSyncStatus,
-            listings: { count: listingsCount, lastSyncedAt: reservationsLastSynced?.toISOString() || null },
-            reservations: { count: reservationsCount, lastSyncedAt: reservationsLastSynced?.toISOString() || null },
-            inventory_master: { daysCount: calendarCount, lastSyncedAt: reservationsLastSynced?.toISOString() || null },
-        });
-    } catch (error: any) {
-        console.error("Status check failed:", error);
-        return NextResponse.json({ status: "error", message: error.message || "Failed to fetch status" }, { status: 500 });
+    const params = new URLSearchParams({ orgId: payload.orgId });
+    if (propertyId) {
+      params.set("propertyId", propertyId);
     }
+
+    const backendRes = await fetch(`${BACKEND}/sync/status?${params.toString()}`);
+    const data = await backendRes.json();
+
+    return NextResponse.json(data, { status: backendRes.status });
+  } catch (err) {
+    console.error("[sync/status proxy]", err);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  }
 }

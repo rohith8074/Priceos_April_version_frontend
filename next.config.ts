@@ -24,7 +24,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
-      "connect-src 'self' https://agent-prod.studio.lyzr.ai https://app.ticketmaster.com https://api.hostaway.com",
+      "connect-src 'self' https://agent-prod.studio.lyzr.ai https://app.ticketmaster.com https://api.hostaway.com http://localhost:8000",
       "frame-ancestors 'none'",
     ].join("; "),
   },
@@ -59,7 +59,12 @@ const nextConfig: NextConfig = {
   typescript: { ignoreBuildErrors: false },
 
   // Server-side packages that must not be bundled into client chunks
-  serverExternalPackages: ["mongoose"],
+  // (mongoose removed - no longer used in frontend)
+  serverExternalPackages: [],
+
+  // Anchor webpack's file tracing to this directory, preventing it from
+  // crawling to /Original_priceos and failing to resolve tailwindcss
+  outputFileTracingRoot: __dirname,
 };
 
 export default nextConfig;

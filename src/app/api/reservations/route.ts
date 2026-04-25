@@ -1,48 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { connectDB, Reservation } from "@/lib/db";
-import { getSession } from "@/lib/auth/server";
+import { verifyAccessToken } from "@/lib/auth/jwt";
 
-export const dynamic = "force-dynamic";
-
-export async function GET(req: NextRequest) {
-  try {
-    const session = await getSession();
-    await connectDB();
-
-    const { searchParams } = new URL(req.url);
-    const context = searchParams.get("context");
-    const propertyId = searchParams.get("propertyId");
-    const status = searchParams.get("status");
-
-    const query: Record<string, unknown> = {};
-    if (session?.orgId) query.orgId = session.orgId;
-    if (context === "property" && propertyId) query.listingId = propertyId;
-    if (status) query.status = status;
-
-    const reservations = await Reservation.find(query)
-      .sort({ checkIn: -1 })
-      .limit(500)
-      .lean();
-
-    return NextResponse.json({ success: true, reservations });
-  } catch (error) {
-    console.error("[Reservations GET]", error);
-    return NextResponse.json({ error: "Failed to fetch reservations" }, { status: 500 });
-  }
-}
+const BACKEND = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-    await connectDB();
-    const body = await req.json();
-
-    const reservation = await Reservation.create({ ...body, orgId: session.orgId });
-    return NextResponse.json({ success: true, reservation }, { status: 201 });
+    const token = req.cookies.get("priceos-session")?.value;
+    if (!token) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    const payload = verifyAccessToken(token);
+    const body = await req.json().catch(() => ({}));
+    const res = await fetch(`${BACKEND}/reservations`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...body, orgId: payload.orgId }),
+    });
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
   } catch (error) {
-    console.error("[Reservations POST]", error);
-    return NextResponse.json({ error: "Failed to create reservation" }, { status: 500 });
+    console.error("[reservations POST]", error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

@@ -39,6 +39,14 @@ The CRO Router passes you the relevant data at invocation time. This data is you
 - `calendar_metrics`: occupancy, booked nights, available nights
 - `reservations`: recent reservation data
 - `benchmark`: competitor pricing data (p25/p50/p75/p90)
+- `market_overview` *(optional — injected when real market data is available)*: `{ month, adr, revpar, occupancyRate, activeListings, demandScore }` — **Real Dubai market baseline from Airbtics data.**
+
+### market_overview Usage Rules
+When `market_overview` is provided:
+- **Distinguish market trough from listing problem**: If `calendar_metrics.occupancy_pct < 30%` but `market_overview.occupancyRate < 30%`, this is a market-wide trough — NOT an anomaly for this listing specifically. Do NOT raise a booking velocity alert. State: *"Occupancy is low but consistent with market-wide demand score of [X]."*
+- **True anomaly flag**: If `calendar_metrics.occupancy_pct` is more than **20 percentage points below** `market_overview.occupancyRate`, this IS a listing-specific anomaly.
+- **ADR anomaly calibration**: Compare listing's average nightly rate against `market_overview.adr`. If listing ADR is more than 80% above market ADR while occupancy is below market, flag as a pricing anomaly.
+- If `market_overview` is absent, fall back to comparing against `benchmark.p50` as before.
 
 ## Instructions
 

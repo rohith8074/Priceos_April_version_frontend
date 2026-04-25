@@ -1,95 +1,76 @@
-import { connectDB, InventoryMaster, MarketEvent, Listing } from "@/lib/db";
 import { MarketIntelligenceClient } from "./market-client";
 import { getSession } from "@/lib/auth/server";
-import mongoose from "mongoose";
+import { cookies } from "next/headers";
+import { format, addDays } from "date-fns";
+
+const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
 
 export default async function MarketPage() {
   const session = await getSession();
   if (!session?.orgId) {
-    return (
-      <MarketIntelligenceClient
-        events={[]}
-        occupancyPct={0}
-        avgNightly={0}
-        listings={[]}
-      />
-    );
+    return null;
   }
 
-  await connectDB();
-  const orgId = new mongoose.Types.ObjectId(session.orgId);
+  const cookieStore = await cookies();
+  const token = cookieStore.get("priceos-session")?.value;
 
-  const today = new Date();
-  const todayStr = today.toISOString().split("T")[0];
-  const plus90 = new Date(today);
-  plus90.setDate(plus90.getDate() + 90);
-  const plus90Str = plus90.toISOString().split("T")[0];
+  const todayStr = format(new Date(), "yyyy-MM-dd");
+  const plus89Str = format(addDays(new Date(), 89), "yyyy-MM-dd");
+  const plus29Str = format(addDays(new Date(), 29), "yyyy-MM-dd");
 
-  // Fetch upcoming market events (next 90 days)
-  const events = await MarketEvent.find({
-    orgId,
-    startDate: { $lte: plus90Str },
-    endDate: { $gte: todayStr },
-  })
-    .sort({ startDate: 1 })
-    .limit(200)
-    .lean();
+  // Fetch data in parallel — short-TTL cache to speed up repeat navigation
+  const [eventsRes, metricsRes, listingsRes, revRes] = await Promise.all([
+    fetch(`${API}/agent-tools/market-events?orgId=${session.orgId}&dateFrom=${todayStr}&dateTo=${plus89Str}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      next: { revalidate: 300 }, // events change infrequently
+    }),
+    fetch(`${API}/agent-tools/portfolio-overview?orgId=${session.orgId}&dateFrom=${todayStr}&dateTo=${plus29Str}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      next: { revalidate: 60 },
+    }),
+    fetch(`${API}/listings/?orgId=${session.orgId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      next: { revalidate: 120 },
+    }),
+    fetch(`${API}/agent-tools/revenue-snapshot?orgId=${session.orgId}&dateFrom=${todayStr}&dateTo=${plus29Str}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      next: { revalidate: 60 },
+    }),
+  ]).catch(() => [null, null, null, null]);
 
-  // Fetch portfolio occupancy next 30 days
-  const plus30 = new Date(today);
-  plus30.setDate(plus30.getDate() + 29);
-  const plus30Str = plus30.toISOString().split("T")[0];
+  const eventsData = eventsRes?.ok ? await eventsRes.json() : { events: [] };
+  const metricsData = metricsRes?.ok ? await metricsRes.json() : { avgOccupancyPct: 0 };
+  const listingsData = listingsRes?.ok ? await listingsRes.json() : { listings: [] };
+  const revData = revRes?.ok ? await revRes.json() : { totals: { avgBookingValue: 0 } };
 
-  const occupancyResult = await InventoryMaster.aggregate([
-    { $match: { orgId, date: { $gte: todayStr, $lte: plus30Str } } },
-    {
-      $group: {
-        _id: null,
-        totalDays: { $sum: 1 },
-        bookedDays: { $sum: { $cond: [{ $eq: ["$status", "booked"] }, 1, 0] } },
-        blockedDays: { $sum: { $cond: [{ $eq: ["$status", "blocked"] }, 1, 0] } },
-        avgPrice: { $avg: "$currentPrice" },
-      },
-    },
-  ]);
-
-  const occ = occupancyResult[0] || { totalDays: 0, bookedDays: 0, blockedDays: 0, avgPrice: 0 };
-  const availDays = occ.totalDays - occ.blockedDays;
-  const occupancyPct = availDays > 0 ? Math.round((occ.bookedDays / availDays) * 100) : 0;
-  const avgNightly = Math.round(Number(occ.avgPrice) || 0);
-
-  // Fetch listings for benchmark selector
-  const listingDocs = await Listing.find({ orgId, isActive: true })
-    .select("_id name currencyCode area")
-    .lean();
-
-  const listings = listingDocs.map((l: any) => ({
-    id: l._id.toString(),
-    name: l.name as string,
-    currencyCode: (l.currencyCode as string) || "AED",
-    area: (l.area as string) || "",
+  const formattedEvents = (eventsData.events ?? []).map((e: any) => ({
+    id: e.id || Math.random().toString(36).substr(2, 9),
+    title: e.name,
+    startDate: e.startDate,
+    endDate: e.endDate,
+    impact: e.impactLevel,
+    suggestedPremiumPct: e.upliftPct,
+    description: e.description || "",
+    category: e.category || "General",
+    area: e.area || "Dubai",
+    source: e.source,
   }));
 
-  const serializedEvents = events.map((e: any) => ({
-    id: e._id.toString(),
-    listingId: e.listingId ? e.listingId.toString() : null,
-    title: (e.title || e.name) as string,
-    startDate: e.startDate as string,
-    endDate: e.endDate as string,
-    impact: (e.impact || e.impactLevel || "medium") as "high" | "medium" | "low",
-    suggestedPremiumPct: (e.suggestedPremiumPct ?? e.upliftPct ?? 0) as number,
-    description: (e.description || "") as string,
-    category: (e.category || e.source || "event") as string,
-    area: (e.area || (e.areas && e.areas[0]) || "") as string,
-    source: (e.source || "ai_detected") as string,
+  const formattedListings = (listingsData.listings ?? []).map((l: any) => ({
+    id: l.id,
+    name: l.name,
+    currencyCode: l.currencyCode || "AED",
+    area: l.area,
   }));
 
   return (
     <MarketIntelligenceClient
-      events={serializedEvents}
-      occupancyPct={occupancyPct}
-      avgNightly={avgNightly}
-      listings={listings}
+      events={formattedEvents}
+      occupancyPct={metricsData.avgOccupancyPct || 0}
+      avgNightly={metricsData.avgNightlyRate || 0}
+      listings={formattedListings}
     />
   );
 }
+
+
