@@ -65,6 +65,9 @@ const nextConfig: NextConfig = {
   // Anchor webpack's file tracing to this directory, preventing it from
   // crawling to /Original_priceos and failing to resolve tailwindcss
   outputFileTracingRoot: __dirname,
+
+  // ── Docker optimization ────────────────────────────────────────────────────
+  output: 'standalone',
 };
 
 export default nextConfig;
