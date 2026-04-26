@@ -1,0 +1,371 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Guest Agent Tools API",
+    "version": "1.2.0",
+    "description": "Tools for managing guest conversation threads, reservations, operations tickets, and upsell offers."
+  },
+  "servers": [
+    {
+      "url": "https://sadistically-calycine-carry.ngrok-free.dev/api/guest-agent",
+      "description": "Backend via ngrok tunnel"
+    }
+  ],
+  "paths": {
+    "/threads": {
+      "get": {
+        "summary": "List guest threads",
+        "description": "Return guest conversation threads for this org.",
+        "operationId": "listThreads",
+        "parameters": [
+          {
+            "name": "orgId",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Use the org_id value from session context exactly as provided."
+          },
+          {
+            "name": "status_filter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["all", "open", "urgent", "pending_approval", "closed"],
+              "default": "all"
+            }
+          }
+        ],
+        "responses": {
+          "200": { "description": "List of threads returned successfully" },
+          "400": { "description": "Bad request" }
+        }
+      }
+    },
+
+    "/threads/{threadId}": {
+      "get": {
+        "summary": "Read a thread",
+        "description": "Fetch conversation details and reservation context for a thread. Always call this before replying.",
+        "operationId": "readThread",
+        "parameters": [
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "The thread_id value from session context or from listThreads response."
+          },
+          {
+            "name": "include_reservation",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean", "default": true }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Thread details returned successfully" },
+          "404": { "description": "Thread not found" }
+        }
+      }
+    },
+
+    "/threads/{threadId}/messages": {
+      "post": {
+        "summary": "Send a guest message",
+        "description": "Send or draft a guest reply message to the guest.",
+        "operationId": "sendGuestMessage",
+        "parameters": [
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Use the thread_id from session context."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["content"],
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "description": "The full message text to send to the guest. Must be warm, professional, and hospitality-focused."
+                  },
+                  "approvalRequired": {
+                    "type": "boolean",
+                    "description": "Set true for sensitive replies that need PM review before sending."
+                  },
+                  "intent": {
+                    "type": "string",
+                    "description": "Short label describing the reply intent, e.g. 'maintenance_acknowledgement', 'check_in_info'."
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Message sent or drafted successfully" },
+          "400": { "description": "Bad request" }
+        }
+      }
+    },
+
+    "/tickets": {
+      "post": {
+        "summary": "Create an ops ticket",
+        "description": "ALWAYS call this when the guest reports ANY maintenance issue, broken appliance, housekeeping problem, noise complaint, access/key problem, or broken amenity. Do NOT skip this — create the ticket first, then send the guest a reply acknowledging the issue.",
+        "operationId": "createOpsTicket",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["orgId", "threadId", "category", "description", "severity"],
+                "properties": {
+                  "orgId": {
+                    "type": "string",
+                    "description": "REQUIRED. Use the exact org_id string from session context. Do not modify or shorten it."
+                  },
+                  "threadId": {
+                    "type": "string",
+                    "description": "REQUIRED. Use the exact thread_id string from session context (e.g. the Hostaway conversation ID or GuestThread ID)."
+                  },
+                  "reservationId": {
+                    "type": "string",
+                    "description": "Optional. Use reservation.reservationId from readThread if available. If not available, omit this field entirely."
+                  },
+                  "listingId": {
+                    "type": "string",
+                    "description": "Optional but preferred. Use the listing_id from session context."
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": ["maintenance", "housekeeping", "access", "noise", "amenity_fault", "other"],
+                    "description": "Select the best matching category for the guest's issue."
+                  },
+                  "description": {
+                    "type": "string",
+                    "description": "A clear summary of what the guest reported. Include the specific item/issue mentioned (e.g. 'Guest reported AC not working in bedroom. Guest message: ...')."
+                  },
+                  "severity": {
+                    "type": "string",
+                    "enum": ["critical", "high", "medium", "low"],
+                    "description": "critical=no access or safety risk; high=major discomfort; medium=inconvenience; low=minor request."
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Ticket created successfully" },
+          "201": { "description": "Ticket created successfully" },
+          "400": { "description": "Bad request" }
+        }
+      }
+    },
+
+    "/threads/{threadId}/escalate": {
+      "post": {
+        "summary": "Escalate a thread to human manager",
+        "description": "Call this for angry guests, legal threats, complaints you cannot resolve, or any situation requiring immediate human attention. This pauses all auto-comms on the thread.",
+        "operationId": "escalateThread",
+        "parameters": [
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Use the thread_id from session context."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["reason", "urgency", "contextSummary"],
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "description": "Why this thread needs human attention. Be specific."
+                  },
+                  "urgency": {
+                    "type": "string",
+                    "enum": ["immediate", "high", "normal"],
+                    "description": "immediate=safety/legal; high=angry guest; normal=complex request."
+                  },
+                  "contextSummary": {
+                    "type": "string",
+                    "description": "Brief summary of the conversation and what the guest needs."
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Thread escalated successfully" },
+          "404": { "description": "Thread not found" }
+        }
+      }
+    },
+
+    "/threads/{threadId}/close": {
+      "post": {
+        "summary": "Close a guest thread",
+        "description": "Close the thread when the guest's stay is complete and no further action is needed.",
+        "operationId": "closeThread",
+        "parameters": [
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["reason"],
+                "properties": {
+                  "reason": { "type": "string" },
+                  "sendFarewell": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Set true to automatically send a farewell review-nudge message."
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Thread closed successfully" },
+          "404": { "description": "Thread not found" }
+        }
+      }
+    },
+
+    "/threads/{threadId}/access-details": {
+      "post": {
+        "summary": "Send check-in / wifi / access details",
+        "description": "Call this when a guest asks about check-in instructions, door codes, wifi password, or how to access the property. Only available for confirmed or checked-in reservations.",
+        "operationId": "sendAccessDetails",
+        "parameters": [
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["orgId", "listingId", "reservationId"],
+                "properties": {
+                  "orgId": { "type": "string", "description": "Use org_id from session context." },
+                  "listingId": { "type": "string", "description": "Use listing_id from session context." },
+                  "reservationId": { "type": "string", "description": "Use reservation.reservationId from readThread." }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Access details sent successfully" },
+          "400": { "description": "Bad request" }
+        }
+      }
+    },
+
+    "/properties/{listingId}": {
+      "get": {
+        "summary": "Get property availability and event context",
+        "description": "Call this when the guest asks about amenities, house rules, early check-in, late checkout, or any property-specific question.",
+        "operationId": "getPropertyData",
+        "parameters": [
+          {
+            "name": "listingId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Use the listing_id from session context."
+          },
+          {
+            "name": "orgId",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Use the org_id from session context."
+          }
+        ],
+        "responses": {
+          "200": { "description": "Property data returned successfully" },
+          "404": { "description": "Listing not found" }
+        }
+      }
+    },
+
+    "/threads/{threadId}/upsell": {
+      "post": {
+        "summary": "Send a structured upsell offer to the guest",
+        "description": "Call this to offer early check-in, late checkout, extended stay, or room upgrades. Only offer if availability allows — check getPropertyData first.",
+        "operationId": "sendUpsellOffer",
+        "parameters": [
+          {
+            "name": "threadId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["offerType", "price"],
+                "properties": {
+                  "offerType": {
+                    "type": "string",
+                    "enum": ["early_checkin", "late_checkout", "extended_stay", "upgrade"]
+                  },
+                  "price": { "type": "number", "description": "Price in the property currency (default AED)." },
+                  "currency": { "type": "string", "default": "AED" },
+                  "details": { "type": "string", "description": "Any additional terms or details for the offer." }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Upsell offer sent successfully" },
+          "400": { "description": "Bad request" }
+        }
+      }
+    }
+  }
+}

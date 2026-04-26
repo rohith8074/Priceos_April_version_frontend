@@ -87,7 +87,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 import { toast } from "sonner";
-import { readSSEStream } from "@/lib/chat/sse-reader";
+import { pollJob } from "@/lib/api/poll-job";
 import { normalizeChatAgentOutput, hydrateAssistantMessage } from "@/lib/chat/normalize-agent-response";
 import { buildBaseScopeId, generateThreadSessionId } from "@/lib/chat/agent-session-id";
 import {
@@ -616,171 +616,93 @@ export function UnifiedChatInterface({ properties: _properties, orgId }: Props) 
         throw new Error(`API Error: ${response.status}`);
       }
 
+      const { jobId } = await response.json();
+
       const stepAgentMap: Record<string, { tool: string; agent: string }> = {
         routing:    { tool: "CRO Router",         agent: "CRO Router" },
         analyzing:  { tool: "Property Analyst",   agent: "Property Analyst" },
         validating: { tool: "PriceGuard",         agent: "PriceGuard" },
         generating: { tool: "Response Generator", agent: "CRO Router" },
       };
+      const stepKeys = Object.keys(stepAgentMap);
 
-      await readSSEStream(
-        response,
-        (msg, step) => {
-          setStatusText(msg);
-          if (msg) setLastThinkingMessage(msg);
+      // Animate graph stages based on elapsed poll time
+      const data = await pollJob<{ message: string; metadata?: unknown; proposals?: unknown[] }>(jobId, {
+        onPoll: (elapsed) => {
+          const idx = Math.min(Math.floor(elapsed / 8000), stepKeys.length - 1);
+          const step = stepKeys[idx];
+          const { tool, agent } = stepAgentMap[step];
+          const now = new Date().toISOString();
 
-          if (step && stepAgentMap[step]) {
-            const { tool, agent } = stepAgentMap[step];
-            const stepKeys = Object.keys(stepAgentMap);
-            const stepIdx = stepKeys.indexOf(step);
-            const now = new Date().toISOString();
+          setStatusText(`${agent} is working…`);
+          setLastThinkingMessage(`${agent} is working…`);
 
-            setStages(prev => prev.map(s => {
-              if (s.id === step) return { ...s, status: "active" };
-              const allStages = ["routing", "analyzing", "validating", "generating"];
-              if (allStages.indexOf(s.id) < allStages.indexOf(step)) return { ...s, status: "done" };
-              return s;
-            }));
+          setStages(prev => prev.map(s => {
+            if (s.id === step) return { ...s, status: "active" };
+            if (stepKeys.indexOf(s.id) < idx) return { ...s, status: "done" };
+            return s;
+          }));
 
-            // Push completed-stage events for all steps before current
-            const completedEvents: LyzrAgentEvent[] = stepKeys.slice(0, stepIdx).map((prevStep) => ({
-              event_type: "tool_response",
-              tool_name: stepAgentMap[prevStep].tool,
-              agent_name: stepAgentMap[prevStep].agent,
-              status: "completed",
-              timestamp: now,
-              iteration: 1,
-            }));
-
-            // Push the active event for current step
-            const activeEvent: LyzrAgentEvent = {
-              event_type: "tool_called",
-              tool_name: tool,
-              agent_name: agent,
-              message: msg,
-              thinking: msg,
-              status: "active",
-              timestamp: now,
-              iteration: 1,
-            };
-
-            setGraphEvents(prev => {
-              // Remove any previous events for steps already represented, then add current snapshot
-              const base = prev.filter(e =>
-                !Object.values(stepAgentMap).some(m => m.tool === e.tool_name)
-              );
-              return [...base, ...completedEvents, activeEvent];
-            });
-          }
-        },
-        (data) => {
-          setStages(prev => prev.map(s => ({ ...s, status: "done" })));
-          setGraphFlowStatus("done");
-          setGraphEvents(prev => [
-            ...prev,
-            {
-              event_type: "output_generated",
-              message: "Analysis Complete",
-              status: "done",
-              timestamp: new Date().toISOString(),
-              iteration: 1,
-            },
-          ]);
-
-          const assistantMsg: Message = {
-            id: Date.now().toString(),
-            role: "assistant",
-            content: data.message,
-            metadata: data.metadata,
-            proposals: data.proposals && data.proposals.length > 0 ? data.proposals : undefined,
-            proposalStatus: data.proposals && data.proposals.length > 0 ? "pending" : undefined,
+          const completedEvents: LyzrAgentEvent[] = stepKeys.slice(0, idx).map((prevStep) => ({
+            event_type: "tool_response",
+            tool_name: stepAgentMap[prevStep].tool,
+            agent_name: stepAgentMap[prevStep].agent,
+            status: "completed",
+            timestamp: now,
+            iteration: 1,
+          }));
+          const activeEvent: LyzrAgentEvent = {
+            event_type: "tool_called",
+            tool_name: tool,
+            agent_name: agent,
+            status: "active",
+            timestamp: now,
+            iteration: 1,
           };
-
-          setMessages(prev => {
-            const filtered = prev.filter(m => m.id !== "streaming-temp");
-            return [...filtered, assistantMsg];
+          setGraphEvents(prev => {
+            const base = prev.filter(e => !Object.values(stepAgentMap).some(m => m.tool === e.tool_name));
+            return [...base, ...completedEvents, activeEvent];
           });
-
-          if (data.proposals && data.proposals.length > 0) {
-            // ── Auto-save to Pricing section immediately as 'pending' ──
-            const mappedProposals = data.proposals.map((p: any) => ({
-              listingId: propertyId,
-              date: p.date,
-              proposedPrice: p.proposed_price ?? p.proposedPrice,
-              changePct: p.change_pct ?? p.changePct,
-              reasoning: typeof p.reasoning === "object"
-                ? Object.values(p.reasoning as Record<string, string>).filter(Boolean).join(" | ")
-                : (p.reasoning ?? ""),
-              status: "pending"
-            }));
-
-            fetch("/api/proposals/bulk-save", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ orgId, proposals: mappedProposals }),
-            }).then(res => {
-              if (res.ok) console.log("✅ Auto-saved proposals as pending");
-            }).catch(err => console.error("Auto-save failed", err));
-          }
         },
-        (err) => {
-          toast.error(`Agent Error: ${err}`);
-        },
-        (evt) => {
-          if (evt.type === "agent_event" && evt.payload) {
-            setGraphEvents(prev => [...prev, evt.payload as LyzrAgentEvent]);
-          }
-        },
-        (chunk) => {
-          setMessages(prev => {
-            const last = prev[prev.length - 1];
-            
-            // 💎 CLEANUP LOGIC: Extract ONLY the message/reply if it's Maya's JSON
-            let cleanChunk = chunk;
-            const isMayaOutput = chunk.includes('{"triage"') || chunk.includes('{\\"triage\\"');
-            
-            if (isMayaOutput) {
-               // Extract suggested_reply.content or chat_response
-               const extractContent = (full: string) => {
-                  const patterns = [
-                     /\\?"suggested_reply\\?":\s*{\s*\\?"content\\?":\s*\\?"([\s\S]*?)(?=\\?",\s*\\?"approval_required\\?")/,
-                     /\\?"chat_response\\?":\s*\\?"([\s\S]*?)(?=\\?"})/,
-                     /\\?"reply\\?":\s*\\?"([\s\S]*?)(?=\\?"})/
-                  ];
-                  for (const p of patterns) {
-                     const m = full.match(p);
-                     if (m && m[1]) {
-                        return m[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
-                     }
-                  }
-                  // If we are still in the triage block and haven't reached content yet, show nothing
-                  if (full.includes('{"triage"') || full.includes('{\\"triage\\"')) {
-                     const contentKey = full.includes('content') || full.includes('chat_response');
-                     if (!contentKey) return "";
-                  }
-                  return full;
-               };
-               cleanChunk = extractContent(chunk);
-            }
+      });
 
-            if (last && last.id === "streaming-temp") {
-              return [
-                ...prev.slice(0, -1),
-                { ...last, content: cleanChunk }
-              ];
-            } else {
-              return [
-                ...prev,
-                {
-                  id: "streaming-temp",
-                  role: "assistant",
-                  content: cleanChunk,
-                }
-              ];
-            }
-          });
-        }
-      );
+      setStages(prev => prev.map(s => ({ ...s, status: "done" })));
+      setGraphFlowStatus("done");
+      setGraphEvents(prev => [
+        ...prev,
+        { event_type: "output_generated", message: "Analysis Complete", status: "done", timestamp: new Date().toISOString(), iteration: 1 },
+      ]);
+
+      const assistantMsg: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: data.message,
+        metadata: data.metadata,
+        proposals: data.proposals && data.proposals.length > 0 ? data.proposals : undefined,
+        proposalStatus: data.proposals && data.proposals.length > 0 ? "pending" : undefined,
+      };
+      setMessages(prev => [...prev, assistantMsg]);
+
+      if (data.proposals && data.proposals.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mappedProposals = (data.proposals as any[]).map((p) => ({
+          listingId: propertyId,
+          date: p.date,
+          proposedPrice: p.proposed_price ?? p.proposedPrice,
+          changePct: p.change_pct ?? p.changePct,
+          reasoning: typeof p.reasoning === "object"
+            ? Object.values(p.reasoning as Record<string, string>).filter(Boolean).join(" | ")
+            : (p.reasoning ?? ""),
+          status: "pending",
+        }));
+        fetch("/api/proposals/bulk-save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orgId, proposals: mappedProposals }),
+        }).then(res => {
+          if (res.ok) console.log("✅ Auto-saved proposals as pending");
+        }).catch(err => console.error("Auto-save failed", err));
+      }
     } catch (error) {
       console.error(`Chat Error:`, error);
       setGraphFlowStatus("failed");

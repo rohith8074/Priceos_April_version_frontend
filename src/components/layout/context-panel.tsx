@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { CompactPropertyCard } from "./compact-property-card";
 import { useContextStore } from "@/stores/context-store";
+import { getOrgId } from "@/lib/auth/client";
 import { useChatStore } from "@/stores/chat-store";
 import { usePathname } from "next/navigation";
 import type { PropertyWithMetrics } from "@/types";
@@ -29,7 +30,9 @@ export function ContextPanel({ properties }: Props) {
 
     const fetchCounts = async () => {
       try {
-        const r = await fetch("/api/hostaway/conversations/cached");
+        const orgId = getOrgId();
+        if (!orgId || disposed) return;
+        const r = await fetch(`/api/hostaway/conversations/cached?orgId=${orgId}`);
         if (!r.ok || disposed) return;
         const data = await r.json();
         const counts: Record<string, number> = {};

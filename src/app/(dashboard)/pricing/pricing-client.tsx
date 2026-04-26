@@ -43,6 +43,7 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { backendFetch } from "@/lib/api/backend-client";
 import { LiveInferenceFlowGraph, FlowStage } from "@/components/chat/live-inference-flow-graph";
 import { readSSEStream } from "@/lib/chat/sse-reader";
 import { SUPPORT_AGENT_STREAM_EVENT, SupportAgentStreamEventPayload } from "@/lib/chat/inference-events";
@@ -276,8 +277,11 @@ export function PricingClient({
     setGraphSessionId(currentSessionId);
 
     try {
-      const response = await fetch(`/api/engine/run-all?orgId=${orgId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/engine/run-all?orgId=${orgId}`, {
         method: "POST",
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("priceos-token")}`,
+        }
       });
 
       if (!response.ok) throw new Error("Failed to start engine run");
@@ -640,7 +644,7 @@ export function PricingClient({
           <SelectTrigger className="h-8 w-44 text-xs bg-background border-border/70 text-foreground shadow-sm">
             <SelectValue placeholder="All properties" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="max-h-64 overflow-y-auto">
             <SelectItem value="all" className="text-xs">All properties</SelectItem>
             {propertyOptions.map((p) => (
               <SelectItem key={p.id} value={p.name} className="text-xs">{p.name}</SelectItem>

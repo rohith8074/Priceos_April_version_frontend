@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
+import { backendFetch } from "@/lib/api/backend-client";
 
 export function OperationsClient({ orgId }: { orgId: string }) {
   const [tickets, setTickets] = useState<any[]>([]);
@@ -66,14 +67,13 @@ export function OperationsClient({ orgId }: { orgId: string }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/api/properties")
-      .then(r => r.json())
+    backendFetch(`/listings/?orgId=${orgId}`)
       .then(data => {
         if (data.properties) setAllProperties(data.properties);
         else if (data.listings) setAllProperties(data.listings);
       })
       .catch(console.error);
-  }, []);
+  }, [orgId]);
 
   const uniqueProperties = useMemo(() => {
     if (allProperties.length > 0) {
@@ -140,11 +140,12 @@ export function OperationsClient({ orgId }: { orgId: string }) {
     setSelectedTicket(ticket);
     setThreadData(null);
 
+    const tid: string = ticket.threadId || "";
     if (
-      !ticket.threadId ||
-      ticket.threadId === "N/A" ||
-      ticket.threadId.toLowerCase().includes("placeholder") ||
-      ticket.threadId.toLowerCase().includes("unknown")
+      !tid ||
+      tid === "N/A" ||
+      tid.toLowerCase().includes("placeholder") ||
+      tid.toLowerCase().includes("unknown")
     ) {
       setThreadData({ isManual: true });
       return;
@@ -152,10 +153,23 @@ export function OperationsClient({ orgId }: { orgId: string }) {
 
     setLoadingThread(true);
     try {
-      const res = await fetch(`/api/guest-agent/threads/${ticket.threadId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setThreadData(data);
+      // 1) Try GuestThread first (24-char MongoDB ObjectId)
+      const isObjectId = /^[a-f0-9]{24}$/i.test(tid);
+      if (isObjectId) {
+        const res = await fetch(`/api/guest-agent/threads/${tid}`);
+        if (res.ok) {
+          const data = await res.json();
+          setThreadData({ ...data, source: "guest_thread" });
+          return;
+        }
+      }
+      // 2) Fall back to Hostaway conversation (numeric / non-ObjectId IDs)
+      const hwRes = await fetch(
+        `/api/hostaway/conversation/${tid}?orgId=${orgId}`
+      );
+      if (hwRes.ok) {
+        const hwData = await hwRes.json();
+        setThreadData({ ...hwData, source: "hostaway" });
       } else {
         setThreadData({ error: true });
       }
@@ -215,20 +229,25 @@ export function OperationsClient({ orgId }: { orgId: string }) {
     }
   };
 
-  // Find the agent message that most likely triggered the ticket
+  // Find the agent message that most likely triggered the ticket.
+  // Handles both GuestThread shape (direction/createdAt) and Hostaway shape (sender/time).
   const findTriggerMessageIdx = (messages: any[], ticketCreatedAt: string): number => {
     if (!messages || messages.length === 0) return -1;
     const ticketTime = new Date(ticketCreatedAt).getTime();
     let closestIdx = -1;
     let closestDiff = Infinity;
     messages.forEach((msg, i) => {
-      if (msg.direction !== "inbound") {
-        const msgTime = new Date(msg.createdAt).getTime();
-        const diff = Math.abs(ticketTime - msgTime);
-        if (diff < closestDiff) {
-          closestDiff = diff;
-          closestIdx = i;
-        }
+      const isOutbound =
+        msg.direction === "outbound" ||
+        (msg.direction === undefined && msg.sender !== "guest");
+      if (!isOutbound) return;
+      const ts = msg.createdAt || msg.time;
+      if (!ts) return;
+      const msgTime = new Date(ts).getTime();
+      const diff = Math.abs(ticketTime - msgTime);
+      if (diff < closestDiff) {
+        closestDiff = diff;
+        closestIdx = i;
       }
     });
     return closestIdx;
@@ -304,7 +323,7 @@ export function OperationsClient({ orgId }: { orgId: string }) {
               <SelectTrigger className="w-[180px] h-9 text-xs bg-surface-1 border-border-default">
                 <SelectValue placeholder="All Properties" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-64 overflow-y-auto">
                 <SelectItem value="all">All Properties</SelectItem>
                 {uniqueProperties.map(p => (
                   <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
@@ -577,8 +596,8 @@ export function OperationsClient({ orgId }: { orgId: string }) {
                   </div>
                 </div>
 
-                {/* Guest Info (from thread) */}
-                {!loadingThread && threadData && !threadData.isManual && !threadData.error && threadData.reservation && (
+                {/* Guest Info (from thread — GuestThread or Hostaway) */}
+                {!loadingThread && threadData && !threadData.isManual && !threadData.error && (threadData.reservation || threadData.guestName) && (
                   <div className="bg-surface-2/60 rounded-xl p-3.5 border border-border-subtle">
                     <div className="flex items-center gap-1.5 mb-3">
                       <User className="w-3.5 h-3.5 text-text-tertiary" />
@@ -587,16 +606,20 @@ export function OperationsClient({ orgId }: { orgId: string }) {
                     <div className="grid grid-cols-3 gap-3">
                       <div>
                         <p className="text-[10px] text-text-tertiary mb-0.5">Guest Name</p>
-                        <p className="text-sm font-semibold text-text-primary">{threadData.reservation.guestName || "—"}</p>
+                        <p className="text-sm font-semibold text-text-primary">
+                          {threadData.guestName || threadData.reservation?.guestName || "—"}
+                        </p>
                       </div>
                       <div>
                         <p className="text-[10px] text-text-tertiary mb-0.5">Reservation ID</p>
-                        <p className="text-xs font-mono text-text-primary">{threadData.reservation.reservationId || "—"}</p>
+                        <p className="text-xs font-mono text-text-primary">
+                          {threadData.reservation?.reservationId || selectedTicket.reservationId || "—"}
+                        </p>
                       </div>
                       <div>
                         <p className="text-[10px] text-text-tertiary mb-0.5">Status</p>
                         <Badge variant="outline" className="text-[9px] uppercase font-bold">
-                          {threadData.reservation.status || "—"}
+                          {threadData.reservation?.status || (threadData.source === "hostaway" ? "hostaway" : "—")}
                         </Badge>
                       </div>
                     </div>
@@ -654,19 +677,36 @@ export function OperationsClient({ orgId }: { orgId: string }) {
                     <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1 scrollbar-thin">
                       {(() => {
                         const triggerIdx = findTriggerMessageIdx(threadData.messages, selectedTicket.createdAt);
+                        const guestName =
+                          threadData.guestName ||
+                          threadData.reservation?.guestName ||
+                          "Guest";
                         return threadData.messages.map((msg: any, idx: number) => {
-                          const isInbound = msg.direction === "inbound";
+                          // Normalise: support GuestThread (direction/content/createdAt)
+                          // and Hostaway (sender/text/time) shapes
+                          const isInbound =
+                            msg.direction === "inbound" ||
+                            (msg.direction === undefined && msg.sender === "guest");
                           const isTrigger = idx === triggerIdx;
+                          const body = msg.content ?? msg.text ?? "";
+                          const ts = msg.createdAt || msg.time || "";
+                          let timeLabel = "";
+                          try {
+                            if (ts) {
+                              const d = new Date(ts.endsWith("Z") ? ts : ts + "Z");
+                              timeLabel = format(d, "h:mm a");
+                            }
+                          } catch { /* ignore bad timestamps */ }
                           return (
                             <div
                               key={idx}
                               className={cn(
                                 "flex flex-col rounded-xl p-3 text-sm transition-all",
                                 isInbound
-                                  ? "bg-surface-2 border border-border-subtle self-start"
+                                  ? "bg-surface-2 border border-border-subtle"
                                   : isTrigger
-                                  ? "bg-amber/5 border-2 border-amber/30 self-end ml-auto"
-                                  : "bg-blue-500/5 border border-blue-500/15 self-end ml-auto"
+                                  ? "bg-amber/5 border-2 border-amber/30 ml-6"
+                                  : "bg-blue-500/5 border border-blue-500/15 ml-6"
                               )}
                             >
                               {/* Trigger badge */}
@@ -681,16 +721,14 @@ export function OperationsClient({ orgId }: { orgId: string }) {
                               )}
                               <div className="flex items-center justify-between gap-4 mb-1">
                                 <span className="text-[10px] font-bold uppercase opacity-60">
-                                  {isInbound
-                                    ? threadData.reservation?.guestName || "Guest"
-                                    : "Maya (Agent)"}
+                                  {isInbound ? guestName : "Maya (Agent)"}
                                 </span>
-                                <span className="text-[10px] opacity-50 tabular-nums">
-                                  {format(new Date(msg.createdAt.endsWith('Z') ? msg.createdAt : msg.createdAt + 'Z'), "h:mm a")}
-                                </span>
+                                {timeLabel && (
+                                  <span className="text-[10px] opacity-50 tabular-nums">{timeLabel}</span>
+                                )}
                               </div>
                               <p className="whitespace-pre-wrap text-text-primary text-xs leading-relaxed">
-                                {msg.content}
+                                {body}
                               </p>
                             </div>
                           );

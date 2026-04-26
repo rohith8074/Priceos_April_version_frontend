@@ -24,7 +24,9 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https:",
       "font-src 'self' data:",
-      "connect-src 'self' https://agent-prod.studio.lyzr.ai https://app.ticketmaster.com https://api.hostaway.com http://localhost:8000",
+      // agent-prod.studio.lyzr.ai is needed for the Lyzr agent event WebSocket (monitoring only).
+      // All data API calls (Hostaway, Ticketmaster, Lyzr chat) go through the FastAPI backend.
+      "connect-src 'self' wss://metrics.studio.lyzr.ai https://agent-prod.studio.lyzr.ai http://localhost:8000 http://localhost:3000",
       "frame-ancestors 'none'",
     ].join("; "),
   },
@@ -65,6 +67,18 @@ const nextConfig: NextConfig = {
   // Anchor webpack's file tracing to this directory, preventing it from
   // crawling to /Original_priceos and failing to resolve tailwindcss
   outputFileTracingRoot: __dirname,
+
+  // ── API Rewrites ────────────────────────────────────────────────────────────
+  // This allows the frontend to call the backend directly via /api/* without
+  // needing redundant proxy files in src/app/api/*.
+  async rewrites() {
+    return [
+      {
+        source: "/api/:path*",
+        destination: "http://localhost:8000/api/:path*",
+      },
+    ];
+  },
 
   // ── Docker optimization ────────────────────────────────────────────────────
   output: 'standalone',

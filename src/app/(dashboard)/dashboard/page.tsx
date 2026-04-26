@@ -30,6 +30,10 @@ export default async function OverviewPage() {
   const plus29 = new Date(today);
   plus29.setDate(plus29.getDate() + 29);
   const plus29Str = plus29.toISOString().split("T")[0];
+  // For channel chart: include past 365 days so historical revenue is captured
+  const minus365 = new Date(today);
+  minus365.setDate(minus365.getDate() - 365);
+  const minus365Str = minus365.toISOString().split("T")[0];
 
   // Fetch all data in parallel from FastAPI, but don't 500 if backend is down.
   const [listingsResS, inventoryResS, reservationsResS] = await Promise.allSettled([
@@ -41,7 +45,8 @@ export default async function OverviewPage() {
       headers: { Authorization: `Bearer ${token}` },
       next: { revalidate: 60 },
     }),
-    fetch(`${API}/reservations/?orgId=${orgId}&checkIn=${todayStr}&checkOut=${plus29Str}`, {
+    // Wide date range: past 365 days through next 30 days so Revenue By Channel shows historical data
+    fetch(`${API}/reservations?orgId=${orgId}&checkIn=${minus365Str}&checkOut=${plus29Str}`, {
       headers: { Authorization: `Bearer ${token}` },
       next: { revalidate: 30 },
     }),

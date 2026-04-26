@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { getOrgId } from "@/lib/auth/client";
 import {
   Layers,
   Plus,
@@ -287,12 +288,14 @@ function GroupForm({
 
   const handleSave = async () => {
     if (!name.trim()) { toast.error("Group name is required"); return; }
+    const orgId = getOrgId();
+    if (!orgId) { toast.error("Session expired, please log in again"); return; }
     setSaving(true);
     try {
       const payload = { name, description, color, listingIds: [...selectedIds] };
       const saved = initial
-        ? await api(`/api/groups/${initial._id}`, { method: "PUT", body: JSON.stringify(payload) })
-        : await api("/api/groups", { method: "POST", body: JSON.stringify(payload) });
+        ? await api(`/api/groups/${initial._id}?orgId=${orgId}`, { method: "PUT", body: JSON.stringify(payload) })
+        : await api(`/api/groups?orgId=${orgId}`, { method: "POST", body: JSON.stringify(payload) });
       onSave(saved);
     } catch (e: any) {
       toast.error(e.message);
@@ -950,10 +953,12 @@ export default function GroupsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    const orgId = getOrgId();
+    if (!orgId) { setLoading(false); return; }
     try {
       const [gs, ls] = await Promise.all([
-        api("/api/groups"),
-        api("/api/properties"),
+        api(`/api/groups?orgId=${orgId}`),
+        api(`/api/properties?orgId=${orgId}`),
       ]);
       const normalizedGroups = Array.isArray(gs) ? gs : gs?.groups ?? [];
       const rawListings = Array.isArray(ls) ? ls : ls?.properties ?? [];

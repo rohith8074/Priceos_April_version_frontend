@@ -8,7 +8,7 @@ import { Bot, Send, Loader2, RefreshCw, X, Maximize2, Minimize2, Activity } from
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
-import { readSSEStream } from "@/lib/chat/sse-reader";
+import { pollJob } from "@/lib/api/poll-job";
 import { cn } from "@/lib/utils";
 import { useLyzrAgentEvents } from "@/hooks/use-lyzr-agent-events";
 import { LiveInferenceFlowGraph, type FlowStage } from "./live-inference-flow-graph";
@@ -129,34 +129,30 @@ export function DashboardChatPopup({ isOpen, onOpenChange }: DashboardChatPopupP
 
       if (!response.ok) throw new Error("Failed to get response");
 
-      await readSSEStream(
-        response,
-        (msg, step) => {
-          setStatusText(msg);
-          if (step === "agent") {
-            emitGraphEvent({ timestamp: new Date().toISOString(), event_type: "tool_response", tool_name: "Portfolio Router", agent_name: "Portfolio Router", iteration: 1, status: "done" });
-            emitGraphEvent({ timestamp: new Date().toISOString(), event_type: "tool_called", tool_name: "Data Analyst", agent_name: "Data Analyst", iteration: 1, status: "active" });
-            setStages(prev => prev.map(s => s.id === "routing" ? { ...s, status: "done" } : s.id === "analyzing" ? { ...s, status: "active" } : s));
-          }
-        },
-        (data) => {
-          emitGraphEvent({ timestamp: new Date().toISOString(), event_type: "tool_response", tool_name: "Data Analyst", agent_name: "Data Analyst", iteration: 1, status: "done" });
-          emitGraphEvent({ timestamp: new Date().toISOString(), event_type: "tool_called", tool_name: "Response", agent_name: "Portfolio Router", iteration: 1, status: "active" });
-          emitGraphEvent({ timestamp: new Date().toISOString(), event_type: "output_generated", message: "Portfolio analysis complete", status: "done" });
-          setStages(prev => prev.map(s => ({ ...s, status: "done" })));
+      const { jobId } = await response.json();
 
-          const assistantMessage: Message = {
-            id: (Date.now() + 1).toString(),
-            role: "assistant",
-            content: getDisplayMessage(data.message || ""),
-            timestamp: new Date(),
-          };
-          setMessages((prev) => [...prev, assistantMessage]);
-        },
-        (errMsg) => {
-          toast.error(errMsg || "Failed to connect to the assistant.");
-        },
-      );
+      // Animate graph stages while polling
+      setTimeout(() => {
+        emitGraphEvent({ timestamp: new Date().toISOString(), event_type: "tool_response", tool_name: "Portfolio Router", agent_name: "Portfolio Router", iteration: 1, status: "done" });
+        emitGraphEvent({ timestamp: new Date().toISOString(), event_type: "tool_called", tool_name: "Data Analyst", agent_name: "Data Analyst", iteration: 1, status: "active" });
+        setStages(prev => prev.map(s => s.id === "routing" ? { ...s, status: "done" } : s.id === "analyzing" ? { ...s, status: "active" } : s));
+        setStatusText("Data Analyst is working…");
+      }, 3000);
+
+      const data = await pollJob<{ message: string }>(jobId);
+
+      emitGraphEvent({ timestamp: new Date().toISOString(), event_type: "tool_response", tool_name: "Data Analyst", agent_name: "Data Analyst", iteration: 1, status: "done" });
+      emitGraphEvent({ timestamp: new Date().toISOString(), event_type: "tool_called", tool_name: "Response", agent_name: "Portfolio Router", iteration: 1, status: "active" });
+      emitGraphEvent({ timestamp: new Date().toISOString(), event_type: "output_generated", message: "Portfolio analysis complete", status: "done" });
+      setStages(prev => prev.map(s => ({ ...s, status: "done" })));
+
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: getDisplayMessage(data.message || ""),
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
       console.error("Chat error:", error);
       toast.error("Failed to connect to the assistant.");

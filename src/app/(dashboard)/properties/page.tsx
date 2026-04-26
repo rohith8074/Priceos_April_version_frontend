@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { getOrgId } from "@/lib/auth/client";
 import { cn } from "@/lib/utils";
 import {
   Home,
@@ -129,7 +130,9 @@ export default function PropertiesPage() {
   const [analyticsPropertyId, setAnalyticsPropertyId] = useState<string>("");
 
   useEffect(() => {
-    fetch("/api/properties")
+    const orgId = getOrgId();
+    if (!orgId) { setLoading(false); return; }
+    fetch(`/api/properties?orgId=${orgId}`)
       .then((r) => r.json())
       .then((data) => setProperties(data.properties || []))
       .catch(() => toast.error("Failed to load properties"))

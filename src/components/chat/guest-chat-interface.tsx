@@ -13,7 +13,7 @@ import { useContextStore } from "@/stores/context-store";
 import { toast } from "sonner";
 import { LiveInferenceFlowGraph, type FlowStage } from "./live-inference-flow-graph";
 import type { LyzrAgentEvent } from "@/hooks/use-lyzr-agent-events";
-import { readSSEStream } from "@/lib/chat/sse-reader";
+import { pollJob } from "@/lib/api/poll-job";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
@@ -128,7 +128,9 @@ export function GuestChatInterface({
         setIsSyncingHostaway(true);
         toast.loading("Syncing conversations from Hostaway...", { id: "sync_hostaway" });
         try {
-            const res = await fetch(`/api/hostaway/conversations?listingId=${propertyId}`);
+            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/hostaway/conversations?listingId=${propertyId}&orgId=${orgId}`, {
+                headers: { "Authorization": `Bearer ${localStorage.getItem("priceos-token")}` }
+            });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || "Failed to sync from Hostaway");
             const syncedConversations = data.conversations || [];
@@ -154,7 +156,9 @@ export function GuestChatInterface({
 
         try {
             // 1) Load cached conversations
-            const convRes = await fetch(`/api/hostaway/conversations/cached?listingId=${propertyId}`);
+            const convRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/hostaway/conversations/cached?listingId=${propertyId}&orgId=${orgId}`, {
+                headers: { "Authorization": `Bearer ${localStorage.getItem("priceos-token")}` }
+            });
             if (convRes.ok) {
                 const convData = await convRes.json();
                 const cachedConversations = convData.conversations || [];
@@ -167,7 +171,9 @@ export function GuestChatInterface({
 
                 // 2) If cache is empty, sync from Hostaway live API for this property
                 if (cachedConversations.length === 0) {
-                    const liveRes = await fetch(`/api/hostaway/conversations?listingId=${propertyId}`);
+                    const liveRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/hostaway/conversations?listingId=${propertyId}&orgId=${orgId}`, {
+                        headers: { "Authorization": `Bearer ${localStorage.getItem("priceos-token")}` }
+                    });
                     if (liveRes.ok) {
                         const liveData = await liveRes.json();
                         const syncedConversations = liveData.conversations || [];
@@ -189,7 +195,9 @@ export function GuestChatInterface({
             }
 
             // Load cached summary
-            const sumRes = await fetch(`/api/hostaway/summary?listingId=${propertyId}`);
+            const sumRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/hostaway/summary?listingId=${propertyId}&orgId=${orgId}`, {
+                headers: { "Authorization": `Bearer ${localStorage.getItem("priceos-token")}` }
+            });
             if (sumRes.ok) {
                 const sumData = await sumRes.json();
                 if (sumData.summary) setConversationSummary(sumData.summary);
@@ -329,9 +337,8 @@ export function GuestChatInterface({
     };
 
     const generateAiReply = async (
-        conversation: SimulatedConversation, 
+        conversation: SimulatedConversation,
         sessionId: string,
-        onChunk: (fullText: string) => void,
         onComplete: (finalReply: string) => void
     ): Promise<void> => {
         const res = await fetch("/api/hostaway/suggest-reply", {
@@ -350,142 +357,77 @@ export function GuestChatInterface({
 
         if (!res.ok) throw new Error("Failed to call agent");
 
-        await readSSEStream(
-            res,
-            (msg, step) => {
-                if (step) {
-                    setGraphStages(prev => prev.map(s => {
-                        if (s.id === step) return { ...s, status: "active" };
-                        const allStages = ["routing", "analyzing", "validating", "generating"];
-                        if (allStages.indexOf(s.id) < allStages.indexOf(step)) return { ...s, status: "done" };
-                        return s;
-                    }));
-                }
-                if (msg) {
-                    pushGraphEvent({
-                        timestamp: new Date().toISOString(),
-                        event_type: "thinking_log",
-                        message: msg,
-                        thinking: msg,
-                        status: "active",
-                        iteration: 1,
-                    });
-                }
+        const { jobId } = await res.json();
+
+        // Animate graph stages while polling
+        setGraphStages(prev => prev.map(s => s.id === "routing" ? { ...s, status: "active" } : s));
+        pushGraphEvent({
+            event_type: "tool_called",
+            message: "Routing guest request...",
+            thinking: "Analyzing guest intent...",
+            status: "active",
+            timestamp: new Date().toISOString(),
+            iteration: 1,
+        });
+
+        const allStages = ["routing", "analyzing", "validating", "generating"];
+        const result = await pollJob<{ message: string; raw_json?: Record<string, unknown> }>(jobId, {
+            onPoll: (elapsed) => {
+                const idx = Math.min(Math.floor(elapsed / 8000), allStages.length - 1);
+                setGraphStages(prev => prev.map((s, i) => ({
+                    ...s,
+                    status: i < idx ? "done" : i === idx ? "active" : s.status,
+                })));
             },
-            (data) => {
-                setGraphStages(prev => prev.map(s => ({ ...s, status: "done" })));
-                setGraphFlowStatus("done");
-                pushGraphEvent({
-                    event_type: "output_generated",
-                    message: "Response complete",
-                    status: "done",
-                    timestamp: new Date().toISOString(),
-                    iteration: 1,
-                });
-                
-                let processedMessage = data.message;
-                let parsedJson: any = data.raw_json || null;
+        });
 
-                if (!parsedJson && processedMessage && (processedMessage.includes("{") || processedMessage.includes("{\""))) {
-                    try {
-                        // Handle possible double-encoded JSON or escaped strings from Lyzr
-                        let cleanMessage = processedMessage.trim();
-                        
-                        // If the message is wrapped in literal quotes (e.g. "{\"triage\":...}"), unwrap it
-                        if (cleanMessage.startsWith('"') && cleanMessage.endsWith('"') && cleanMessage.includes('\\"')) {
-                            try {
-                                cleanMessage = JSON.parse(cleanMessage);
-                            } catch (e) {
-                                // Not a JSON-encoded string, proceed with regex cleanup
-                                cleanMessage = cleanMessage.replace(/^"|"$/g, '');
-                            }
-                        }
+        setGraphStages(prev => prev.map(s => ({ ...s, status: "done" })));
+        setGraphFlowStatus("done");
+        pushGraphEvent({
+            event_type: "output_generated",
+            message: "Response complete",
+            status: "done",
+            timestamp: new Date().toISOString(),
+            iteration: 1,
+        });
 
-                        // Fallback: manually unescape common characters if it's still just a string
-                        const unescaped = typeof cleanMessage === 'string' 
-                            ? cleanMessage.replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\")
-                            : cleanMessage;
-                            
-                        parsedJson = typeof unescaped === 'object' ? unescaped : JSON.parse(unescaped);
-                    } catch (e) {
-                        console.warn("[GUEST_AGENT] Frontend fallback parse failed:", e);
-                    }
-                }
+        let processedMessage = result.message;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let parsedJson: any = result.raw_json || null;
 
-                if (parsedJson) {
-                    processedMessage =
-                        parsedJson.suggested_reply?.content ||
-                        parsedJson.chat_response ||
-                        parsedJson.reply ||
-                        parsedJson.message ||
-                        processedMessage;
+        if (!parsedJson && processedMessage && (processedMessage.includes("{") || processedMessage.includes("{\""))) {
+            try {
+                let cleanMessage = processedMessage.trim();
+                if (cleanMessage.startsWith('"') && cleanMessage.endsWith('"') && cleanMessage.includes('\\"')) {
+                    try { cleanMessage = JSON.parse(cleanMessage); } catch { cleanMessage = cleanMessage.replace(/^"|"$/g, ''); }
                 }
-
-                // Auto-create ops ticket when Maya flags suggested_action: "ticket"
-                if (parsedJson?.triage?.suggested_action === "ticket" && activeConversationId) {
-                    createOpsTicket(parsedJson, activeConversationId);
-                }
-                // Auto-escalate when Maya flags suggested_action: "escalate"
-                if (parsedJson?.triage?.suggested_action === "escalate" && activeConversationId) {
-                    createEscalation(parsedJson, activeConversationId);
-                }
-
-                onComplete(processedMessage);
-                setIsGraphProcessing(false);
-            },
-            (err) => {
-                throw new Error(err);
-            },
-            (evt) => {
-                if (evt.type === "agent_event" && evt.payload) {
-                    pushGraphEvent(evt.payload as LyzrAgentEvent);
-                }
-            },
-            (chunk) => {
-                // `chunk` is the full accumulated raw response so far.
-                // Extract ONLY suggested_reply.content for live display.
-                // The agent schema is: {"triage":{...},"suggested_reply":{"content":"<REPLY>","approval_required":...},...}
-                // Robust extraction that handles escaped quotes e.g. \"suggested_reply\" or "suggested_reply"
-                const findKey = (str: string, key: string) => {
-                    const variants = [`"${key}"`, `\\"${key}\\"`];
-                    for (const v of variants) {
-                        const idx = str.indexOf(v);
-                        if (idx !== -1) return { index: idx, variant: v };
-                    }
-                    return null;
-                };
-
-                const srMatch = findKey(chunk, 'suggested_reply');
-                if (!srMatch) {
-                    onChunk("");
-                    return;
-                }
-
-                const afterSr = chunk.slice(srMatch.index);
-                const cMatch = findKey(afterSr, 'content');
-                if (!cMatch) {
-                    onChunk("");
-                    return;
-                }
-
-                let content = afterSr.slice(cMatch.index + cMatch.variant.length);
-                // Skip the colon and opening quote(s)
-                content = content.replace(/^[:\s\\]*"/, '').replace(/^[:\s]*\\"/, '');
-                // Trim at the closing delimiter of the content string (handles both " and \")
-                const endIdx = content.search(/\\?",\s*\\?"approval_required\\?"/);
-                if (endIdx !== -1) {
-                    content = content.slice(0, endIdx);
-                } else {
-                    // Partial — clean escape sequences for live display
-                    content = content.replace(/\\n/g, "\n").replace(/\\"/g, '"');
-                    // Remove dangling trailing quote if present
-                    if (content.endsWith('"') && !content.endsWith('\\"')) {
-                        content = content.slice(0, -1);
-                    }
-                }
-                if (content) onChunk(content);
+                const unescaped = typeof cleanMessage === 'string'
+                    ? cleanMessage.replace(/\\n/g, "\n").replace(/\\"/g, '"').replace(/\\\\/g, "\\")
+                    : cleanMessage;
+                parsedJson = typeof unescaped === 'object' ? unescaped : JSON.parse(unescaped);
+            } catch (e) {
+                console.warn("[GUEST_AGENT] Frontend fallback parse failed:", e);
             }
-        );
+        }
+
+        if (parsedJson) {
+            processedMessage =
+                parsedJson.suggested_reply?.content ||
+                parsedJson.chat_response ||
+                parsedJson.reply ||
+                parsedJson.message ||
+                processedMessage;
+        }
+
+        if (parsedJson?.triage?.suggested_action === "ticket" && activeConversationId) {
+            createOpsTicket(parsedJson, activeConversationId);
+        }
+        if (parsedJson?.triage?.suggested_action === "escalate" && activeConversationId) {
+            createEscalation(parsedJson, activeConversationId);
+        }
+
+        onComplete(processedMessage);
+        setIsGraphProcessing(false);
     };
 
     const handleAiSuggest = async () => {
@@ -508,12 +450,6 @@ export function GuestChatInterface({
             await generateAiReply(
                 conversation,
                 runtimeSession,
-                (chunk) => {
-                    if (chunk) {
-                        setReplyText(chunk);
-                        toast.success("Agent is drafting reply...", { id: 'suggest' });
-                    }
-                },
                 (finalReply) => {
                     setReplyText(finalReply);
                     toast.success("Agent drafted a suggested reply", { id: 'suggest' });
@@ -548,7 +484,6 @@ export function GuestChatInterface({
                 await generateAiReply(
                     conversation,
                     runtimeSession,
-                    () => {},
                     (reply) => { finalReply = reply; }
                 );
                 
@@ -690,8 +625,31 @@ export function GuestChatInterface({
         setIsGraphProcessing(true);
         setShowLiveGraph(true);
 
+        // Create a real GuestThread so the agent receives a valid MongoDB ObjectId.
+        // Without this, the Lyzr agent gets a synthetic "test-{timestamp}" ID which
+        // causes a 400 on every send_reply tool call.
+        let realThreadId = `test-${Date.now()}`;
+        try {
+            const threadRes = await fetch("/api/guest-agent/threads", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    orgId,
+                    guestName: "Test Guest",
+                    listingId: propertyId || undefined,
+                    channel: "internal",
+                }),
+            });
+            if (threadRes.ok) {
+                const threadData = await threadRes.json();
+                realThreadId = threadData.threadId;
+            }
+        } catch {
+            // Fall back to synthetic ID — send_reply handles it gracefully
+        }
+
         const mockConversation: SimulatedConversation = {
-            id: `test-${Date.now()}`,
+            id: realThreadId,
             guestName: "Test Guest",
             lastMessage: msgText,
             status: "needs_reply",
@@ -702,59 +660,17 @@ export function GuestChatInterface({
         };
 
         try {
-            let lastAgentMsgId: string | null = null;
-
             await generateAiReply(
-                mockConversation, 
-                runtimeSession, 
-                (chunk) => {
-                    // Real-time streaming chunk update
-                    if (!chunk) return; // Ignore triage/empty chunks
-                    
-                    setTestMessages(prev => {
-                        const existingMsgIndex = prev.findIndex(m => m.id === lastAgentMsgId);
-                        const newMsg = {
-                            id: lastAgentMsgId || `ta-${Date.now()}`,
-                            text: chunk,
-                            sender: "agent" as const,
-                            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                        };
-                        
-                        if (existingMsgIndex !== -1) {
-                            // Update existing
-                            const next = [...prev];
-                            next[existingMsgIndex] = newMsg;
-                            return next;
-                        } else {
-                            // First chunk for this agent response
-                            lastAgentMsgId = newMsg.id;
-                            return [...prev, newMsg];
-                        }
-                    });
-                    
-                    setTimeout(() => testScrollRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
-                },
+                mockConversation,
+                runtimeSession,
                 (finalReply) => {
-                    // Final cleaned up reply — update or create the agent bubble
-                    setTestMessages(prev => {
-                        const existingMsgIndex = prev.findIndex(m => m.id === lastAgentMsgId);
-                        const id = lastAgentMsgId || `ta-final-${Date.now()}`;
-                        lastAgentMsgId = id; // ensure it's set so future updates hit same bubble
-                        const finalMsg = {
-                            id,
-                            text: finalReply || "Agent couldn't generate a reply. Please try again.",
-                            sender: "agent" as const,
-                            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                        };
-
-                        if (existingMsgIndex !== -1) {
-                            const next = [...prev];
-                            next[existingMsgIndex] = finalMsg;
-                            return next;
-                        } else {
-                            return [...prev, finalMsg];
-                        }
-                    });
+                    const agentMsg = {
+                        id: `ta-${Date.now()}`,
+                        text: finalReply || "Agent couldn't generate a reply. Please try again.",
+                        sender: "agent" as const,
+                        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                    };
+                    setTestMessages(prev => [...prev, agentMsg]);
                     setTimeout(() => testScrollRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
                 }
             );
