@@ -82,7 +82,6 @@ import { useContextStore } from "@/stores/context-store";
 import type { PropertyWithMetrics } from "@/types";
 import { DateRangePicker } from "./date-range-picker";
 import { addDays, differenceInCalendarDays, format, startOfDay } from "date-fns";
-import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -224,7 +223,7 @@ export function UnifiedChatInterface({ properties: _properties, orgId }: Props) 
     async (threadSessionId: string): Promise<number> => {
       const propParam = contextType === "property" && propertyId ? propertyId : "null";
       const res = await fetch(
-        `/api/chat/history?propertyId=${propParam}&sessionId=${encodeURIComponent(threadSessionId)}`
+        `/api/chat/history?propertyId=${propParam}&sessionId=${encodeURIComponent(threadSessionId)}&orgId=${encodeURIComponent(orgId)}`
       );
       if (res.ok) {
         const data = await res.json();
@@ -333,7 +332,7 @@ export function UnifiedChatInterface({ properties: _properties, orgId }: Props) 
         let sessions: ChatSessionRow[] = [];
         if (contextType === "property" && propertyId && fromStr !== "start" && toStr !== "end") {
           const sessionsRes = await fetch(
-            `/api/chat/sessions?propertyId=${encodeURIComponent(propertyId)}&from=${encodeURIComponent(fromStr)}&to=${encodeURIComponent(toStr)}`
+            `/api/chat/sessions?propertyId=${encodeURIComponent(propertyId)}&from=${encodeURIComponent(fromStr)}&to=${encodeURIComponent(toStr)}&orgId=${encodeURIComponent(orgId)}`
           );
           if (sessionsRes.ok) {
             const sd = await sessionsRes.json();
@@ -354,7 +353,7 @@ export function UnifiedChatInterface({ properties: _properties, orgId }: Props) 
         writeThreadPref(baseScopeId, chosen);
 
         const res = await fetch(
-          `/api/chat/history?propertyId=${propParam}&sessionId=${encodeURIComponent(chosen)}`
+          `/api/chat/history?propertyId=${propParam}&sessionId=${encodeURIComponent(chosen)}&orgId=${encodeURIComponent(orgId)}`
         );
 
         if (res.ok) {
@@ -589,6 +588,7 @@ export function UnifiedChatInterface({ properties: _properties, orgId }: Props) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: input,
+          orgId,
           context: {
             type: contextType,
             propertyId: propertyId || undefined,
@@ -1083,145 +1083,246 @@ export function UnifiedChatInterface({ properties: _properties, orgId }: Props) 
                   <div className="break-words">
                     <MarkdownMessage content={message.content} isUser={message.role === "user"} />
                   </div>
-                  {message.proposals && message.proposals.length > 0 && (
-                    <div className="mt-5 border border-border/40 rounded-2xl bg-white/5 backdrop-blur-md overflow-hidden shadow-inner">
-                      {/* Header */}
-                      <div className="bg-primary/5 px-4 py-3 text-xs font-black uppercase tracking-[0.2em] border-b border-border/40 text-primary flex items-center justify-between">
-                        <span>Live Price Proposals ({message.proposals.length})</span>
-                        {message.proposalStatus === "saved" && (
-                          <span className="text-emerald-500 text-[10px] font-black">✓ Saved to Pricing</span>
-                        )}
-                        {message.proposalStatus === "rejected" && (
-                          <span className="text-muted-foreground text-[10px] font-black">✗ Rejected</span>
-                        )}
+                  {message.proposals && message.proposals.length > 0 && (() => {
+                    // ── helpers ────────────────────────────────────────────────
+                    const computeConfidence = (p: typeof message.proposals[0]): number => {
+                      let s = 55;
+                      if (p.guard_verdict === "APPROVED") s += 18;
+                      else if (p.guard_verdict === "FLAGGED") s -= 18;
+                      else if (p.guard_verdict === "REJECTED") s -= 35;
+                      if (p.risk_level === "low") s += 15;
+                      else if (p.risk_level === "medium") s += 5;
+                      else if (p.risk_level === "high") s -= 8;
+                      const compCount = [p.comparisons?.vs_p50, p.comparisons?.vs_recommended, p.comparisons?.vs_top_comp].filter(Boolean).length;
+                      s += compCount * 4;
+                      if (p.reasoning && typeof p.reasoning === "object") s += Math.min(Object.keys(p.reasoning).length * 2, 8);
+                      return Math.max(22, Math.min(96, s));
+                    };
+
+                    const REASON_META: Record<string, { label: string; icon: string }> = {
+                      reason_market:    { label: "Market Signal",  icon: "📊" },
+                      reason_benchmark: { label: "Benchmark",      icon: "📈" },
+                      reason_historic:  { label: "Historic",       icon: "🕐" },
+                      reason_seasonal:  { label: "Seasonal",       icon: "🌤" },
+                      reason_guardrails:{ label: "Guardrails",     icon: "🛡" },
+                      reason_news:      { label: "News & Events",  icon: "📰" },
+                      reason_event:     { label: "Event",          icon: "🗓" },
+                    };
+
+                    const approvedCount = message.proposals.filter(p => message.proposalDecisions?.[p.proposal_id] === "approved").length;
+
+                    return (
+                    <div className="mt-5 rounded-2xl overflow-hidden border border-border/40 shadow-lg">
+                      {/* ── Panel header ─────────────────────────────────── */}
+                      <div className="px-4 py-3 bg-gradient-to-r from-primary/8 to-amber-500/5 border-b border-border/40 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-black uppercase tracking-[0.18em] text-primary">Aria Pricing Proposals</span>
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">{message.proposals.length}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {approvedCount > 0 && (
+                            <span className="text-[10px] font-black text-emerald-500">✓ {approvedCount} approved</span>
+                          )}
+                          {message.proposalStatus === "saved" && (
+                            <span className="text-[10px] font-black text-emerald-500 flex items-center gap-1"><IconCircleCheck className="size-3" /> Saved to Pricing</span>
+                          )}
+                          {message.proposalStatus === "rejected" && (
+                            <span className="text-[10px] font-black text-muted-foreground">✗ All rejected</span>
+                          )}
+                        </div>
                       </div>
 
-                      {/* Proposal rows */}
-                      <div className="p-4 text-sm space-y-4">
-                          {message.proposals.map((prop, idx) => {
+                      {/* ── Proposal cards ───────────────────────────────── */}
+                      <div className="p-3 space-y-3 bg-background/40 backdrop-blur-sm">
+                        {message.proposals.map((prop, idx) => {
                           const decision = message.proposalDecisions?.[prop.proposal_id];
                           const isApproved = decision === "approved";
                           const isRejected = decision === "rejected" || prop.guard_verdict === "REJECTED";
                           const isDecided = isApproved || decision === "rejected";
                           const isFlagged = prop.guard_verdict === "FLAGGED";
                           const canApprove = prop.guard_verdict !== "REJECTED";
+                          const confidence = computeConfidence(prop);
+                          const confLabel = confidence >= 75 ? "High" : confidence >= 50 ? "Medium" : "Low";
+                          const confBarCls = confidence >= 75 ? "bg-emerald-500" : confidence >= 50 ? "bg-amber-500" : "bg-red-400";
+                          const confTextCls = confidence >= 75 ? "text-emerald-500" : confidence >= 50 ? "text-amber-500" : "text-red-400";
+                          const isDown = prop.change_pct < 0;
 
-                          // Build full reasoning text from object or string
-                          const reasoningText = (() => {
-                            if (!prop.reasoning) return null;
-                            if (typeof prop.reasoning === "string") return prop.reasoning.trim() || null;
-                            const parts: string[] = [];
-                            const r = prop.reasoning as Record<string, string>;
-                            if (r.reason_market) parts.push(`📊 ${r.reason_market}`);
-                            if (r.reason_event) parts.push(`🗓 ${r.reason_event}`);
-                            if (r.reason_seasonality) parts.push(`🌤 ${r.reason_seasonality}`);
-                            if (r.reason_guardrails) parts.push(`🛡 ${r.reason_guardrails}`);
-                            const others = Object.entries(r)
-                              .filter(([k]) => !["reason_market","reason_event","reason_seasonality","reason_guardrails"].includes(k))
-                              .map(([, v]) => v)
-                              .filter(Boolean);
-                            parts.push(...others);
-                            return parts.join(" | ") || null;
+                          const reasoningEntries = (() => {
+                            if (!prop.reasoning) return [];
+                            if (typeof prop.reasoning === "string") return [{ key: "reasoning", label: "Reasoning", icon: "💬", text: prop.reasoning }];
+                            return Object.entries(prop.reasoning as Record<string, string>)
+                              .filter(([, v]) => v)
+                              .map(([k, v]) => ({ key: k, label: REASON_META[k]?.label ?? k.replace("reason_", ""), icon: REASON_META[k]?.icon ?? "•", text: v }));
                           })();
 
                           return (
-                            <div key={idx} className={`flex flex-col gap-2.5 pb-4 border-b border-border/20 last:border-0 last:pb-0 rounded-lg px-2 pt-2 transition-colors ${isApproved ? "bg-emerald-500/5" : isRejected ? "bg-red-500/5 opacity-60" : ""}`}>
-                              {/* Row 1: Date + price + verdict badge */}
-                              <div className="flex justify-between font-bold items-center">
+                            <div key={idx} className={`rounded-xl border overflow-hidden transition-all ${
+                              isApproved ? "border-emerald-500/30 bg-emerald-500/5" :
+                              isRejected ? "border-red-400/20 bg-red-500/5 opacity-55" :
+                              isFlagged  ? "border-amber-500/30 bg-amber-500/5" :
+                              "border-border/30 bg-background/60"
+                            }`}>
+
+                              {/* ── Card header ──────────────────────────── */}
+                              <div className="px-4 py-2.5 border-b border-border/20 flex items-center justify-between bg-muted/10">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm tracking-tight text-foreground/80">{prop.date}</span>
+                                  <span className="text-sm font-black tabular-nums">{prop.date}</span>
                                   {prop.date_classification && (
-                                    <Badge variant="outline" className="text-[9px] font-black uppercase hidden sm:inline-flex">
+                                    <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-muted/50 text-muted-foreground border border-border/30">
                                       {prop.date_classification}
-                                    </Badge>
+                                    </span>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  {/* User Decision Badge */}
+                                <div className="flex items-center gap-1.5">
                                   {isApproved && (
-                                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 flex items-center gap-1">
-                                      <IconCircleCheck className="size-2.5" />
-                                      Approved & Saved
+                                    <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-500 border border-emerald-500/25 flex items-center gap-1">
+                                      <IconCircleCheck className="size-2.5" /> Approved & Saved
                                     </span>
                                   )}
                                   {decision === "rejected" && (
-                                    <span className="text-[9px] font-black px-1.5 py-0.5 rounded-md uppercase tracking-wider bg-red-500/10 text-red-600 border border-red-500/20">
-                                      Rejected
-                                    </span>
+                                    <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-red-500/15 text-red-400 border border-red-400/25">✗ Rejected</span>
                                   )}
-
-                                  {/* Guard verdict badge (shown only when no user decision yet) */}
                                   {!isDecided && (
-                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider ${prop.guard_verdict === "APPROVED" ? "bg-emerald-500/15 text-emerald-500" :
-                                        prop.guard_verdict === "FLAGGED" ? "bg-amber-500/15 text-amber-500" :
-                                          "bg-red-500/15 text-red-500"
-                                      }`}>
-                                      {prop.guard_verdict === "APPROVED" ? "✓ Approved" : prop.guard_verdict === "FLAGGED" ? "⚠ Flagged" : "✗ Blocked"}
+                                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border ${
+                                      prop.guard_verdict === "APPROVED" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
+                                      prop.guard_verdict === "FLAGGED"  ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
+                                      "bg-red-500/10 text-red-400 border-red-400/20"
+                                    }`}>
+                                      {prop.guard_verdict === "APPROVED" ? "✓ PriceGuard OK" : prop.guard_verdict === "FLAGGED" ? "⚠ Flagged" : "✗ Blocked"}
                                     </span>
                                   )}
-
-                                  {/* Price */}
-                                  <span className="text-sm font-black tabular-nums text-amber-600">
-                                    AED {prop.proposed_price}
-                                    <span className="text-[10px] ml-1 opacity-70">({prop.change_pct > 0 ? "+" : ""}{prop.change_pct}%)</span>
-                                  </span>
                                 </div>
                               </div>
 
-                              {/* Row 2: Risk + comparisons */}
-                              <div className="flex flex-wrap gap-2 text-[10px]">
-                                <span className={`px-1.5 py-0.5 rounded-full font-bold uppercase ${prop.risk_level === "low" ? "bg-emerald-500/10 text-emerald-600" :
-                                    prop.risk_level === "medium" ? "bg-amber-500/10 text-amber-600" :
-                                      "bg-red-500/10 text-red-500"
-                                  }`}>
+                              {/* ── Price row ────────────────────────────── */}
+                              <div className="px-4 py-3 flex items-center gap-4 border-b border-border/20">
+                                {/* Current price */}
+                                <div className="text-center">
+                                  <p className="text-[9px] text-muted-foreground uppercase tracking-wide font-semibold mb-0.5">Current</p>
+                                  <p className="text-sm font-bold line-through opacity-40 tabular-nums">AED {prop.current_price}</p>
+                                </div>
+                                {/* Arrow + change */}
+                                <div className="flex-1 flex flex-col items-center">
+                                  <div className={`text-[11px] font-black px-2 py-0.5 rounded-full tabular-nums ${isDown ? "bg-red-500/10 text-red-400" : "bg-emerald-500/10 text-emerald-500"}`}>
+                                    {isDown ? "▼" : "▲"} {Math.abs(prop.change_pct)}%
+                                  </div>
+                                  <div className="w-full h-px bg-border/30 mt-1.5 relative">
+                                    <div className={`absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full ${isDown ? "bg-red-400" : "bg-emerald-500"}`} />
+                                  </div>
+                                </div>
+                                {/* Proposed price */}
+                                <div className="text-center">
+                                  <p className="text-[9px] text-muted-foreground uppercase tracking-wide font-semibold mb-0.5">Proposed</p>
+                                  <p className="text-xl font-black tabular-nums text-amber-500">AED {prop.proposed_price}</p>
+                                </div>
+                                {/* Risk badge */}
+                                <span className={`ml-auto text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded-lg border ${
+                                  prop.risk_level === "low"    ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
+                                  prop.risk_level === "medium" ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
+                                  "bg-red-500/10 text-red-400 border-red-400/20"
+                                }`}>
                                   {prop.risk_level} risk
                                 </span>
-                                {prop.comparisons?.vs_p50 && (
-                                  <span className="text-muted-foreground">vs P50 {prop.comparisons.vs_p50.diff_pct > 0 ? "+" : ""}{prop.comparisons.vs_p50.diff_pct}%</span>
-                                )}
-                                {prop.comparisons?.vs_recommended && (
-                                  <span className="text-muted-foreground">vs recommended {prop.comparisons.vs_recommended.diff_pct > 0 ? "+" : ""}{prop.comparisons.vs_recommended.diff_pct}%</span>
-                                )}
-                                {prop.comparisons?.vs_top_comp?.comp_name && (
-                                  <span className="text-muted-foreground">vs {prop.comparisons.vs_top_comp.comp_name} {prop.comparisons.vs_top_comp.diff_pct > 0 ? "+" : ""}{prop.comparisons.vs_top_comp.diff_pct}%</span>
-                                )}
                               </div>
 
-                              {/* Row 3: Full reasoning */}
-                              {reasoningText && (
-                                <div className="bg-muted/30 rounded-md px-2.5 py-2 border border-border/30">
-                                  <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">Reasoning</p>
-                                  <p className="text-[11px] text-foreground/80 leading-snug">{reasoningText}</p>
+                              {/* ── Confidence bar ───────────────────────── */}
+                              <div className="px-4 py-2.5 border-b border-border/20 bg-muted/5">
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <span className="text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">AI Confidence</span>
+                                  <span className={`text-[9px] font-black ${confTextCls}`}>{confLabel} · {confidence}%</span>
+                                </div>
+                                <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                                  <div className={`h-full rounded-full transition-all duration-700 ${confBarCls}`} style={{ width: `${confidence}%` }} />
+                                </div>
+                              </div>
+
+                              {/* ── Market comparisons ───────────────────── */}
+                              {(prop.comparisons?.vs_p50 || prop.comparisons?.vs_recommended || prop.comparisons?.vs_top_comp) && (
+                                <div className="px-4 py-3 border-b border-border/20 grid grid-cols-3 gap-3">
+                                  {[
+                                    { label: "vs Market P50", data: prop.comparisons?.vs_p50 },
+                                    { label: "vs Recommended", data: prop.comparisons?.vs_recommended },
+                                    { label: `vs ${prop.comparisons?.vs_top_comp?.comp_name ?? "Top Comp"}`, data: prop.comparisons?.vs_top_comp },
+                                  ].map(({ label, data }) => {
+                                    if (!data) return null;
+                                    const d = data as Record<string, unknown>;
+                                    const compPrice = d.comp_price as number;
+                                    const diffPct = d.diff_pct as number;
+                                    const isPos = diffPct >= 0;
+                                    return (
+                                      <div key={label} className="flex flex-col gap-1">
+                                        <span className="text-[9px] text-muted-foreground font-medium truncate">{label}</span>
+                                        <span className="text-[10px] font-black tabular-nums text-muted-foreground">
+                                          AED {compPrice}
+                                        </span>
+                                        <span className={`text-[10px] font-black tabular-nums ${isPos ? "text-emerald-500" : "text-red-400"}`}>
+                                          {diffPct > 0 ? "+" : ""}{diffPct}%
+                                        </span>
+                                        {/* mini bar */}
+                                        <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+                                          <div
+                                            className={`h-full rounded-full ${isPos ? "bg-emerald-500/60" : "bg-red-400/60"}`}
+                                            style={{ width: `${Math.min(100, Math.abs(diffPct))}%` }}
+                                          />
+                                        </div>
+                                        {/* formula */}
+                                        <span className="text-[8px] font-mono text-muted-foreground/40 leading-tight mt-0.5 select-all">
+                                          ({prop.proposed_price} − {compPrice}) ÷ {compPrice} × 100
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
 
-                              {/* Row 4: FLAGGED caution */}
-                              {isFlagged && !isDecided && (
-                                <p className="text-[11px] text-amber-500/80 leading-snug bg-amber-500/5 rounded px-2 py-1">
-                                  ⚠ PriceGuard flagged this for review — outside normal range but not hard-blocked. Approve with caution.
-                                </p>
+                              {/* ── Reasoning (collapsible) ──────────────── */}
+                              {reasoningEntries.length > 0 && (
+                                <details className="group border-b border-border/20">
+                                  <summary className="px-4 py-2.5 flex items-center justify-between cursor-pointer list-none bg-muted/5 hover:bg-muted/10 transition-colors">
+                                    <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Analysis & Reasoning</span>
+                                    <span className="text-[9px] text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
+                                  </summary>
+                                  <div className="px-4 py-3 grid grid-cols-1 gap-2">
+                                    {reasoningEntries.map(({ key, label, icon, text }) => (
+                                      <div key={key} className="flex gap-2.5 rounded-lg bg-muted/20 border border-border/20 px-3 py-2">
+                                        <span className="text-sm shrink-0 mt-0.5">{icon}</span>
+                                        <div className="min-w-0">
+                                          <p className="text-[9px] font-black uppercase tracking-wide text-muted-foreground mb-0.5">{label}</p>
+                                          <p className="text-[11px] text-foreground/80 leading-snug">{text}</p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </details>
                               )}
 
-                              {/* Row 5: Action buttons — hidden once decided */}
+                              {/* ── PriceGuard flagged warning ───────────── */}
+                              {isFlagged && !isDecided && (
+                                <div className="px-4 py-2.5 bg-amber-500/5 border-b border-amber-500/20 flex items-start gap-2">
+                                  <span className="text-sm mt-0.5">⚠</span>
+                                  <p className="text-[11px] text-amber-500/90 leading-snug">PriceGuard flagged this — outside normal range but not hard-blocked. Approve with caution.</p>
+                                </div>
+                              )}
+
+                              {/* ── Action buttons ───────────────────────── */}
                               {!isDecided && message.proposalStatus !== "rejected" && (
-                                <div className="flex items-center gap-2 pt-1">
-                                  {canApprove && (
+                                <div className="px-4 py-3 flex items-center gap-2.5">
+                                  {canApprove ? (
                                     <button
                                       onClick={() => handleProposalDecision(message.id, prop.proposal_id, "approved")}
-                                      className="text-[10px] font-black px-3 py-1 rounded-full border border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 transition-all"
+                                      className="flex-1 py-2 rounded-lg text-[11px] font-black bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all"
                                     >
-                                      Approve
+                                      ✓ Approve & Save
                                     </button>
+                                  ) : (
+                                    <span className="text-[10px] text-red-400/70 font-bold">Blocked by PriceGuard</span>
                                   )}
                                   <button
                                     onClick={() => handleProposalDecision(message.id, prop.proposal_id, "rejected")}
-                                    className="text-[10px] font-black px-3 py-1 rounded-full border border-red-400/40 text-red-400 hover:bg-red-500/10 transition-all"
+                                    className="flex-1 py-2 rounded-lg text-[11px] font-black bg-red-500/10 text-red-400 border border-red-400/30 hover:bg-red-500/20 transition-all"
                                   >
-                                    Reject
+                                    ✗ Reject
                                   </button>
-                                  {prop.guard_verdict === "REJECTED" && (
-                                    <span className="text-[10px] text-red-400/70 font-bold">Blocked by PriceGuard — cannot approve</span>
-                                  )}
                                 </div>
                               )}
                             </div>
@@ -1229,35 +1330,32 @@ export function UnifiedChatInterface({ properties: _properties, orgId }: Props) 
                         })}
                       </div>
 
-                      {/* Footer: Reject All (only when still pending) */}
+                      {/* ── Panel footer ─────────────────────────────────── */}
                       {message.proposalStatus === "pending" && (
-                        <div className="px-4 py-3 border-t border-border/40 bg-muted/20 flex items-center justify-between gap-3">
-                          <p className="text-[10px] text-muted-foreground leading-snug">
-                            Approve or reject each proposal — approved ones are saved to Pricing instantly.
-                          </p>
+                        <div className="px-4 py-3 border-t border-border/40 bg-muted/10 flex items-center justify-between gap-3">
+                          <p className="text-[10px] text-muted-foreground">Approved proposals are saved to Pricing instantly.</p>
                           <button
                             onClick={() => handleRejectProposals(message.id)}
-                            className="text-[11px] font-bold px-3 py-1.5 rounded-lg border border-border/50 text-muted-foreground hover:bg-muted transition-colors shrink-0"
+                            className="text-[10px] font-black px-3 py-1.5 rounded-lg border border-border/50 text-muted-foreground hover:bg-muted transition-colors shrink-0"
                           >
                             Reject All
                           </button>
                         </div>
                       )}
-
                       {message.proposalStatus === "saved" && (
                         <div className="px-4 py-3 border-t border-border/40 bg-emerald-500/5 flex items-center gap-2">
-                          <span className="text-[11px] text-emerald-600 font-black">✓ Saved to Pricing section</span>
+                          <span className="text-[11px] text-emerald-600 font-black">✓ Saved to Pricing</span>
                           <span className="text-[10px] text-muted-foreground">— review and push to Hostaway from the Pricing page</span>
                         </div>
                       )}
-
                       {message.proposalStatus === "rejected" && (
                         <div className="px-4 py-3 border-t border-border/40 bg-muted/10 flex items-center gap-2">
                           <span className="text-[11px] text-muted-foreground font-bold">✗ All proposals rejected. No changes made.</span>
                         </div>
                       )}
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
               </div>
             ))}

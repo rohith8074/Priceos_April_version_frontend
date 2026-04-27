@@ -8,7 +8,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Tooltip as UITooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { RefreshCw, Building2, TrendingUp, DollarSign, CalendarCheck, Search, Bot, X, Sparkles } from "lucide-react";
+import { RefreshCw, Building2, TrendingUp, DollarSign, CalendarCheck, Search, Bot, X, Sparkles, BarChart2, Database, CalendarRange } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,6 +66,7 @@ export function OverviewClient({
   const [calendarStartDate, setCalendarStartDate] = useState(new Date());
   const [isSyncing, setIsSyncing] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [dashTab, setDashTab] = useState<"overview" | "database" | "calendar">("overview");
 
   const handleSync = async () => {
     setIsSyncing(true);
@@ -102,6 +103,7 @@ export function OverviewClient({
     prop.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     prop.area.toLowerCase().includes(searchTerm.toLowerCase())
   );
+  const currency = (properties[0] as any)?.currencyCode ?? "AED";
 
   // Dynamic KPIs based on search
   const filteredTotalProperties = filteredProperties.length;
@@ -182,7 +184,7 @@ export function OverviewClient({
         <div className="bg-background border border-border/50 p-3 rounded-xl shadow-lg">
           <p className="font-semibold text-sm mb-1 text-foreground dark:text-white">{label}</p>
           <p className="text-emerald-600 dark:text-emerald-500 font-bold text-sm">
-            {payload[0].name === "occupancy" ? `${payload[0].value}%` : `${payload[0].value.toLocaleString()} AED`}
+            {payload[0].name === "occupancy" ? `${payload[0].value}%` : `${payload[0].value.toLocaleString()} ${currency}`}
           </p>
           <p className="text-muted-foreground text-xs mt-1">
             {payload[0].name === "occupancy" ? "Occupancy Rate" : "Projected Revenue"}
@@ -249,7 +251,30 @@ export function OverviewClient({
       )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5 mb-8">
+      {/* ── Dashboard Inner Tabs ── */}
+      <div className="flex items-center gap-1 mb-6 border-b border-border dark:border-white/10 z-10 relative">
+        {(["overview", "database", "calendar"] as const).map((tab) => {
+          const Icon = tab === "overview" ? BarChart2 : tab === "database" ? Database : CalendarRange;
+          const label = tab === "overview" ? "Overview" : tab === "database" ? "Property Database" : "Global Calendar";
+          return (
+            <button
+              key={tab}
+              onClick={() => setDashTab(tab)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
+                dashTab === tab
+                  ? "border-amber-500 text-amber-500 dark:text-amber-400"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className={cn("grid gap-4 md:grid-cols-2 lg:grid-cols-5 mb-8", dashTab !== "overview" && "hidden")}>
         <UITooltip>
           <TooltipTrigger asChild>
             <Card className="bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl border-border dark:border-white/5 shadow-xl dark:shadow-2xl overflow-hidden relative group hover:border-amber-500/20 transition-all duration-500 cursor-help">
@@ -307,7 +332,7 @@ export function OverviewClient({
                 </div>
               </CardHeader>
               <CardContent className="z-10 relative">
-                <div className="text-3xl font-light text-foreground dark:text-white">{filteredAvgPrice} <span className="text-lg font-light text-muted-foreground">AED</span></div>
+                <div className="text-3xl font-light text-foreground dark:text-white">{filteredAvgPrice} <span className="text-lg font-light text-muted-foreground">{currency}</span></div>
                 <p className="text-xs text-emerald-600 dark:text-emerald-500/80 mt-1 font-medium flex items-center gap-1">
                   <TrendingUp className="w-3 h-3" /> Overall booked rate
                 </p>
@@ -333,7 +358,7 @@ export function OverviewClient({
                 </div>
               </CardHeader>
               <CardContent className="z-10 relative">
-                <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-500 to-amber-700 dark:from-amber-200 dark:to-amber-500">{filteredTotalRevenue.toLocaleString()} <span className="text-lg font-medium text-amber-500/50">AED</span></div>
+                <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-amber-500 to-amber-700 dark:from-amber-200 dark:to-amber-500">{filteredTotalRevenue.toLocaleString()} <span className="text-lg font-medium text-amber-500/50">{currency}</span></div>
                 <p className="text-xs text-amber-600 dark:text-amber-500/80 mt-1 font-medium flex items-center gap-1">
                   <TrendingUp className="w-3 h-3" /> Estimated 30-day gross
                 </p>
@@ -356,7 +381,7 @@ export function OverviewClient({
                 </div>
               </CardHeader>
               <CardContent className="z-10 relative">
-                <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-500 to-emerald-700 dark:from-emerald-200 dark:to-emerald-500">{(totalHistoricalRevenue).toLocaleString()} <span className="text-lg font-medium text-emerald-500/50">AED</span></div>
+                <div className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-500 to-emerald-700 dark:from-emerald-200 dark:to-emerald-500">{(totalHistoricalRevenue).toLocaleString()} <span className="text-lg font-medium text-emerald-500/50">{currency}</span></div>
                 <p className="text-xs text-emerald-600 dark:text-emerald-500/80 mt-1 font-medium flex items-center gap-1">
                   <TrendingUp className="w-3 h-3" /> All-time booked revenue
                 </p>
@@ -369,7 +394,7 @@ export function OverviewClient({
         </UITooltip>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 mb-8">
+      <div className={cn("grid gap-4 md:grid-cols-2 mb-8", dashTab !== "overview" && "hidden")}>
         {/* Top Drivers by Revenue */}
         <Card className="shadow-xl dark:shadow-2xl border-border dark:border-white/5 bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -501,7 +526,7 @@ export function OverviewClient({
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: number) => [`${value.toLocaleString()} AED`, 'Revenue']}
+                    formatter={(value: number) => [`${value.toLocaleString()} ${currency}`, 'Revenue']}
                     contentStyle={{ backgroundColor: 'hsl(var(--background))', borderColor: 'hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--foreground))' }}
                     itemStyle={{ color: 'hsl(var(--foreground))', fontWeight: '500' }}
                   />
@@ -556,7 +581,7 @@ export function OverviewClient({
                     ))}
                   </Pie>
                   <Tooltip
-                    formatter={(value: number) => [`${value.toLocaleString()} AED`, 'Revenue']}
+                    formatter={(value: number) => [`${value.toLocaleString()} ${currency}`, 'Revenue']}
                     contentStyle={{ backgroundColor: 'hsl(var(--background))', borderColor: 'hsl(var(--border))', borderRadius: '8px', color: 'hsl(var(--foreground))' }}
                     itemStyle={{ color: 'hsl(var(--foreground))', fontWeight: '500' }}
                   />
@@ -575,7 +600,7 @@ export function OverviewClient({
         </Card>
       </div>
 
-      <Card className="flex-1 min-h-0 flex flex-col shadow-xl dark:shadow-2xl border-border dark:border-white/5 bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl">
+      <Card className={cn("flex-1 min-h-0 flex flex-col shadow-xl dark:shadow-2xl border-border dark:border-white/5 bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl", dashTab !== "database" && "hidden")}>
         <CardHeader className="border-b border-border dark:border-white/10 py-4 bg-muted/20 dark:bg-black/20">
           <CardTitle className="text-foreground dark:text-white">Property Details</CardTitle>
         </CardHeader>
@@ -597,7 +622,7 @@ export function OverviewClient({
                   <TableRow key={property.id} className="hover:bg-muted/50 dark:hover:bg-white/5 transition-colors border-border dark:border-white/5">
                     <TableCell className="font-medium text-foreground dark:text-white">{property.name}</TableCell>
                     <TableCell className="text-muted-foreground">{property.area}</TableCell>
-                    <TableCell className="text-muted-foreground">{property.price} AED</TableCell>
+                    <TableCell className="text-muted-foreground">{property.price} {currency}</TableCell>
                     <TableCell>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${property.occupancy >= 70 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-500 border border-emerald-500/20' :
                         property.occupancy >= 40 ? 'bg-amber-500/10 text-amber-600 dark:text-amber-500 border border-amber-500/20' :
@@ -606,14 +631,14 @@ export function OverviewClient({
                         {property.occupancy}%
                       </span>
                     </TableCell>
-                    <TableCell className="font-medium text-foreground dark:text-white">{property.avgPrice.toFixed(0)} <span className="text-xs text-muted-foreground">AED</span></TableCell>
+                    <TableCell className="font-medium text-foreground dark:text-white">{property.avgPrice.toFixed(0)} <span className="text-xs text-muted-foreground">{currency}</span></TableCell>
                     <TableCell className="text-right font-bold tracking-tight">
                       {property.revenue > 0 ? (
                         <span className="text-amber-600 dark:text-amber-500">{property.revenue.toLocaleString()}</span>
                       ) : (
                         <span className="text-muted-foreground">{property.revenue.toLocaleString()}</span>
                       )}{" "}
-                      <span className="text-xs font-normal text-amber-600/70 dark:text-amber-500/50">AED</span>
+                      <span className="text-xs font-normal text-amber-600/70 dark:text-amber-500/50">{currency}</span>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -630,7 +655,7 @@ export function OverviewClient({
         </CardContent>
       </Card>
 
-      <Card className="flex-1 shrink-0 flex flex-col shadow-xl dark:shadow-2xl mt-8 mb-8 border border-border dark:border-white/5 bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl">
+      <Card className={cn("flex-1 shrink-0 flex flex-col shadow-xl dark:shadow-2xl mt-8 mb-8 border border-border dark:border-white/5 bg-background/60 dark:bg-[#111113]/60 backdrop-blur-xl", dashTab !== "calendar" && "hidden")}>
         <CardHeader className="border-b border-border dark:border-white/10 py-4 bg-gradient-to-r from-amber-500/5 dark:from-amber-500/10 to-transparent flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <CardTitle className="text-amber-600 dark:text-amber-500 flex items-center gap-2">
@@ -720,7 +745,7 @@ export function OverviewClient({
                                       </div>
                                       <div className="flex justify-between items-center text-xs mb-1">
                                         <span className="text-muted-foreground">Total Payout:</span>
-                                        <span className="font-bold text-emerald-600 dark:text-emerald-400">{reservation.financials?.hostPayout?.toLocaleString() || reservation.financials?.totalPrice?.toLocaleString() || 'Unknown'} AED</span>
+                                        <span className="font-bold text-emerald-600 dark:text-emerald-400">{reservation.financials?.hostPayout?.toLocaleString() || reservation.financials?.totalPrice?.toLocaleString() || 'Unknown'} {currency}</span>
                                       </div>
                                       <div className="flex justify-between items-center text-xs mb-1">
                                         <span className="text-muted-foreground">Channel:</span>
@@ -752,7 +777,7 @@ export function OverviewClient({
                                       </div>
                                       <div className="flex justify-between items-center text-xs mb-1">
                                         <span className="text-muted-foreground">Current Rate:</span>
-                                        <span className="font-bold text-foreground dark:text-white">{calDay?.price?.toLocaleString() || property.price} AED</span>
+                                        <span className="font-bold text-foreground dark:text-white">{calDay?.price?.toLocaleString() || property.price} {currency}</span>
                                       </div>
                                       <div className="flex justify-between items-center text-xs mb-1">
                                         <span className="text-muted-foreground">Min Stay:</span>

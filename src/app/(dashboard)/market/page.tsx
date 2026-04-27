@@ -65,6 +65,7 @@ export default async function MarketPage() {
 
   return (
     <MarketIntelligenceClient
+      orgId={session.orgId}
       events={formattedEvents}
       occupancyPct={metricsData.avgOccupancyPct || 0}
       avgNightly={metricsData.avgNightlyRate || 0}

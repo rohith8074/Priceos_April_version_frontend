@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Bot, Send, Loader2, RefreshCw, X, Maximize2, Minimize2, Activity } from "lucide-react";
+import { Bot, Send, Loader2, RefreshCw, X, Activity } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
@@ -41,7 +41,6 @@ export function DashboardChatPopup({ isOpen, onOpenChange }: DashboardChatPopupP
   const [graphQueryId, setGraphQueryId] = useState<string>("");
   const [showGraph, setShowGraph] = useState(false);
   const [stages, setStages] = useState<FlowStage[]>(DASHBOARD_STAGES);
-  const [isExpanded, setIsExpanded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { isConnected: isGraphConnected, events: graphEvents } = useLyzrAgentEvents(graphQueryId, isLoading);
@@ -166,13 +165,7 @@ export function DashboardChatPopup({ isOpen, onOpenChange }: DashboardChatPopupP
 
   return (
     <div
-      className={cn(
-        "fixed bottom-20 right-6 z-50 flex flex-col rounded-xl border border-border-default bg-surface-1 shadow-2xl transition-all duration-300 origin-bottom-right",
-        isExpanded
-          ? "w-[min(860px,calc(100vw-2rem))] h-[min(82vh,calc(100vh-5rem))]"
-          : "w-[min(380px,calc(100vw-2rem))] h-[min(520px,calc(100vh-8rem))]",
-        "scale-100 opacity-100 pointer-events-auto"
-      )}
+      className="fixed top-0 right-0 z-50 flex flex-col h-full w-[400px] border-l border-border-default bg-surface-1 shadow-2xl transition-transform duration-300"
       role="dialog"
       aria-label="Portfolio assistant chat"
     >
@@ -208,14 +201,6 @@ export function DashboardChatPopup({ isOpen, onOpenChange }: DashboardChatPopupP
           </button>
           <button
             type="button"
-            onClick={() => setIsExpanded((v) => !v)}
-            title={isExpanded ? "Collapse" : "Expand"}
-            className="p-1.5 rounded-md text-text-tertiary hover:text-foreground transition-colors"
-          >
-            {isExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
-          </button>
-          <button
-            type="button"
             onClick={() => onOpenChange(false)}
             title="Close"
             className="p-1.5 rounded-md text-text-tertiary hover:text-foreground transition-colors"
@@ -233,7 +218,7 @@ export function DashboardChatPopup({ isOpen, onOpenChange }: DashboardChatPopupP
 
       {/* Live Execution Graph — collapses when hidden */}
       {showGraph && graphQueryId && (
-        <div className="shrink-0 border-b border-border-subtle/50 bg-muted/10" style={{ height: isExpanded ? 320 : 220 }}>
+        <div className="shrink-0 border-b border-border-subtle/50 bg-muted/10" style={{ height: 220 }}>
           <div className="flex items-center justify-between px-3 py-1.5 border-b border-border-subtle/30">
             <span className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.15em] text-muted-foreground">
               <span className={cn("h-1.5 w-1.5 rounded-full", isGraphConnected ? "bg-emerald-500 animate-pulse" : "bg-amber-500")} />
@@ -243,7 +228,7 @@ export function DashboardChatPopup({ isOpen, onOpenChange }: DashboardChatPopupP
               <X className="h-3 w-3" />
             </button>
           </div>
-          <div className="relative" style={{ height: isExpanded ? 280 : 180 }}>
+          <div className="relative" style={{ height: 180 }}>
             <LiveInferenceFlowGraph
               stages={stages}
               streamEvents={graphEvents}

@@ -529,6 +529,63 @@ for lid, prop in listing_ids:
 db.pricingrules.insert_many(rule_docs)
 print(f"  ✓ {len(rule_docs)} pricing rules inserted ({len(rule_docs)//3} × 3 per property)")
 
+# ─── 7. Benchmark Data ────────────────────────────────────────────────────────
+
+print("\n[7/6] Seeding BenchmarkData...")
+
+db.benchmark_data.delete_many({})
+
+benchmark_docs = []
+for lid, prop in listing_ids:
+    base = prop["price"]
+    benchmark_docs.append({
+        "orgId": org_id,
+        "listingId": lid,
+        "dateFrom": date_str(today),
+        "dateTo": date_str(today + timedelta(days=30)),
+        "p25Rate": round(base * 0.8),
+        "p50Rate": round(base * 1.05),
+        "p75Rate": round(base * 1.3),
+        "p90Rate": round(base * 1.6),
+        "avgWeekday": round(base * 0.95),
+        "avgWeekend": round(base * 1.2),
+        "yourPrice": base,
+        "percentile": 45,
+        "verdict": "FAIR",
+        "rateTrend": "stable",
+        "trendPct": 2,
+        "recommendedWeekday": round(base * 0.98),
+        "recommendedWeekend": round(base * 1.15),
+        "reasoning": f"Market analysis for {prop['area']} shows stable demand. Your property is positioned competitively at the 45th percentile.",
+        "comps": [
+            {
+                "name": f"Luxury {prop['bedroomsNumber']}BR in {prop['area']}",
+                "source": "Airbnb",
+                "sourceUrl": "https://airbnb.com",
+                "rating": 4.8,
+                "reviews": 120,
+                "avgRate": round(base * 1.1),
+                "weekdayRate": round(base * 1.0),
+                "weekendRate": round(base * 1.3)
+            },
+            {
+                "name": f"Modern Apartment {prop['area']}",
+                "source": "Booking.com",
+                "sourceUrl": "https://booking.com",
+                "rating": 4.5,
+                "reviews": 85,
+                "avgRate": round(base * 0.9),
+                "weekdayRate": round(base * 0.85),
+                "weekendRate": round(base * 1.1)
+            }
+        ],
+        "createdAt": datetime.utcnow(),
+        "updatedAt": datetime.utcnow(),
+    })
+
+db.benchmark_data.insert_many(benchmark_docs)
+print(f"  ✓ {len(benchmark_docs)} benchmark entries inserted")
+
 # ─── Done ─────────────────────────────────────────────────────────────────────
 
 print("\n" + "═" * 55)

@@ -19,7 +19,7 @@ import {
   AlertTriangle,
   Clock3,
   X,
-  Sparkles,
+  BarChart2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -39,7 +39,7 @@ const BUSINESS_GROUP = [
   { name: "Operations", href: "/operations", icon: Clock3 },
   { name: "Properties", href: "/properties", icon: Home },
   { name: "Groups", href: "/groups", icon: Layers },
-  { name: "UI Preview", href: "/redesign", icon: Sparkles },
+  { name: "Analytics", href: "/analytics", icon: BarChart2 },
 ];
 
 export function AppSidebar() {

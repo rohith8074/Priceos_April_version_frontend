@@ -1,25 +1,21 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { verifyAccessToken } from "@/lib/auth/jwt";
-import { ContextPanel } from "@/components/layout/context-panel";
+import { getSession } from "@/lib/auth/server";
 import { UnifiedChatInterface } from "@/components/chat/unified-chat-interface";
-import { SidebarTabbedView } from "@/components/layout/sidebar-tabbed-view";
+import { ContextPanel } from "@/components/layout/context-panel";
 import { RightSidebarLayout } from "@/components/layout/right-sidebar-layout";
+import { SidebarTabbedView } from "@/components/layout/sidebar-tabbed-view";
 import type { PropertyWithMetrics } from "@/types";
 
-export default async function DashboardPage() {
-  // ── Auth + orgId ──────────────────────────────────────────────────────────
-  const cookieStore = await cookies();
-  const token = cookieStore.get("priceos-session")?.value;
-  if (!token) redirect("/login");
+export const metadata = {
+  title: "Aria | PriceOS Intelligence",
+  description: "AI Revenue Manager — powered by Aria CRO.",
+};
 
-  let orgObjectId: string;
-  try {
-    const payload = verifyAccessToken(token!);
-    orgObjectId = payload.orgId;
-  } catch {
-    redirect("/login");
-  }
+export default async function AgentChatPage() {
+  const session = await getSession();
+  if (!session?.orgId) redirect("/login");
+
+  const orgObjectId = session.orgId;
 
   let propertiesWithMetrics: PropertyWithMetrics[] = [];
   try {
@@ -28,9 +24,9 @@ export default async function DashboardPage() {
       `${backend}/properties?orgId=${encodeURIComponent(orgObjectId)}`,
       { next: { revalidate: 120 } }
     );
-    const data = await res.json().catch(() => ({} as any));
+    const data = await res.json().catch(() => ({} as Record<string, unknown>));
     const properties = Array.isArray(data?.properties) ? data.properties : [];
-    propertiesWithMetrics = properties.map((p: any) => ({
+    propertiesWithMetrics = properties.map((p: Record<string, unknown>) => ({
       ...p,
       id: String(p.id ?? p._id ?? ""),
       _id: String(p.id ?? p._id ?? ""),
@@ -44,19 +40,18 @@ export default async function DashboardPage() {
 
   return (
     <div className="flex h-full overflow-hidden">
-      <div id="tour-property-list">
-        <ContextPanel properties={propertiesWithMetrics} />
-      </div>
+      {/* Left: property selector panel */}
+      <ContextPanel properties={propertiesWithMetrics} />
 
-      <div className="flex-[2] min-w-[500px] border-r flex flex-col h-full bg-background relative z-10 transition-all duration-300">
+      {/* Center: Aria chat */}
+      <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden">
         <UnifiedChatInterface properties={propertiesWithMetrics} orgId={orgObjectId} />
       </div>
 
-      <div id="tour-sidebar">
-        <RightSidebarLayout>
-          <SidebarTabbedView />
-        </RightSidebarLayout>
-      </div>
+      {/* Right: signals / calendar / summary sidebar (toggled by Sidebar button in chat header) */}
+      <RightSidebarLayout>
+        <SidebarTabbedView />
+      </RightSidebarLayout>
     </div>
   );
 }

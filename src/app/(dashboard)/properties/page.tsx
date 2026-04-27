@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { getOrgId } from "@/lib/auth/client";
 import { cn } from "@/lib/utils";
 import {
@@ -96,8 +97,8 @@ interface Property {
   createdAt: string;
 }
 
-type TabId = "selected" | "inactive" | "analytics";
-type DetailTabId = "overview" | "analytics";
+type TabId = "selected" | "inactive";
+type DetailTabId = "overview";
 
 interface PropertyAnalyticsResponse {
   listingId: string;
@@ -124,11 +125,8 @@ export default function PropertiesPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabId>("selected");
   const [detailProperty, setDetailProperty] = useState<Property | null>(null);
-  const [detailInitialTab, setDetailInitialTab] = useState<DetailTabId>("overview");
   const [activating, setActivating] = useState<string | null>(null);
   const [deactivating, setDeactivating] = useState<string | null>(null);
-  const [analyticsPropertyId, setAnalyticsPropertyId] = useState<string>("");
-
   useEffect(() => {
     const orgId = getOrgId();
     if (!orgId) { setLoading(false); return; }
@@ -150,16 +148,6 @@ export default function PropertiesPage() {
   );
 
   const displayList = activeTab === "selected" ? selectedProperties : inactiveProperties;
-
-  useEffect(() => {
-    if (!selectedProperties.length) {
-      setAnalyticsPropertyId("");
-      return;
-    }
-    if (!analyticsPropertyId || !selectedProperties.some((p) => p.id === analyticsPropertyId)) {
-      setAnalyticsPropertyId(selectedProperties[0].id);
-    }
-  }, [selectedProperties, analyticsPropertyId]);
 
   const handleActivate = async (id: string) => {
     setActivating(id);
@@ -247,7 +235,6 @@ export default function PropertiesPage() {
         {([
           { id: "selected" as TabId, label: "Selected", count: selectedCount },
           { id: "inactive" as TabId, label: "Inactive", count: allPropertiesCount },
-          { id: "analytics" as TabId, label: "Analytics", count: selectedCount },
         ]).map(({ id, label, count }) => (
           <button
             key={id}
@@ -272,13 +259,7 @@ export default function PropertiesPage() {
         ))}
       </div>
 
-      {activeTab === "analytics" ? (
-        <PropertiesAnalyticsSection
-          properties={selectedProperties}
-          selectedPropertyId={analyticsPropertyId}
-          onSelectProperty={setAnalyticsPropertyId}
-        />
-      ) : displayList.length === 0 ? (
+      {displayList.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3 rounded-xl border border-white/5 bg-white/[0.02]">
           <Home className="h-8 w-8 text-text-disabled" />
           <p className="text-text-tertiary text-sm">
@@ -297,14 +278,7 @@ export default function PropertiesPage() {
               onDeactivate={handleDeactivate}
               activating={activating === prop.id}
               deactivating={deactivating === prop.id}
-              onOpenDetail={() => {
-                setDetailInitialTab("overview");
-                setDetailProperty(prop);
-              }}
-              onOpenAnalytics={() => {
-                setDetailInitialTab("analytics");
-                setDetailProperty(prop);
-              }}
+              onOpenDetail={() => setDetailProperty(prop)}
             />
           ))}
         </div>
@@ -314,7 +288,6 @@ export default function PropertiesPage() {
       {detailProperty && (
         <PropertyDetailDrawer
           property={detailProperty}
-          initialTab={detailInitialTab}
           onClose={() => setDetailProperty(null)}
         />
       )}
@@ -331,7 +304,6 @@ function PropertyCard({
   activating,
   deactivating,
   onOpenDetail,
-  onOpenAnalytics,
 }: {
   property: Property;
   onActivate: (id: string) => void;
@@ -339,7 +311,6 @@ function PropertyCard({
   activating: boolean;
   deactivating: boolean;
   onOpenDetail: () => void;
-  onOpenAnalytics: () => void;
 }) {
   return (
     <div
@@ -428,16 +399,6 @@ function PropertyCard({
             >
               View Details <ChevronRight className="h-3 w-3" />
             </button>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onOpenAnalytics();
-              }}
-              className="text-[11px] text-amber hover:text-amber/80 flex items-center gap-1 transition-colors"
-            >
-              <BarChart3 className="h-3 w-3" />
-              Analytics
-            </button>
             <Button
               size="sm"
               variant="outline"
@@ -478,11 +439,6 @@ function PropertyCard({
             Activate
           </Button>
         )}
-        {p.hostawayId && (
-          <span className="text-[9px] text-text-disabled font-mono">
-            HW#{p.hostawayId}
-          </span>
-        )}
       </div>
     </div>
   );
@@ -520,63 +476,33 @@ function MiniStat({
 
 function PropertyDetailDrawer({
   property: p,
-  initialTab,
   onClose,
 }: {
   property: Property;
-  initialTab: DetailTabId;
   onClose: () => void;
 }) {
-  const [detailTab, setDetailTab] = useState<DetailTabId>(initialTab);
-  const [analyticsLoading, setAnalyticsLoading] = useState(false);
-  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
-  const [analytics, setAnalytics] = useState<PropertyAnalyticsResponse | null>(null);
-  const [rangePreset, setRangePreset] = useState<"30d" | "60d" | "90d" | "custom">("30d");
-  const [range, setRange] = useState(() => {
-    const now = new Date();
-    return {
-      from: format(now, "yyyy-MM-dd"),
-      to: format(addDays(now, 29), "yyyy-MM-dd"),
-    };
-  });
+  const router = useRouter();
+  const [pendingProposals, setPendingProposals] = useState<Array<{ id: string; currentPrice: number; proposedPrice: number; reasoning: string; changePct: number; date: string }>>([]);
+  const [proposalsLoading, setProposalsLoading] = useState(false);
 
   useEffect(() => {
-    setDetailTab(initialTab);
-  }, [initialTab, p.id]);
-
-  useEffect(() => {
-    if (rangePreset === "custom") return;
-    const now = new Date();
-    const days = rangePreset === "60d" ? 59 : rangePreset === "90d" ? 89 : 29;
-    setRange({ from: format(now, "yyyy-MM-dd"), to: format(addDays(now, days), "yyyy-MM-dd") });
-  }, [rangePreset]);
-
-  useEffect(() => {
-    if (detailTab !== "analytics") return;
-    const controller = new AbortController();
-    const fetchAnalytics = async () => {
-      setAnalyticsLoading(true);
-      setAnalyticsError(null);
+    const load = async () => {
+      setProposalsLoading(true);
       try {
-        const params = new URLSearchParams({
-          listingId: p.id,
-          from: range.from,
-          to: range.to,
-        });
-        const res = await fetch(`/api/properties/analytics?${params.toString()}`, { signal: controller.signal });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Failed to load analytics");
-        setAnalytics(data);
-      } catch (err) {
-        if ((err as Error).name === "AbortError") return;
-        setAnalyticsError((err as Error).message || "Failed to load analytics");
+        const orgId = await getOrgId();
+        const res = await fetch(`/api/v1/revenue/proposals?orgId=${orgId}&listingId=${p.id}&status=pending`);
+        if (res.ok) {
+          const data = await res.json();
+          setPendingProposals(data.proposals ?? data ?? []);
+        }
+      } catch {
+        // silently fail — card count is still shown
       } finally {
-        setAnalyticsLoading(false);
+        setProposalsLoading(false);
       }
     };
-    fetchAnalytics();
-    return () => controller.abort();
-  }, [detailTab, p.id, range.from, range.to]);
+    load();
+  }, [p.id]);
 
   return (
     <>
@@ -621,29 +547,7 @@ function PropertyDetailDrawer({
             )}
           </div>
 
-          <div className="flex items-center gap-1 rounded-lg border border-border-subtle bg-surface-2/40 p-1">
-            {([
-              { id: "overview" as DetailTabId, label: "Overview" },
-              { id: "analytics" as DetailTabId, label: "Analytics" },
-            ]).map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setDetailTab(tab.id)}
-                className={cn(
-                  "px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
-                  detailTab === tab.id
-                    ? "bg-amber text-black"
-                    : "text-text-secondary hover:text-text-primary hover:bg-surface-2"
-                )}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {detailTab === "overview" ? (
-            <>
+          <>
               {/* Property Details */}
               <div className="rounded-xl border border-border-subtle bg-surface-1 p-4">
                 <h3 className="text-xs font-bold text-text-tertiary uppercase tracking-wider mb-3">
@@ -667,8 +571,70 @@ function PropertyDetailDrawer({
                   <DetailRow label="Price Floor" value={p.priceFloor > 0 ? `${p.currency} ${p.priceFloor.toLocaleString("en-US")}` : "Not set"} icon={ShieldCheck} />
                   <DetailRow label="Price Ceiling" value={p.priceCeiling > 0 ? `${p.currency} ${p.priceCeiling.toLocaleString("en-US")}` : "Not set"} icon={ShieldCheck} />
                   <DetailRow label="Avg Price (30d)" value={`${p.currency} ${p.avgPrice.toLocaleString("en-US")}`} icon={TrendingUp} />
-                  <DetailRow label="Pending Proposals" value={`${p.pendingProposals}`} icon={Clock} />
                 </div>
+              </div>
+
+              {/* Pending Proposals */}
+              <div className="rounded-xl border border-border-subtle bg-surface-1 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-xs font-bold text-text-tertiary uppercase tracking-wider flex items-center gap-1.5">
+                    <Clock className="h-3 w-3" />
+                    Pending Proposals
+                    {pendingProposals.length > 0 && (
+                      <span className="ml-1 bg-amber/20 text-amber text-[9px] font-bold px-1.5 py-0.5 rounded-full">
+                        {pendingProposals.length}
+                      </span>
+                    )}
+                  </h3>
+                </div>
+                {proposalsLoading ? (
+                  <div className="flex items-center gap-2 text-text-tertiary text-xs py-2">
+                    <Loader2 className="h-3 w-3 animate-spin" /> Loading…
+                  </div>
+                ) : pendingProposals.length === 0 ? (
+                  <p className="text-xs text-text-tertiary py-1">No pending proposals</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {pendingProposals.map((proposal) => (
+                      <button
+                        key={proposal.id}
+                        onClick={() => {
+                          router.push(`/pricing?listingId=${p.id}`);
+                          onClose();
+                        }}
+                        className="w-full text-left rounded-lg bg-surface-2/60 hover:bg-amber/10 border border-border-subtle hover:border-amber/30 px-3 py-2.5 transition-all group"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <TrendingUp className="h-3 w-3 text-amber shrink-0" />
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-xs text-text-secondary truncate">
+                                {p.currency} {(proposal.currentPrice ?? 0).toLocaleString("en-US")} → {(proposal.proposedPrice ?? 0).toLocaleString("en-US")}
+                              </span>
+                              {proposal.date && (
+                                <span className="text-[9px] text-text-tertiary">{proposal.date}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className={cn(
+                              "text-[9px] font-bold px-1.5 py-0.5 rounded-full border tabular-nums",
+                              (proposal.changePct ?? 0) > 0
+                                ? "bg-green-500/10 text-green-400 border-green-500/20"
+                                : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                            )}>
+                              {(proposal.changePct ?? 0) > 0 ? "+" : ""}{(proposal.changePct ?? 0).toFixed(1)}%
+                            </span>
+                            <ChevronRight className="h-3 w-3 text-text-disabled group-hover:text-amber transition-colors" />
+                          </div>
+                        </div>
+                        {proposal.reasoning && (
+                          <p className="text-[10px] text-text-tertiary mt-1 line-clamp-1">{proposal.reasoning}</p>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="rounded-xl border border-border-subtle bg-surface-1 p-4">
@@ -768,19 +734,7 @@ function PropertyDetailDrawer({
                   )}
                 </div>
               </div>
-            </>
-          ) : (
-            <PropertyAnalyticsPanel
-              property={p}
-              loading={analyticsLoading}
-              error={analyticsError}
-              data={analytics}
-              range={range}
-              rangePreset={rangePreset}
-              onRangePresetChange={setRangePreset}
-              onRangeChange={setRange}
-            />
-          )}
+          </>
         </div>
       </div>
     </>
@@ -1041,14 +995,14 @@ function PropertiesAnalyticsSection({
   const [rangePreset, setRangePreset] = useState<"30d" | "60d" | "90d" | "custom">("30d");
   const [range, setRange] = useState(() => {
     const now = new Date();
-    return { from: format(now, "yyyy-MM-dd"), to: format(addDays(now, 29), "yyyy-MM-dd") };
+    return { from: format(addDays(now, -29), "yyyy-MM-dd"), to: format(now, "yyyy-MM-dd") };
   });
 
   useEffect(() => {
     if (rangePreset === "custom") return;
     const now = new Date();
     const days = rangePreset === "60d" ? 59 : rangePreset === "90d" ? 89 : 29;
-    setRange({ from: format(now, "yyyy-MM-dd"), to: format(addDays(now, days), "yyyy-MM-dd") });
+    setRange({ from: format(addDays(now, -days), "yyyy-MM-dd"), to: format(now, "yyyy-MM-dd") });
   }, [rangePreset]);
 
   useEffect(() => {

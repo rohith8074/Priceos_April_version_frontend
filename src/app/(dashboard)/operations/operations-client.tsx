@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { DateRange } from "react-day-picker";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -25,9 +26,15 @@ import {
   User,
   Building2,
   Hash,
-  ChevronRight,
+  ChevronDown,
+  ChevronsUpDown,
   Bot,
   Tag,
+  LayoutGrid,
+  List,
+  Flame,
+  CheckCircle,
+  Timer,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
@@ -49,7 +56,18 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { backendFetch } from "@/lib/api/backend-client";
 
-export function OperationsClient({ orgId }: { orgId: string }) {
+export function OperationsClient(props: { orgId: string }) {
+  return (
+    <Suspense fallback={<div>Loading operations...</div>}>
+      <OperationsClientInternal {...props} />
+    </Suspense>
+  );
+}
+
+function OperationsClientInternal({ orgId }: { orgId: string }) {
+  const searchParams = useSearchParams();
+  const ticketIdParam = searchParams.get("ticketId");
+
   const [tickets, setTickets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -60,11 +78,57 @@ export function OperationsClient({ orgId }: { orgId: string }) {
 
   const [propertyFilter, setPropertyFilter] = useState<string>("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
-  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "resolved">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "resolved">("open");
   const [isUpdatingStatus, setIsUpdatingStatus] = useState<string | null>(null);
   const [allProperties, setAllProperties] = useState<any[]>([]);
 
+  const [viewType, setViewType] = useState<"table" | "cards">("table");
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [sortColumn, setSortColumn] = useState<"severity" | "sla" | "reported" | "status" | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const panelRef = useRef<HTMLDivElement>(null);
+
+  const handleSort = (col: "severity" | "sla" | "reported" | "status") => {
+    if (sortColumn === col) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortColumn(col);
+      setSortDir("asc");
+    }
+  };
+
+  const toggleExpand = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  // Calculate metrics
+  const metrics = useMemo(() => {
+    const open = tickets.filter(t => t.status === "open");
+    const resolved = tickets.filter(t => t.status === "resolved");
+    
+    // Simple logic for overdue: if current time > created time + SLA hours
+    const overdue = open.filter(t => {
+      const created = new Date(t.createdAt).getTime();
+      const now = new Date().getTime();
+      return (now - created) > (t.slaHours * 60 * 60 * 1000);
+    });
+
+    const avgSla = open.length > 0 
+      ? Math.round(open.reduce((acc, t) => acc + (t.slaHours || 0), 0) / open.length) 
+      : 0;
+
+    return {
+      openCount: open.length,
+      resolvedCount: resolved.length,
+      overdueCount: overdue.length,
+      avgSla
+    };
+  }, [tickets]);
 
   useEffect(() => {
     backendFetch(`/listings/?orgId=${orgId}`)
@@ -103,8 +167,20 @@ export function OperationsClient({ orgId }: { orgId: string }) {
         return tDate.getTime() === fromDate.getTime();
       });
     }
+    if (sortColumn) {
+      const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+      const statusOrder: Record<string, number> = { open: 0, resolved: 1, closed: 2 };
+      filtered.sort((a, b) => {
+        let cmp = 0;
+        if (sortColumn === "severity") cmp = (severityOrder[a.severity] ?? 9) - (severityOrder[b.severity] ?? 9);
+        else if (sortColumn === "sla") cmp = (a.slaHours ?? 0) - (b.slaHours ?? 0);
+        else if (sortColumn === "reported") cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        else if (sortColumn === "status") cmp = (statusOrder[a.status] ?? 9) - (statusOrder[b.status] ?? 9);
+        return sortDir === "asc" ? cmp : -cmp;
+      });
+    }
     return filtered;
-  }, [tickets, propertyFilter, dateRange, statusFilter]);
+  }, [tickets, propertyFilter, dateRange, statusFilter, sortColumn, sortDir]);
 
   const fetchTickets = async (silent = false) => {
     if (!orgId) return;
@@ -130,6 +206,25 @@ export function OperationsClient({ orgId }: { orgId: string }) {
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orgId]);
+
+  // Handle deep linking
+  useEffect(() => {
+    if (ticketIdParam && tickets.length > 0) {
+      const ticket = tickets.find(t => t.id === ticketIdParam || t._id === ticketIdParam);
+      if (ticket) {
+        handleRowClick(ticket);
+        // Clear status filter if it would hide this ticket
+        if (statusFilter !== "all" && ticket.status !== statusFilter) {
+          setStatusFilter("all");
+        }
+        // Clear property filter if it would hide this ticket
+        if (propertyFilter !== "all" && String(ticket.listingId) !== propertyFilter) {
+          setPropertyFilter("all");
+        }
+      }
+    }
+  }, [ticketIdParam, tickets]);
+
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -265,46 +360,135 @@ export function OperationsClient({ orgId }: { orgId: string }) {
   return (
     <div className="relative p-8 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
-        <div>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-2">
+        <div className="animate-in fade-in slide-in-from-left-4 duration-1000">
           <div className="flex items-center gap-3 mb-1">
-            <div className="p-2 bg-blue-500/10 rounded-lg">
+            <div className="p-2.5 bg-blue-500/10 rounded-2xl border border-blue-500/20 shadow-inner">
               <Wrench className="w-6 h-6 text-blue-500" />
             </div>
             <h1 className="text-3xl font-bold tracking-tight text-text-primary">Operations Tower</h1>
           </div>
-          <p className="text-text-secondary">
+          <p className="text-text-secondary text-sm">
             Real-time escalation tickets and maintenance tasks from Maya (Guest Agent).
           </p>
         </div>
+      </div>
 
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex gap-2 text-xs font-medium mr-2">
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in slide-in-from-top-4 duration-1000 delay-200">
+        <div className="bg-surface-1 border border-border-default rounded-2xl p-5 shadow-sm hover:shadow-md transition-all group">
+          <div className="flex justify-between items-start mb-3">
+            <div className="p-2 bg-amber/10 rounded-xl group-hover:scale-110 transition-transform">
+              <AlertTriangle className="w-5 h-5 text-amber" />
+            </div>
+            <Badge variant="outline" className="text-[10px] border-amber/20 text-amber bg-amber/5">Live</Badge>
+          </div>
+          <p className="text-text-muted text-xs font-medium uppercase tracking-wider mb-1">Active Tickets</p>
+          <div className="flex items-end gap-2">
+            <h3 className="text-3xl font-bold text-text-primary">{metrics.openCount}</h3>
+            <span className="text-[10px] text-text-muted mb-1.5 font-medium">Unresolved items</span>
+          </div>
+        </div>
+
+        <div className="bg-surface-1 border border-border-default rounded-2xl p-5 shadow-sm hover:shadow-md transition-all group">
+          <div className="flex justify-between items-start mb-3">
+            <div className="p-2 bg-red-500/10 rounded-xl group-hover:scale-110 transition-transform">
+              <Flame className="w-5 h-5 text-red-500" />
+            </div>
+            <Badge variant="outline" className="text-[10px] border-red-500/20 text-red-500 bg-red-500/5">Critical</Badge>
+          </div>
+          <p className="text-text-muted text-xs font-medium uppercase tracking-wider mb-1">SLA Overdue</p>
+          <div className="flex items-end gap-2">
+            <h3 className="text-3xl font-bold text-text-primary">{metrics.overdueCount}</h3>
+            <span className="text-[10px] text-red-400 mb-1.5 font-medium">Requires action</span>
+          </div>
+        </div>
+
+        <div className="bg-surface-1 border border-border-default rounded-2xl p-5 shadow-sm hover:shadow-md transition-all group">
+          <div className="flex justify-between items-start mb-3">
+            <div className="p-2 bg-blue-500/10 rounded-xl group-hover:scale-110 transition-transform">
+              <Timer className="w-5 h-5 text-blue-500" />
+            </div>
+          </div>
+          <p className="text-text-muted text-xs font-medium uppercase tracking-wider mb-1">Average SLA</p>
+          <div className="flex items-end gap-2">
+            <h3 className="text-3xl font-bold text-text-primary">{metrics.avgSla}h</h3>
+            <span className="text-[10px] text-text-muted mb-1.5 font-medium">Target response</span>
+          </div>
+        </div>
+
+        <div className="bg-surface-1 border border-border-default rounded-2xl p-5 shadow-sm hover:shadow-md transition-all group">
+          <div className="flex justify-between items-start mb-3">
+            <div className="p-2 bg-green-500/10 rounded-xl group-hover:scale-110 transition-transform">
+              <CheckCircle className="w-5 h-5 text-green-500" />
+            </div>
+          </div>
+          <p className="text-text-muted text-xs font-medium uppercase tracking-wider mb-1">Resolved</p>
+          <div className="flex items-end gap-2">
+            <h3 className="text-3xl font-bold text-text-primary">{metrics.resolvedCount}</h3>
+            <span className="text-[10px] text-green-400 mb-1.5 font-medium">Lifetime total</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Command Bar */}
+      <div className="flex flex-col lg:flex-row justify-between items-center bg-surface-1/40 backdrop-blur-sm p-2 rounded-2xl border border-border-default shadow-sm gap-4">
+        <div className="flex items-center gap-2 bg-surface-2/50 p-1 rounded-xl border border-border-subtle">
+          <button
+            onClick={() => setViewType("table")}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all",
+              viewType === "table" 
+                ? "bg-surface-1 text-amber shadow-md border border-border-subtle" 
+                : "text-text-tertiary hover:text-text-secondary"
+            )}
+          >
+            <List className="w-3.5 h-3.5" />
+            Table View
+          </button>
+          <button
+            onClick={() => setViewType("cards")}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all",
+              viewType === "cards" 
+                ? "bg-surface-1 text-amber shadow-md border border-border-subtle" 
+                : "text-text-tertiary hover:text-text-secondary"
+            )}
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />
+            Card View
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3 flex-wrap lg:flex-nowrap">
+          <div className="flex gap-1.5 bg-surface-2/50 p-1 rounded-xl border border-border-subtle">
             <button
               onClick={() => setStatusFilter(prev => prev === "open" ? "all" : "open")}
               className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-full border shadow-sm transition-all",
+                "px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-2",
                 statusFilter === "open"
-                  ? "bg-orange-500/10 border-orange-500/40 ring-1 ring-orange-500/30"
-                  : "bg-surface-1 border-border-subtle hover:bg-surface-2"
+                  ? "bg-orange-500/10 text-orange-500 border border-orange-500/20"
+                  : "text-text-tertiary hover:text-text-secondary"
               )}
             >
-              <span className="w-2 h-2 rounded-full bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.4)]" />
-              <span className="text-text-secondary">{tickets.filter(t => t.status === "open").length} Open</span>
+              <div className={cn("w-1.5 h-1.5 rounded-full", statusFilter === "open" ? "bg-orange-500 animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.5)]" : "bg-text-tertiary/40")} />
+              {tickets.filter(t => t.status === "open").length} Active
             </button>
             <button
               onClick={() => setStatusFilter(prev => prev === "resolved" ? "all" : "resolved")}
               className={cn(
-                "flex items-center gap-2 px-3 py-1.5 rounded-full border shadow-sm transition-all",
+                "px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-2",
                 statusFilter === "resolved"
-                  ? "bg-green-500/10 border-green-500/40 ring-1 ring-green-500/30"
-                  : "bg-surface-1 border-border-subtle hover:bg-surface-2"
+                  ? "bg-green-500/10 text-green-500 border border-green-500/20"
+                  : "text-text-tertiary hover:text-text-secondary"
               )}
             >
-              <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
-              <span className="text-text-secondary">{tickets.filter(t => t.status === "resolved").length} Resolved</span>
+              <div className={cn("w-1.5 h-1.5 rounded-full", statusFilter === "resolved" ? "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]" : "bg-text-tertiary/40")} />
+              {tickets.filter(t => t.status === "resolved").length} Resolved
             </button>
           </div>
+
+          <div className="h-6 w-px bg-border-subtle mx-1 hidden lg:block" />
 
           <div className="flex items-center gap-2">
             {(statusFilter !== "all" || propertyFilter !== "all" || dateRange?.from) && (
@@ -312,15 +496,14 @@ export function OperationsClient({ orgId }: { orgId: string }) {
                 variant="ghost"
                 size="sm"
                 onClick={() => { setStatusFilter("all"); setPropertyFilter("all"); setDateRange(undefined); }}
-                className="h-9 text-xs text-text-tertiary hover:text-text-primary px-2"
+                className="h-9 text-[10px] uppercase font-bold text-text-tertiary hover:text-red-400 px-2 transition-colors"
               >
-                <X className="w-3.5 h-3.5 mr-1" />
                 Clear
               </Button>
             )}
 
             <Select value={propertyFilter} onValueChange={setPropertyFilter}>
-              <SelectTrigger className="w-[180px] h-9 text-xs bg-surface-1 border-border-default">
+              <SelectTrigger className="w-[160px] h-9 text-xs bg-surface-1 border-border-default shadow-sm">
                 <SelectValue placeholder="All Properties" />
               </SelectTrigger>
               <SelectContent className="max-h-64 overflow-y-auto">
@@ -336,19 +519,19 @@ export function OperationsClient({ orgId }: { orgId: string }) {
                 <Button
                   variant="outline"
                   className={cn(
-                    "w-[240px] justify-start text-left font-normal h-9 text-xs bg-surface-1 border-border-default",
+                    "w-[220px] justify-start text-left font-normal h-9 text-xs bg-surface-1 border-border-default shadow-sm",
                     !dateRange && "text-muted-foreground"
                   )}
                 >
-                  <CalendarIcon className="mr-2 h-3.5 w-3.5" />
+                  <CalendarIcon className="mr-2 h-3.5 w-3.5 text-text-tertiary" />
                   {dateRange?.from ? (
                     dateRange.to ? (
-                      <>{format(dateRange.from, "LLL dd, y")} - {format(dateRange.to, "LLL dd, y")}</>
-                    ) : format(dateRange.from, "LLL dd, y")
-                  ) : <span>Pick a date range</span>}
+                      <>{format(dateRange.from, "MMM dd")} - {format(dateRange.to, "MMM dd")}</>
+                    ) : format(dateRange.from, "MMM dd")
+                  ) : <span className="text-text-tertiary">Select Dates</span>}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 bg-surface-1 border-border-default" align="end">
+              <PopoverContent className="w-auto p-0 bg-surface-1 border-border-default shadow-2xl" align="end">
                 <Calendar
                   initialFocus
                   mode="range"
@@ -365,7 +548,7 @@ export function OperationsClient({ orgId }: { orgId: string }) {
               size="sm"
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="h-9 border-border-default bg-surface-1 text-text-primary hover:bg-surface-2 px-3"
+              className="h-9 border-border-default bg-surface-1 text-text-primary hover:bg-surface-2 px-3 shadow-sm"
             >
               <RefreshCcw className={cn("w-3.5 h-3.5", isRefreshing && "animate-spin")} />
             </Button>
@@ -373,142 +556,279 @@ export function OperationsClient({ orgId }: { orgId: string }) {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-surface-1 rounded-2xl border border-border-default overflow-hidden shadow-xl">
-        <Table>
-          <TableHeader className="bg-surface-2/50">
-            <TableRow className="hover:bg-transparent border-border-subtle">
-              <TableHead className="text-text-secondary font-semibold py-4 w-[40%] min-w-[280px]">Issue</TableHead>
-              <TableHead className="text-text-secondary font-semibold w-[18%] min-w-[140px]">Property</TableHead>
-              <TableHead className="text-text-secondary font-semibold text-center w-[10%] min-w-[90px]">Severity</TableHead>
-              <TableHead className="text-text-secondary font-semibold w-[8%] min-w-[64px]">SLA</TableHead>
-              <TableHead className="text-text-secondary font-semibold w-[12%] min-w-[110px]">Reported</TableHead>
-              <TableHead className="text-text-secondary font-semibold w-[10%] min-w-[100px]">Status</TableHead>
-              <TableHead className="text-text-secondary font-semibold text-right pr-6 w-[12%] min-w-[100px]">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={7} className="h-64 text-center">
-                  <div className="flex flex-col items-center gap-3">
-                    <RefreshCcw className="w-8 h-8 text-text-tertiary animate-spin" />
-                    <p className="text-text-tertiary font-medium">Scanning for operational exceptions...</p>
-                  </div>
-                </TableCell>
+      {/* Content View Switcher */}
+      {viewType === "table" ? (
+        <div className="bg-surface-1 rounded-2xl border border-border-default overflow-hidden shadow-xl">
+          <Table>
+            <TableHeader className="bg-surface-2/50">
+              <TableRow className="hover:bg-transparent border-border-subtle">
+                <TableHead className="text-text-secondary font-semibold py-4 w-[40%] min-w-[280px]">Issue</TableHead>
+                <TableHead className="text-text-secondary font-semibold w-[18%] min-w-[140px]">Property</TableHead>
+                <TableHead className="text-text-secondary font-semibold text-center w-[10%] min-w-[90px]">
+                  <button onClick={() => handleSort("severity")} className="flex items-center gap-1 mx-auto hover:text-amber transition-colors group">
+                    Severity <ChevronsUpDown className={cn("w-3 h-3 transition-colors", sortColumn === "severity" ? "text-amber" : "text-text-tertiary group-hover:text-amber")} />
+                  </button>
+                </TableHead>
+                <TableHead className="text-text-secondary font-semibold w-[8%] min-w-[64px]">
+                  <button onClick={() => handleSort("sla")} className="flex items-center gap-1 hover:text-amber transition-colors group">
+                    SLA <ChevronsUpDown className={cn("w-3 h-3 transition-colors", sortColumn === "sla" ? "text-amber" : "text-text-tertiary group-hover:text-amber")} />
+                  </button>
+                </TableHead>
+                <TableHead className="text-text-secondary font-semibold w-[12%] min-w-[110px]">
+                  <button onClick={() => handleSort("reported")} className="flex items-center gap-1 hover:text-amber transition-colors group">
+                    Reported <ChevronsUpDown className={cn("w-3 h-3 transition-colors", sortColumn === "reported" ? "text-amber" : "text-text-tertiary group-hover:text-amber")} />
+                  </button>
+                </TableHead>
+                <TableHead className="text-text-secondary font-semibold w-[10%] min-w-[100px]">
+                  <button onClick={() => handleSort("status")} className="flex items-center gap-1 hover:text-amber transition-colors group">
+                    Status <ChevronsUpDown className={cn("w-3 h-3 transition-colors", sortColumn === "status" ? "text-amber" : "text-text-tertiary group-hover:text-amber")} />
+                  </button>
+                </TableHead>
+                <TableHead className="text-text-secondary font-semibold text-right pr-6 w-[12%] min-w-[100px]">Actions</TableHead>
               </TableRow>
-            ) : filteredTickets.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="h-64 text-center">
-                  <div className="flex flex-col items-center gap-3 opacity-60">
-                    <CheckCircle2 className="w-12 h-12 text-green-500/50" />
-                    <p className="text-text-tertiary font-medium text-lg">No tickets found.</p>
-                    <p className="text-text-tertiary text-sm">Try adjusting your filters or enjoy the peace.</p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredTickets.map((ticket) => (
-                <TableRow
-                  key={ticket.id}
-                  onClick={() => handleRowClick(ticket)}
-                  className={cn(
-                    "hover:bg-surface-2/40 border-border-subtle transition-colors group cursor-pointer",
-                    selectedTicket?.id === ticket.id && "bg-surface-2/60 ring-1 ring-inset ring-amber/20"
-                  )}
-                >
-                  {/* Issue */}
-                  <TableCell className="py-4 pr-4">
-                    <div className="flex flex-col gap-1.5">
-                      <div className="flex items-start gap-2">
-                        <Badge variant="outline" className="capitalize text-[9px] h-4 px-1.5 font-bold tracking-tight border-border-strong text-text-tertiary bg-surface-2 shrink-0 mt-0.5">
-                          {ticket.category}
-                        </Badge>
-                        <span className="text-text-primary font-semibold text-sm leading-snug group-hover:text-amber transition-colors line-clamp-2">
-                          {ticket.description}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-text-tertiary pl-0.5">
-                        <Hash className="w-3 h-3 shrink-0" />
-                        <span className="font-mono">RES-{(ticket.reservationId || "N/A").slice(-6).toUpperCase()}</span>
-                        <span className="mx-0.5">·</span>
-                        <ChevronRight className="w-3 h-3 text-text-tertiary/50" />
-                        <span className="text-text-tertiary/70">Click to inspect</span>
-                      </div>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-64 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <RefreshCcw className="w-8 h-8 text-text-tertiary animate-spin" />
+                      <p className="text-text-tertiary font-medium">Scanning for operational exceptions...</p>
                     </div>
-                  </TableCell>
-
-                  {/* Property */}
-                  <TableCell className="py-4 pr-4">
-                    <div className="flex items-center gap-1.5">
-                      <Building2 className="w-3.5 h-3.5 text-text-tertiary shrink-0" />
-                      <span className={cn(
-                        "text-sm font-medium truncate max-w-[160px]",
-                        (propertyDisplayName(ticket) === "Unknown Property" || propertyDisplayName(ticket) === "—")
-                          ? "text-text-tertiary italic"
-                          : "text-text-secondary"
-                      )}>
-                        {propertyDisplayName(ticket)}
-                      </span>
-                    </div>
-                  </TableCell>
-
-                  {/* Severity */}
-                  <TableCell className="text-center py-4 pr-4">
-                    <Badge className={cn("px-2.5 py-0.5 border text-[10px] uppercase font-bold", getSeverityColor(ticket.severity))}>
-                      {ticket.severity}
-                    </Badge>
-                  </TableCell>
-
-                  {/* SLA */}
-                  <TableCell className="py-4 pr-4">
-                    <div className="flex items-center gap-1.5 font-medium text-sm text-text-secondary">
-                      <Clock className="w-3.5 h-3.5 text-text-tertiary" />
-                      {ticket.slaHours}h
-                    </div>
-                  </TableCell>
-
-                  {/* Reported */}
-                  <TableCell className="text-text-tertiary text-xs py-4 pr-4">
-                    <div className="flex flex-col">
-                      <span>{format(new Date(ticket.createdAt.endsWith('Z') ? ticket.createdAt : ticket.createdAt + 'Z'), "MMM d, yyyy")}</span>
-                      <span className="text-[10px] opacity-70">{format(new Date(ticket.createdAt.endsWith('Z') ? ticket.createdAt : ticket.createdAt + 'Z'), "h:mm a")}</span>
-                    </div>
-                  </TableCell>
-
-                  {/* Status */}
-                  <TableCell className="py-4 pr-4">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-text-primary capitalize">
-                      {getStatusIcon(ticket.status)}
-                      {ticket.status.replace("_", " ")}
-                    </div>
-                  </TableCell>
-
-                  {/* Actions */}
-                  <TableCell className="text-right pr-6 py-4">
-                    {ticket.status !== "resolved" && ticket.status !== "closed" && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={(e) => handleResolveTicket(ticket.id || ticket._id, e)}
-                        disabled={isUpdatingStatus === (ticket.id || ticket._id)}
-                        className="h-8 text-xs bg-green-500/10 text-green-600 hover:bg-green-500/20 border-green-500/20"
-                      >
-                        {isUpdatingStatus === (ticket.id || ticket._id) ? (
-                          <RefreshCcw className="w-3 h-3 mr-1.5 animate-spin" />
-                        ) : (
-                          <CheckCircle2 className="w-3 h-3 mr-1.5" />
-                        )}
-                        Resolve
-                      </Button>
-                    )}
                   </TableCell>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              ) : filteredTickets.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-64 text-center">
+                    <div className="flex flex-col items-center gap-3 opacity-60">
+                      <CheckCircle2 className="w-12 h-12 text-green-500/50" />
+                      <p className="text-text-tertiary font-medium text-lg">No tickets found.</p>
+                      <p className="text-text-tertiary text-sm">Try adjusting your filters or enjoy the peace.</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredTickets.map((ticket) => {
+                  const ticketId = ticket.id || ticket._id;
+                  const isExpanded = expandedRows.has(ticketId);
+                  return (
+                  <TableRow
+                    key={ticketId}
+                    onClick={() => handleRowClick(ticket)}
+                    className={cn(
+                      "hover:bg-surface-2/40 border-border-subtle transition-colors group cursor-pointer",
+                      selectedTicket?.id === ticket.id && "bg-surface-2/60 ring-1 ring-inset ring-amber/20"
+                    )}
+                  >
+                    {/* Issue */}
+                    <TableCell className="py-4 pr-4">
+                      <div className="flex items-start gap-3">
+                        <div className={cn(
+                          "w-1 rounded-full shrink-0 mt-1",
+                          isExpanded ? "self-stretch min-h-[2.5rem]" : "h-10",
+                          ticket.severity === "critical" ? "bg-red-500" :
+                          ticket.severity === "high" ? "bg-orange-500" :
+                          ticket.severity === "medium" ? "bg-yellow-500" : "bg-blue-500"
+                        )} />
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <div className="flex items-start gap-2 mb-1">
+                            <span className={cn(
+                              "text-text-primary font-semibold text-sm leading-snug group-hover:text-amber transition-colors flex-1",
+                              !isExpanded && "line-clamp-1"
+                            )}>
+                              {ticket.description}
+                            </span>
+                            <button
+                              onClick={(e) => toggleExpand(ticketId, e)}
+                              title={isExpanded ? "Collapse" : "Expand full text"}
+                              className="shrink-0 p-0.5 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-2 transition-colors mt-0.5"
+                            >
+                              <ChevronDown className={cn("w-3.5 h-3.5 transition-transform duration-200", isExpanded && "rotate-180")} />
+                            </button>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="capitalize text-[9px] h-4 px-1.5 font-bold tracking-tight border-border-strong text-text-tertiary bg-surface-2 shrink-0">
+                              {ticket.category.replace('_', ' ')}
+                            </Badge>
+                            <span className="font-mono text-[10px] text-text-tertiary bg-surface-2 px-1.5 py-0.5 rounded border border-border-subtle uppercase">
+                              RES-{(ticket.reservationId || "N/A").slice(-6)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </TableCell>
+
+                    {/* Property */}
+                    <TableCell className="py-4 pr-4">
+                      <div className="flex items-start gap-1.5">
+                        <Building2 className="w-3.5 h-3.5 text-text-tertiary shrink-0 mt-0.5" />
+                        <span className={cn(
+                          "text-sm font-medium",
+                          !isExpanded && "truncate max-w-[160px]",
+                          (propertyDisplayName(ticket) === "Unknown Property" || propertyDisplayName(ticket) === "—")
+                            ? "text-text-tertiary italic"
+                            : "text-text-secondary"
+                        )}>
+                          {propertyDisplayName(ticket)}
+                        </span>
+                      </div>
+                    </TableCell>
+
+                    {/* Severity */}
+                    <TableCell className="text-center py-4 pr-4">
+                      <Badge className={cn("px-2.5 py-0.5 border text-[10px] uppercase font-bold", getSeverityColor(ticket.severity))}>
+                        {ticket.severity}
+                      </Badge>
+                    </TableCell>
+
+                    {/* SLA */}
+                    <TableCell className="py-4 pr-4">
+                      <div className="flex items-center gap-1.5 font-medium text-sm text-text-secondary">
+                        <Clock className="w-3.5 h-3.5 text-text-tertiary" />
+                        {ticket.slaHours}h
+                      </div>
+                    </TableCell>
+
+                    {/* Reported */}
+                    <TableCell className="text-text-tertiary text-xs py-4 pr-4">
+                      <div className="flex flex-col">
+                        <span>{format(new Date(ticket.createdAt.endsWith('Z') ? ticket.createdAt : ticket.createdAt + 'Z'), "MMM d, yyyy")}</span>
+                        <span className="text-[10px] opacity-70">{format(new Date(ticket.createdAt.endsWith('Z') ? ticket.createdAt : ticket.createdAt + 'Z'), "h:mm a")}</span>
+                      </div>
+                    </TableCell>
+
+                    {/* Status */}
+                    <TableCell className="py-4 pr-4">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-text-primary capitalize">
+                        {getStatusIcon(ticket.status)}
+                        {ticket.status === "open" ? "Active" : ticket.status.replace("_", " ")}
+                      </div>
+                    </TableCell>
+
+                    {/* Actions */}
+                    <TableCell className="text-right pr-6 py-4">
+                      {ticket.status !== "resolved" && ticket.status !== "closed" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={(e) => handleResolveTicket(ticket.id || ticket._id, e)}
+                          disabled={isUpdatingStatus === (ticket.id || ticket._id)}
+                          className="h-8 text-xs bg-green-500/10 text-green-600 hover:bg-green-500/20 border-green-500/20 shadow-sm"
+                        >
+                          {isUpdatingStatus === (ticket.id || ticket._id) ? (
+                            <RefreshCcw className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="w-3 h-3 mr-1.5" />
+                          )}
+                          {!isUpdatingStatus && "Resolve"}
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      ) : (
+        /* Card View */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 animate-in fade-in zoom-in-95 duration-500">
+          {loading ? (
+             Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="h-48 bg-surface-1 border border-border-default rounded-2xl animate-pulse" />
+            ))
+          ) : filteredTickets.length === 0 ? (
+            <div className="col-span-full h-64 flex flex-col items-center justify-center bg-surface-1 rounded-2xl border border-dashed border-border-default text-text-tertiary">
+              <CheckCircle2 className="w-12 h-12 mb-3 opacity-30" />
+              <p className="text-lg font-medium">All clear! No tickets found.</p>
+            </div>
+          ) : (
+            filteredTickets.map((ticket) => {
+              const ticketId = ticket.id || ticket._id;
+              const isExpanded = expandedRows.has(ticketId);
+              return (
+              <div
+                key={ticketId}
+                onClick={() => handleRowClick(ticket)}
+                className={cn(
+                  "flex flex-col bg-surface-1 border border-border-default rounded-2xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer group relative overflow-hidden",
+                  selectedTicket?.id === ticket.id && "ring-2 ring-amber/50 border-amber/20 shadow-amber/10 shadow-lg"
+                )}
+              >
+                {/* Severity Bar */}
+                <div className={cn(
+                  "absolute top-0 left-0 bottom-0 w-1.5",
+                  ticket.severity === "critical" ? "bg-red-500" :
+                  ticket.severity === "high" ? "bg-orange-500" :
+                  ticket.severity === "medium" ? "bg-yellow-500" : "bg-blue-500"
+                )} />
+                <div className="flex justify-between items-start mb-3 pl-1.5">
+                  <Badge variant="outline" className="capitalize text-[10px] font-bold tracking-tight bg-surface-2">
+                    {ticket.category}
+                  </Badge>
+                  <Badge className={cn("px-2 py-0.5 border text-[9px] uppercase font-bold shadow-sm", getSeverityColor(ticket.severity))}>
+                    {ticket.severity}
+                  </Badge>
+                </div>
+                <div className="mb-3 pl-1.5">
+                  <div className="flex items-start gap-1.5">
+                    <h3 className={cn(
+                      "text-sm font-semibold text-text-primary group-hover:text-amber transition-colors flex-1",
+                      !isExpanded && "line-clamp-2"
+                    )}>
+                      {ticket.description}
+                    </h3>
+                    <button
+                      onClick={(e) => toggleExpand(ticketId, e)}
+                      title={isExpanded ? "Collapse" : "Expand full text"}
+                      className="shrink-0 p-0.5 rounded text-text-tertiary hover:text-text-primary hover:bg-surface-2 transition-colors mt-0.5"
+                    >
+                      <ChevronDown className={cn("w-3.5 h-3.5 transition-transform duration-200", isExpanded && "rotate-180")} />
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-auto space-y-2.5 pl-1.5">
+                  <div className="flex items-center gap-2 text-xs text-text-secondary">
+                    <Building2 className="w-3.5 h-3.5 text-text-tertiary" />
+                    <span className="truncate">{propertyDisplayName(ticket)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1 text-[10px] text-text-tertiary">
+                        <Clock className="w-3 h-3" />
+                        {ticket.slaHours}h
+                      </div>
+                      <div className="flex items-center gap-1 text-[10px] text-text-tertiary">
+                        <CalendarIcon className="w-3 h-3" />
+                        {format(new Date(ticket.createdAt), "MMM d")}
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                       {getStatusIcon(ticket.status)}
+                       <span className="text-[10px] font-bold text-text-tertiary uppercase">{ticket.status === "open" ? "Active" : ticket.status.replace("_", " ")}</span>
+                    </div>
+                  </div>
+                  {ticket.status === "open" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={(e) => handleResolveTicket(ticket.id || ticket._id, e)}
+                      disabled={isUpdatingStatus === (ticket.id || ticket._id)}
+                      className="w-full h-8 text-xs bg-green-500/10 text-green-600 hover:bg-green-500/20 border-green-500/20 mt-2"
+                    >
+                      <CheckCircle2 className="w-3 h-3 mr-1.5" />
+                      Resolve Task
+                    </Button>
+                  )}
+                </div>
+              </div>
+              );
+            })
+          )}
+        </div>
+      )}
 
       {/* Backdrop */}
       {isPanelOpen && (

@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PriceOS — Formula Reference</title>
+  <style>
+    :root {
+      --bg: #0d0d12;
+      --surface: #13131a;
+      --card: #18181f;
+      --border: rgba(255,255,255,0.07);
+      --border-strong: rgba(255,255,255,0.13);
+      --text: #e8e8f0;
+      --muted: #8a8a9a;
+      --amber: #f59e0b;
+      --emerald: #10b981;
+      --red: #f87171;
+      --blue: #60a5fa;
+      --purple: #a78bfa;
+      --indigo: #818cf8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+      padding: 48px 24px;
+    }
+
+    .page { max-width: 900px; margin: 0 auto; }
+
+    /* Header */
+    .page-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 48px;
+      padding-bottom: 32px;
+      border-bottom: 1px solid var(--border-strong);
+    }
+    .header-icon {
+      width: 48px; height: 48px;
+      background: linear-gradient(135deg, #f59e0b22, #6366f122);
+      border: 1.5px solid rgba(245,158,11,0.3);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0;
+    }
+    .page-header h1 { font-size: 26px; font-weight: 900; color: #fff; letter-spacing: -0.5px; }
+    .page-header p { color: var(--muted); font-size: 14px; margin-top: 4px; }
+
+    /* Section */
+    .section { margin-bottom: 48px; }
+    .section-label {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 20px;
+    }
+    .section-label .icon {
+      width: 30px; height: 30px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+    }
+    .section-label h2 { font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
+    .section-divider { flex: 1; height: 1px; background: var(--border); }
+
+    /* Formula card */
+    .formula-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .formula-card-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+    }
+    .formula-card-header .num {
+      width: 22px; height: 22px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.06);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 900; color: var(--muted);
+      flex-shrink: 0;
+    }
+    .formula-card-header h3 { font-size: 14px; font-weight: 800; color: #fff; }
+    .formula-card-header .where { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+    .formula-card-body { padding: 18px; display: flex; flex-direction: column; gap: 16px; }
+
+    /* Formula box */
+    .formula-box {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      padding: 14px 18px;
+    }
+    .formula-box .label {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--muted); margin-bottom: 8px;
+    }
+    .formula-box .formula-text {
+      font-family: "SF Mono", "Fira Code", "Courier New", monospace;
+      font-size: 14px; font-weight: 700; color: var(--amber);
+      line-height: 1.8;
+    }
+    .formula-box .formula-text .op { color: var(--muted); font-weight: 400; }
+    .formula-box .formula-text .var { color: var(--blue); }
+    .formula-box .formula-text .result { color: var(--emerald); }
+
+    /* Scoring table */
+    .score-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .score-table th {
+      text-align: left; padding: 6px 10px;
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .score-table td { padding: 7px 10px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+    .score-table tr:last-child td { border-bottom: none; }
+    .score-table .condition { color: var(--text); font-family: monospace; font-size: 11px; }
+    .score-table .delta {
+      font-weight: 800; font-family: monospace; font-size: 12px; text-align: right;
+    }
+    .score-table .delta.pos { color: var(--emerald); }
+    .score-table .delta.neg { color: var(--red); }
+    .score-table .delta.neu { color: var(--muted); }
+
+    /* Example block */
+    .example-block {
+      border: 1px solid rgba(245,158,11,0.15);
+      border-radius: 10px;
+      background: rgba(245,158,11,0.04);
+      padding: 14px 18px;
+    }
+    .example-block .ex-label {
+      font-size: 10px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--amber); margin-bottom: 10px;
+    }
+    .example-block .ex-row {
+      display: flex; align-items: baseline; gap: 8px;
+      font-size: 12px; color: var(--text); margin-bottom: 5px;
+    }
+    .example-block .ex-row:last-child { margin-bottom: 0; }
+    .example-block .ex-row .key { color: var(--muted); min-width: 140px; font-size: 11px; }
+    .example-block .ex-row .val { font-family: monospace; font-weight: 700; }
+    .example-block .ex-row .val.ans { color: var(--amber); font-size: 14px; }
+    .example-block .ex-row .val.green { color: var(--emerald); }
+    .example-block .ex-row .val.red { color: var(--red); }
+
+    /* UI mock */
+    .ui-mock {
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #0d0d12;
+    }
+    .ui-mock-header {
+      background: rgba(255,255,255,0.03);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 14px;
+      font-size: 10px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: 0.12em; color: var(--muted);
+    }
+    .ui-mock-body { padding: 14px; }
+
+    /* proposal card mock */
+    .prop-card {
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.02);
+    }
+    .prop-card-header {
+      padding: 8px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      display: flex; align-items: center; justify-between; gap: 8px;
+      background: rgba(255,255,255,0.02);
+    }
+    .prop-card-header { justify-content: space-between; }
+    .date-label { font-size: 13px; font-weight: 900; }
+    .classification { font-size: 9px; font-weight: 700; text-transform: uppercase;
+      padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06);
+      color: var(--muted); border: 1px solid rgba(255,255,255,0.08); }
+    .guard-ok { font-size: 9px; font-weight: 800; color: var(--emerald);
+      padding: 2px 8px; border-radius: 4px;
+      background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.2); }
+
+    .price-row {
+      padding: 10px 14px; display: flex; align-items: center; gap: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .price-current { text-align: center; }
+    .price-current .lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+    .price-current .val { font-size: 13px; font-weight: 700; text-decoration: line-through; opacity: 0.4; }
+    .change-pill {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+    }
+    .change-pill .badge {
+      font-size: 10px; font-weight: 900; padding: 2px 8px; border-radius: 20px;
+      background: rgba(248,113,113,0.1); color: var(--red);
+    }
+    .change-pill .arrow { width: 100%; height: 1px; background: rgba(255,255,255,0.1); margin-top: 4px; position: relative; }
+    .price-proposed { text-align: center; }
+    .price-proposed .lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+    .price-proposed .val { font-size: 18px; font-weight: 900; color: var(--amber); }
+
+    .comp-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 12px; padding: 10px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .comp-cell { display: flex; flex-direction: column; gap: 2px; }
+    .comp-cell .comp-label { font-size: 9px; color: var(--muted); font-weight: 600; }
+    .comp-cell .comp-price { font-size: 10px; font-weight: 900; color: var(--muted); font-family: monospace; }
+    .comp-cell .comp-pct { font-size: 10px; font-weight: 900; font-family: monospace; color: var(--red); }
+    .comp-cell .mini-bar { height: 3px; border-radius: 2px; background: rgba(255,255,255,0.05); overflow: hidden; margin-top: 2px; }
+    .comp-cell .mini-bar-fill { height: 100%; border-radius: 2px; background: rgba(248,113,113,0.5); }
+    .comp-cell .formula-hint {
+      font-family: monospace; font-size: 8px; color: rgba(255,255,255,0.2);
+      margin-top: 2px; line-height: 1.3;
+    }
+
+    .confidence-bar-wrap { padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.01); }
+    .conf-header { display: flex; justify-content: space-between; margin-bottom: 5px; }
+    .conf-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 600; }
+    .conf-value { font-size: 9px; font-weight: 900; color: var(--emerald); }
+    .conf-track { height: 5px; border-radius: 4px; background: rgba(255,255,255,0.04); overflow: hidden; }
+    .conf-fill { height: 100%; border-radius: 4px; background: var(--emerald); }
+
+    /* guest inbox mock */
+    .draft-card {
+      border: 1px solid rgba(245,158,11,0.2);
+      border-radius: 12px;
+      overflow: hidden;
+      background: rgba(245,158,11,0.03);
+    }
+    .draft-header { padding: 8px 14px; border-bottom: 1px solid rgba(245,158,11,0.1);
+      display: flex; align-items: center; justify-content: space-between; }
+    .draft-header .title { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--amber); }
+    .sentiment-badge {
+      font-size: 9px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
+      background: rgba(16,185,129,0.1); color: var(--emerald); border: 1px solid rgba(16,185,129,0.2);
+    }
+    .tone-bar-wrap { padding: 10px 14px; border-bottom: 1px solid rgba(245,158,11,0.1); }
+    .bar-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+    .bar-lbl { font-size: 9px; color: var(--muted); font-weight: 600; }
+    .bar-val { font-size: 9px; font-weight: 800; }
+    .bar-track { height: 4px; border-radius: 3px; background: rgba(255,255,255,0.05); overflow: hidden; }
+    .bar-fill-green { height: 100%; border-radius: 3px; background: var(--emerald); }
+    .bar-fill-blue { height: 100%; border-radius: 3px; background: var(--blue); }
+
+    /* keyword tag */
+    .kw-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .kw { font-size: 11px; padding: 2px 8px; border-radius: 6px; font-family: monospace; font-weight: 600; }
+    .kw.neg { background: rgba(248,113,113,0.1); color: var(--red); border: 1px solid rgba(248,113,113,0.2); }
+    .kw.pos { background: rgba(16,185,129,0.1); color: var(--emerald); border: 1px solid rgba(16,185,129,0.2); }
+
+    /* tags */
+    .tag { display: inline-block; font-size: 10px; padding: 2px 8px; border-radius: 6px; font-weight: 700; margin-right: 4px; }
+    .tag.prop { background: rgba(99,102,241,0.15); color: var(--indigo); border: 1px solid rgba(99,102,241,0.25); }
+    .tag.inbox { background: rgba(245,158,11,0.15); color: var(--amber); border: 1px solid rgba(245,158,11,0.25); }
+
+    /* clamp note */
+    .clamp-note {
+      font-size: 11px; color: var(--muted);
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-family: monospace;
+    }
+    .clamp-note strong { color: var(--text); }
+
+    code { font-family: "SF Mono", "Fira Code", monospace; }
+    .toc { display: flex; flex-direction: column; gap: 6px; margin-bottom: 40px; }
+    .toc a { color: var(--blue); text-decoration: none; font-size: 13px; }
+    .toc a:hover { text-decoration: underline; }
+    .toc-section { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-top: 10px; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── Header ────────────────────────────────────────────────────────── -->
+  <div class="page-header">
+    <div class="header-icon">📐</div>
+    <div>
+      <h1>PriceOS Formula Reference</h1>
+      <p>Every formula used in the platform — where it runs, how it's computed, and a live example matching the UI output.</p>
+    </div>
+  </div>
+
+  <!-- ── TOC ───────────────────────────────────────────────────────────── -->
+  <div class="toc">
+    <div class="toc-section">Proposal Cards (Agent Chat)</div>
+    <a href="#f1">1 — Price Change % (arrow pill)</a>
+    <a href="#f2">2 — Market Comparison % (vs P50 · vs Recommended · vs Top Comp)</a>
+    <a href="#f3">3 — Mini Bar Width (comparison progress bars)</a>
+    <a href="#f4">4 — AI Confidence Score (22 – 96 %)</a>
+    <div class="toc-section">Guest Inbox</div>
+    <a href="#f5">5 — Draft Reply Confidence Score (25 – 95 %)</a>
+    <a href="#f6">6 — Draft Reply Sentiment Detection (categorical)</a>
+    <a href="#f7">7 — Tone Bar Width (fixed mapping)</a>
+    <a href="#f8">8 — Guest Conversation Sentiment Detection</a>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <!-- SECTION 1 — Proposal Cards                                        -->
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+
+  <div class="section">
+    <div class="section-label">
+      <div class="icon" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.25);">💬</div>
+      <h2>Proposal Cards — Agent Chat</h2>
+      <div class="section-divider"></div>
+    </div>
+
+    <!-- F1 ─────────────────────────────────────────────────────────── -->
+    <div class="formula-card" id="f1">
+      <div class="formula-card-header">
+        <div class="num">1</div>
+        <h3>Price Change % <span class="tag prop">Proposal Card · Arrow Pill</span></h3>
+        <span class="where">unified-chat-interface.tsx</span>
+      </div>
+      <div class="formula-card-body">
+
+        <div class="formula-box">
+          <div class="label">Formula</div>
+          <div class="formula-text">
+            <span class="op">Price Change % = </span>
+            (<span class="var">Proposed Price</span> <span class="op">−</span> <span class="var">Current Price</span>)
+            <span class="op"> ÷ </span>
+            <span class="var">Current Price</span>
+            <span class="op"> × 100</span>
+          </div>
+        </div>
+
+        <div style="font-size:12px;color:var(--muted);line-height:1.8;">
+          <strong style="color:var(--text);">Source:</strong> The value <code>change_pct</code> is provided directly by the AI agent in the proposal JSON — it's not computed on the frontend. The frontend reads <code>prop.change_pct</code> and uses <code>Math.abs()</code> for display.<br>
+          <strong style="color:var(--text);">Display:</strong> ▼ for negative (price drop), ▲ for positive (price increase). Red when down, green when up.
+        </div>
+
+        <div class="example-block">
+          <div class="ex-label">Example — Proposal 1 (2026-04-16)</div>
+          <div class="ex-row"><span class="key">Current Price</span><span class="val">AED 500</span></div>
+          <div class="ex-row"><span class="key">Proposed Price</span><span class="val">AED 250</span></div>
+          <div class="ex-row"><span class="key">Calculation</span><span class="val">(250 − 500) ÷ 500 × 100</span></div>
+          <div class="ex-row"><span class="key">Result</span><span class="val ans">−50%</span></div>
+          <div class="ex-row"><span class="key">Displayed as</span><span class="val red">▼ 50%</span></div>
+        </div>
+
+        <!-- UI Mock -->
+        <div class="ui-mock">
+          <div class="ui-mock-header">As it appears in the chat</div>
+          <div class="ui-mock-body">
+            <div class="prop-card">
+              <div class="prop-card-header">
+                <div style="display:flex;align-items:center;gap:8px;">
+                  <span class="date-label">2026-04-16</span>
+                  <span class="classification">distressed</span>
+                </div>
+                <span class="guard-ok">✓ PriceGuard OK</span>
+              </div>
+              <div class="price-row">
+                <div class="price-current">
+                  <div class="lbl">Current</div>
+                  <div class="val">AED 500</div>
+                </div>
+                <div class="change-pill">
+                  <div class="badge">▼ 50%</div>
+                  <div class="arrow"></div>
+                </div>
+                <div class="price-proposed">
+                  <div class="lbl">Proposed</div>
+                  <div class="val">AED 250</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- F2 ─────────────────────────────────────────────────────────── -->
+    <div class="formula-card" id="f2">
+      <div class="formula-card-header">
+        <div class="num">2</div>
+        <h3>Market Comparison % <span class="tag prop">Proposal Card · Comparison Grid</span></h3>
+        <span class="where">unified-chat-interface.tsx</span>
+      </div>
+      <div class="formula-card-body">
+
+        <div class="formula-box">
+          <div class="label">Formula — applied to vs P50, vs Recommended, vs Top Comp</div>
+          <div class="formula-text">
+            <span class="op">diff_pct = </span>
+            (<span class="var">Proposed Price</span> <span class="op">−</span> <span class="var">Benchmark Price</span>)
+            <span class="op"> ÷ </span>
+            <span class="var">Benchmark Price</span>
+            <span class="op"> × 100</span>
+          </div>
+        </div>
+
+        <div style="font-size:12px;color:var(--muted);line-height:1.8;">
+          <strong style="color:var(--text);">Source:</strong> <code>diff_pct</code> is included in each comparison object returned by the AI agent (<code>prop.comparisons.vs_p50.diff_pct</code>, <code>vs_recommended.diff_pct</code>, <code>vs_top_comp.diff_pct</code>).<br>
+          <strong style="color:var(--text);">Formula shown in UI:</strong> The frontend now prints the raw formula below the mini bar so you can verify each number: <code>({proposed} − {comp}) ÷ {comp} × 100</code>.<br>
+          <strong style="color:var(--text);">Negative result</strong> means the proposed price is below the benchmark. <strong style="color:var(--text);">Positive result</strong> means above.
+        </div>
+
+        <div class="example-block">
+          <div class="ex-label">Three comparisons from Proposal 1 (current=500, proposed=250)</div>
+          <div class="ex-row"><span class="key">Market P50</span><span class="val">(250 − 957) ÷ 957 × 100</span><span class="val ans" style="margin-left:auto">−74%</span></div>
+          <div class="ex-row"><span class="key">Recommended</span><span class="val">(250 − 500) ÷ 500 × 100</span><span class="val ans" style="margin-left:auto">−50%</span></div>
+          <div class="ex-row"><span class="key">JBR Luxury Apts</span><span class="val">(250 − 850) ÷ 850 × 100</span><span class="val ans" style="margin-left:auto">−71%</span></div>
+        </div>
+
+        <!-- UI Mock -->
+        <div class="ui-mock">
+          <div class="ui-mock-header">As it appears in the chat</div>
+          <div class="ui-mock-body">
+            <div class="prop-card">
+              <div class="comp-grid">
+                <div class="comp-cell">
+                  <span class="comp-label">vs Market P50</span>
+                  <span class="comp-price">AED 957</span>
+                  <span class="comp-pct">−74%</span>
+                  <div class="mini-bar"><div class="mini-bar-fill" style="width:74%"></div></div>
+                  <span class="formula-hint">(250 − 957) ÷ 957 × 100</span>
+                </div>
+                <div class="comp-cell">
+                  <span class="comp-label">vs Recommended</span>
+                  <span class="comp-price">AED 500</span>
+                  <span class="comp-pct">−50%</span>
+                  <div class="mini-bar"><div class="mini-bar-fill" style="width:50%"></div></div>
+                  <span class="formula-hint">(250 − 500) ÷ 500 × 100</span>
+                </div>
+                <div class="comp-cell">
+                  <span class="comp-label">vs JBR Luxury Apartments</span>
+                  <span class="comp-price">AED 850</span>
+                  <span class="comp-pct">−71%</span>
+                  <div class="mini-bar"><div class="mini-bar-fill" style="width:71%"></div></div>
+                  <span class="formula-hint">(250 − 850) ÷ 850 × 100</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- F3 ─────────────────────────────────────────────────────────── -->
+    <div class="formula-card" id="f3">
+      <div class="formula-card-header">
+        <div class="num">3</div>
+        <h3>Mini Bar Width <span class="tag prop">Proposal Card · Comparison Bar</span></h3>
+        <span class="where">unified-chat-interface.tsx</span>
+      </div>
+      <div class="formula-card-body">
+
+        <div class="formula-box">
+          <div class="label">Formula</div>
+          <div class="formula-text">
+            <span class="op">Bar Width % = </span>
+            min(100, |<span class="var">diff_pct</span>|)
+          </div>
+        </div>
+
+        <div style="font-size:12px;color:var(--muted);line-height:1.8;">
+          The bar is capped at 100% width even when <code>|diff_pct|</code> exceeds 100 (which can happen when the proposed price is drastically below market). The bar is red when <code>diff_pct &lt; 0</code>, green when <code>diff_pct ≥ 0</code>.
+        </div>
+
+        <div class="example-block">
+          <div class="ex-label">Example values</div>
+          <div class="ex-row"><span class="key">diff_pct = −74</span><span class="val">min(100, |−74|) = <span class="ans">74% bar width</span></span></div>
+          <div class="ex-row"><span class="key">diff_pct = −50</span><span class="val">min(100, |−50|) = <span class="ans">50% bar width</span></span></div>
+          <div class="ex-row"><span class="key">diff_pct = −120 (edge)</span><span class="val">min(100, |−120|) = <span class="ans">100% bar width (capped)</span></span></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- F4 ─────────────────────────────────────────────────────────── -->
+    <div class="formula-card" id="f4">
+      <div class="formula-card-header">
+        <div class="num">4</div>
+        <h3>AI Confidence Score <span class="tag prop">Proposal Card · Confidence Bar</span></h3>
+        <span class="where">unified-chat-interface.tsx → computeConfidence()</span>
+      </div>
+      <div class="formula-card-body">
+
+        <div class="formula-box">
+          <div class="label">Formula (additive scoring, clamped to 22 – 96)</div>
+          <div class="formula-text" style="font-size:12px;line-height:2.2;">
+            score <span class="op">= </span>55 <span class="op">(base)</span><br>
+            <span class="op">+ guard_verdict bonus</span><br>
+            <span class="op">+ risk_level bonus</span><br>
+            <span class="op">+ (comparison count × 4)</span><br>
+            <span class="op">+ min(reasoning key count × 2, 8)</span><br>
+            <span class="result">result = max(22, min(96, score))</span>
+          </div>
+        </div>
+
+        <table class="score-table">
+          <thead>
+            <tr><th>Signal</th><th>Condition</th><th style="text-align:right">Δ Score</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Guard verdict</td><td class="condition">guard_verdict === "APPROVED"</td><td class="delta pos">+18</td></tr>
+            <tr><td></td><td class="condition">guard_verdict === "FLAGGED"</td><td class="delta neg">−18</td></tr>
+            <tr><td></td><td class="condition">guard_verdict === "REJECTED"</td><td class="delta neg">−35</td></tr>
+            <tr><td>Risk level</td><td class="condition">risk_level === "low"</td><td class="delta pos">+15</td></tr>
+            <tr><td></td><td class="condition">risk_level === "medium"</td><td class="delta pos">+5</td></tr>
+            <tr><td></td><td class="condition">risk_level === "high"</td><td class="delta neg">−8</td></tr>
+            <tr><td>Comparisons</td><td class="condition">each present comparison (vs_p50, vs_recommended, vs_top_comp)</td><td class="delta pos">+4 each</td></tr>
+            <tr><td>Reasoning depth</td><td class="condition">each key in reasoning object (max 4 keys = +8)</td><td class="delta pos">+2 each, max +8</td></tr>
+            <tr><td>Clamp</td><td class="condition">always enforced</td><td class="delta neu">22 – 96</td></tr>
+          </tbody>
+        </table>
+
+        <div class="example-block">
+          <div class="ex-label">Example — Proposal 1 (APPROVED, high risk, 3 comps, 6 reasoning keys)</div>
+          <div class="ex-row"><span class="key">Base</span><span class="val">55</span></div>
+          <div class="ex-row"><span class="key">guard_verdict = APPROVED</span><span class="val green">+18 → 73</span></div>
+          <div class="ex-row"><span class="key">risk_level = high</span><span class="val red">−8 → 65</span></div>
+          <div class="ex-row"><span class="key">3 comparisons × 4</span><span class="val green">+12 → 77</span></div>
+          <div class="ex-row"><span class="key">6 reasoning keys × 2 (capped at 8)</span><span class="val green">+8 → 85</span></div>
+          <div class="ex-row"><span class="key">Clamp max(22, min(96, 85))</span><span class="val ans">85% — "High"</span></div>
+        </div>
+
+        <!-- UI Mock -->
+        <div class="ui-mock">
+          <div class="ui-mock-header">As it appears in the chat</div>
+          <div class="ui-mock-body">
+            <div class="prop-card">
+              <div class="confidence-bar-wrap">
+                <div class="conf-header">
+                  <span class="conf-label">AI Confidence</span>
+                  <span class="conf-value">High · 85%</span>
+                </div>
+                <div class="conf-track">
+                  <div class="conf-fill" style="width:85%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="clamp-note">
+          <strong>Confidence Labels:</strong>
+          score ≥ 75 → <span style="color:var(--emerald)">High</span> (green) ·
+          score ≥ 50 → <span style="color:var(--amber)">Medium</span> (amber) ·
+          score &lt; 50 → <span style="color:var(--red)">Low</span> (red)
+        </div>
+
+      </div>
+    </div>
+  </div><!-- /section 1 -->
+
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+  <!-- SECTION 2 — Guest Inbox                                           -->
+  <!-- ══════════════════════════════════════════════════════════════════ -->
+
+  <div class="section">
+    <div class="section-label">
+      <div class="icon" style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.25);">📬</div>
+      <h2>Guest Inbox</h2>
+      <div class="section-divider"></div>
+    </div>
+
+    <!-- F5 ─────────────────────────────────────────────────────────── -->
+    <div class="formula-card" id="f5">
+      <div class="formula-card-header">
+        <div class="num">5</div>
+        <h3>Draft Reply Confidence Score <span class="tag inbox">Guest Inbox · Confidence Bar</span></h3>
+        <span class="where">guest-inbox-wired.tsx → detectDraftConfidence()</span>
+      </div>
+      <div class="formula-card-body">
+
+        <div class="formula-box">
+          <div class="label">Formula (additive scoring, clamped to 25 – 95)</div>
+          <div class="formula-text" style="font-size:12px;line-height:2.2;">
+            score <span class="op">= </span>50 <span class="op">(base)</span><br>
+            <span class="op">+ length &amp; quality signals</span><br>
+            <span class="op">+ personalisation signals</span><br>
+            <span class="op">− penalty signals</span><br>
+            <span class="result">result = max(25, min(95, score))</span>
+          </div>
+        </div>
+
+        <table class="score-table">
+          <thead>
+            <tr><th>Signal</th><th>Condition</th><th style="text-align:right">Δ Score</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Length (quality)</td><td class="condition">text.length &gt; 80 chars</td><td class="delta pos">+8</td></tr>
+            <tr><td></td><td class="condition">text.length &gt; 200 chars</td><td class="delta pos">+8 (stacks)</td></tr>
+            <tr><td></td><td class="condition">text.length &gt; 420 chars (too long)</td><td class="delta neg">−12</td></tr>
+            <tr><td>Unfilled placeholders</td><td class="condition">/\[.*?\]/ found (e.g. [NAME])</td><td class="delta neg">−25</td></tr>
+            <tr><td>Trailing ellipsis</td><td class="condition">text ends with "..."</td><td class="delta neg">−10</td></tr>
+            <tr><td>Guest name used</td><td class="condition">guestFirstName appears in draft</td><td class="delta pos">+10</td></tr>
+            <tr><td>Friendly phrases</td><td class="condition">thank you / looking forward / welcome / would be happy / please feel free</td><td class="delta pos">+10</td></tr>
+            <tr><td>Negative phrases</td><td class="condition">unfortunately / cannot / unable</td><td class="delta neg">−5</td></tr>
+            <tr><td>Clamp</td><td class="condition">always enforced</td><td class="delta neu">25 – 95</td></tr>
+          </tbody>
+        </table>
+
+        <div class="example-block">
+          <div class="ex-label">Example — typical good draft (250 chars, includes guest name + "looking forward")</div>
+          <div class="ex-row"><span class="key">Base</span><span class="val">50</span></div>
+          <div class="ex-row"><span class="key">length &gt; 80</span><span class="val green">+8 → 58</span></div>
+          <div class="ex-row"><span class="key">length &gt; 200</span><span class="val green">+8 → 66</span></div>
+          <div class="ex-row"><span class="key">guest name present</span><span class="val green">+10 → 76</span></div>
+          <div class="ex-row"><span class="key">friendly phrase found</span><span class="val green">+10 → 86</span></div>
+          <div class="ex-row"><span class="key">Clamp max(25, min(95, 86))</span><span class="val ans">86% — "High"</span></div>
+        </div>
+
+        <!-- UI Mock -->
+        <div class="ui-mock">
+          <div class="ui-mock-header">As it appears in Guest Inbox</div>
+          <div class="ui-mock-body">
+            <div class="draft-card">
+              <div class="tone-bar-wrap">
+                <div class="bar-row">
+                  <span class="bar-lbl">Confidence</span>
+                  <span class="bar-val" style="color:var(--blue)">High · 86%</span>
+                </div>
+                <div class="bar-track">
+                  <div class="bar-fill-blue" style="width:86%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="clamp-note">
+          <strong>Confidence Labels:</strong>
+          score ≥ 75 → <span style="color:var(--blue)">High</span> (blue) ·
+          score ≥ 50 → <span style="color:var(--indigo)">Medium</span> (sky) ·
+          score &lt; 50 → <span style="color:var(--muted)">Low</span> (slate)
+        </div>
+
+      </div>
+    </div>
+
+    <!-- F6 ─────────────────────────────────────────────────────────── -->
+    <div class="formula-card" id="f6">
+      <div class="formula-card-header">
+        <div class="num">6</div>
+        <h3>Draft Reply Sentiment Detection <span class="tag inbox">Guest Inbox · Sentiment Badge</span></h3>
+        <span class="where">guest-inbox-wired.tsx → detectDraftSentiment()</span>
+      </div>
+      <div class="formula-card-body">
+
+        <div class="formula-box">
+          <div class="label">Decision tree (evaluated top-to-bottom, first match wins)</div>
+          <div class="formula-text" style="font-size:12px;line-height:2.2;">
+            <span class="op">if </span> cautious keywords found <span class="op">→</span> <span style="color:var(--red)">"negative"</span><br>
+            <span class="op">else if </span> positive keywords found <span class="op">→</span> <span style="color:var(--emerald)">"positive"</span><br>
+            <span class="op">else →</span> <span style="color:var(--emerald)">"positive"</span> <span class="op">(default — leans optimistic for hospitality)</span>
+          </div>
+        </div>
+
+        <div style="font-size:12px;color:var(--muted);">Cautious/negative keywords (triggers "negative" label):</div>
+        <div class="kw-list">
+          <span class="kw neg">unfortunately</span><span class="kw neg">regret</span><span class="kw neg">unable to accommodate</span>
+          <span class="kw neg">not available</span><span class="kw neg">cannot</span><span class="kw neg">apologies</span>
+          <span class="kw neg">sorry for the inconvenience</span>
+        </div>
+
+        <div style="font-size:12px;color:var(--muted);margin-top:12px;">Positive keywords (triggers "positive" label if no negative match):</div>
+        <div class="kw-list">
+          <span class="kw pos">wonderful</span><span class="kw pos">delighted</span><span class="kw pos">excited</span>
+          <span class="kw pos">happy</span><span class="kw pos">perfect</span><span class="kw pos">amazing</span>
+          <span class="kw pos">great</span><span class="kw pos">looking forward</span>
+        </div>
+
+        <div class="example-block">
+          <div class="ex-label">Examples</div>
+          <div class="ex-row"><span class="key">"We'd be happy to help you…"</span><span class="val green">positive</span></div>
+          <div class="ex-row"><span class="key">"Unfortunately we cannot…"</span><span class="val red">negative</span></div>
+          <div class="ex-row"><span class="key">"Your booking is confirmed."</span><span class="val green">positive (default)</span></div>
+        </div>
+
+        <!-- UI Mock -->
+        <div class="ui-mock">
+          <div class="ui-mock-header">As it appears in Guest Inbox</div>
+          <div class="ui-mock-body">
+            <div class="draft-card">
+              <div class="draft-header">
+                <span class="title">✦ AI Draft Reply</span>
+                <span class="sentiment-badge">Positive tone</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- F7 ─────────────────────────────────────────────────────────── -->
+    <div class="formula-card" id="f7">
+      <div class="formula-card-header">
+        <div class="num">7</div>
+        <h3>Tone Bar Width <span class="tag inbox">Guest Inbox · Tone Bar</span></h3>
+        <span class="where">guest-inbox-wired.tsx</span>
+      </div>
+      <div class="formula-card-body">
+
+        <div class="formula-box">
+          <div class="label">Fixed mapping (not computed, not a percentage of text)</div>
+          <div class="formula-text" style="font-size:12px;line-height:2.2;">
+            <span class="op">sentiment = "positive"</span> <span class="op">→</span> <span class="result">88% (emerald)</span><br>
+            <span class="op">sentiment = "neutral"</span>  <span class="op">→</span> <span style="color:var(--amber)">52% (amber)</span><br>
+            <span class="op">sentiment = "negative"</span> <span class="op">→</span> <span style="color:var(--red)">28% (red)</span>
+          </div>
+        </div>
+
+        <div style="font-size:12px;color:var(--muted);line-height:1.8;">
+          The Tone bar width is a fixed visual signal — it does not measure a numeric probability. It is deliberately set wide for positive (optimistic hospitality tone) and narrow for cautious/negative drafts to create a strong visual cue.
+        </div>
+
+        <!-- UI Mock -->
+        <div class="ui-mock">
+          <div class="ui-mock-header">As it appears in Guest Inbox</div>
+          <div class="ui-mock-body">
+            <div class="draft-card">
+              <div class="tone-bar-wrap">
+                <div class="bar-row">
+                  <span class="bar-lbl">Tone</span>
+                  <span class="bar-val" style="color:var(--emerald)">Positive</span>
+                </div>
+                <div class="bar-track"><div class="bar-fill-green" style="width:88%"></div></div>
+              </div>
+              <div class="tone-bar-wrap" style="border-bottom:none;">
+                <div class="bar-row">
+                  <span class="bar-lbl">Confidence</span>
+                  <span class="bar-val" style="color:var(--blue)">High · 86%</span>
+                </div>
+                <div class="bar-track"><div class="bar-fill-blue" style="width:86%"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- F8 ─────────────────────────────────────────────────────────── -->
+    <div class="formula-card" id="f8">
+      <div class="formula-card-header">
+        <div class="num">8</div>
+        <h3>Guest Conversation Sentiment <span class="tag inbox">Inbox List · Guest Pill</span></h3>
+        <span class="where">guest-inbox-wired.tsx — conversation card</span>
+      </div>
+      <div class="formula-card-body">
+
+        <div class="formula-box">
+          <div class="label">Decision tree — applied to the guest's most recent message</div>
+          <div class="formula-text" style="font-size:12px;line-height:2.2;">
+            <span class="op">if </span> complaint keywords found <span class="op">→</span> <span style="color:var(--red)">"negative"</span><br>
+            <span class="op">else if </span> praise keywords found <span class="op">→</span> <span style="color:var(--emerald)">"positive"</span><br>
+            <span class="op">else →</span> <span style="color:var(--amber)">"neutral"</span>
+          </div>
+        </div>
+
+        <div style="font-size:12px;color:var(--muted);">Negative/complaint keywords:</div>
+        <div class="kw-list">
+          <span class="kw neg">complaint</span><span class="kw neg">broken</span><span class="kw neg">not working</span>
+          <span class="kw neg">issue</span><span class="kw neg">problem</span><span class="kw neg">terrible</span>
+          <span class="kw neg">bad</span><span class="kw neg">angry</span>
+        </div>
+
+        <div style="font-size:12px;color:var(--muted);margin-top:12px;">Positive/praise keywords:</div>
+        <div class="kw-list">
+          <span class="kw pos">thank</span><span class="kw pos">great</span><span class="kw pos">perfect</span>
+          <span class="kw pos">wonderful</span><span class="kw pos">amazing</span><span class="kw pos">love</span>
+          <span class="kw pos">excellent</span><span class="kw pos">happy</span>
+        </div>
+
+        <div class="example-block">
+          <div class="ex-label">Examples — guest messages</div>
+          <div class="ex-row"><span class="key">"The AC is broken and…"</span><span class="val red">negative → 🔴 Concerned</span></div>
+          <div class="ex-row"><span class="key">"Thank you, it's perfect!"</span><span class="val green">positive → 🟢 Happy</span></div>
+          <div class="ex-row"><span class="key">"What time is check-in?"</span><span class="val" style="color:var(--amber)">neutral → 🟡 Neutral</span></div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /section 2 -->
+
+  <!-- ── Footer ──────────────────────────────────────────────────────── -->
+  <div style="border-top:1px solid var(--border);padding-top:24px;margin-top:24px;color:var(--muted);font-size:12px;display:flex;justify-content:space-between;align-items:center;">
+    <span>PriceOS Formula Reference · Auto-generated from source code</span>
+    <span>8 formulas documented · Updated 2026-04-26</span>
+  </div>
+
+</div>
+</body>
+</html>
