@@ -1,6 +1,4 @@
 @import "tailwindcss";
-@import "@neondatabase/auth/ui/tailwind";
-
 @plugin "tailwindcss-animate";
 @import "tw-animate-css";
 
