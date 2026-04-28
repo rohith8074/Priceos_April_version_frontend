@@ -15,6 +15,7 @@ import {
   Users,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { addDays, format, parseISO } from "date-fns";
 import {
   ResponsiveContainer,
@@ -938,9 +939,53 @@ export default function AnalyticsPage() {
 
         {/* Content */}
         {loading ? (
-          <div className="flex items-center justify-center py-20 gap-3">
-            <Loader2 className="h-6 w-6 text-amber animate-spin" />
-            <span className="text-text-tertiary text-sm">Loading data…</span>
+          <div className="space-y-4">
+            {/* Property/Group Selector Skeleton */}
+            <div className="rounded-xl border border-border-subtle bg-surface-1 p-4 flex items-center gap-3">
+              <Skeleton className="h-4 w-16 shrink-0" />
+              <Skeleton className="flex-1 h-9 rounded-md" />
+            </div>
+
+            {/* Date Range Controls Skeleton */}
+            <div className="rounded-xl border border-border-subtle bg-surface-1 p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <Skeleton className="h-3 w-32" />
+                <div className="flex gap-1.5">
+                  <Skeleton className="h-6 w-10" />
+                  <Skeleton className="h-6 w-10" />
+                  <Skeleton className="h-6 w-10" />
+                  <Skeleton className="h-6 w-14" />
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <Skeleton className="flex-1 h-9 rounded-md" />
+                <Skeleton className="flex-1 h-9 rounded-md" />
+              </div>
+            </div>
+
+            {/* KPI Cards Skeleton */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-border-subtle bg-surface-1 p-4 flex flex-col gap-2">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-6 w-24 mt-1" />
+                </div>
+              ))}
+            </div>
+
+            {/* Charts Skeleton */}
+            <div className="grid grid-cols-1 gap-4">
+              <div className="rounded-xl border border-border-subtle bg-surface-1 p-5 flex flex-col gap-3 h-[300px]">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-64" />
+                <Skeleton className="w-full flex-1 mt-4" />
+              </div>
+              <div className="rounded-xl border border-border-subtle bg-surface-1 p-5 flex flex-col gap-3 h-[300px]">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-64" />
+                <Skeleton className="w-full flex-1 mt-4" />
+              </div>
+            </div>
           </div>
         ) : tab === "properties" ? (
           <PropertiesAnalytics properties={properties} tickets={tickets} />

@@ -73,12 +73,24 @@ export default async function OverviewPage() {
     const listingId = listing.id ?? listing._id;
 
     const listingInv = inventory.filter((r) => (r.listingId ?? r.listing_id) === listingId);
-    const bookedDays = listingInv.filter((r) => r.status === "booked").length;
+    const bookedInv = listingInv.filter((r) => r.status === "booked" || r.status === "reserved");
+    const bookedDays = bookedInv.length;
     const totalDays = listingInv.length;
     const occupancy = totalDays > 0 ? Math.round((bookedDays / totalDays) * 100) : 0;
-    const prices = listingInv.map((r) => Number(r.proposedPrice ?? r.currentPrice ?? 0)).filter(p => p > 0);
-    const avgPrice = prices.length > 0 ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length) : Number(listing.price ?? 0);
-    const revenue = listingInv.filter((r) => r.status === "booked").reduce((sum, r) => sum + Number(r.proposedPrice ?? r.currentPrice ?? 0), 0);
+
+    // ADR from actual Hostaway-synced reservations (totalPrice / nights per booking)
+    const listingReservations = reservations.filter(
+      (r) => (r.listingId ?? r.listing_id) === listingId && r.status !== "cancelled"
+    );
+    const adrEntries = listingReservations
+      .filter((r) => Number(r.totalPrice) > 0 && Number(r.nights) > 0)
+      .map((r) => Number(r.totalPrice) / Number(r.nights));
+    const avgPrice = adrEntries.length > 0
+      ? Math.round(adrEntries.reduce((a, b) => a + b, 0) / adrEntries.length)
+      : Number(listing.price ?? 0);
+
+    // Revenue = sum of all confirmed reservation payouts (historical + upcoming)
+    const revenue = listingReservations.reduce((sum, r) => sum + Number(r.totalPrice ?? 0), 0);
 
     totalPortfolioRevenue += revenue;
     if (occupancy > 0) {
@@ -129,6 +141,7 @@ export default async function OverviewPage() {
 
   return (
     <OverviewClient
+      orgId={orgId}
       properties={propertiesWithMetrics}
       totalProperties={allListings.length}
       avgPortfolioOccupancy={avgPortfolioOccupancy}

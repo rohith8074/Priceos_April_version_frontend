@@ -435,6 +435,7 @@ export function MarketIntelligenceClient({ orgId, events, occupancyPct, avgNight
           </div>
           <div className="p-5">
             <BenchmarkPanel
+              orgId={orgId}
               listingId={selectedListingId}
               listingName={listings.find((l) => l.id === selectedListingId)?.name ?? ""}
               currency={listings.find((l) => l.id === selectedListingId)?.currencyCode ?? "AED"}

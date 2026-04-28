@@ -218,6 +218,7 @@ export function GuestInboxWired({ orgId, properties }: { orgId: string; properti
   const [isSending, setIsSending] = useState(false);
   const [testMode, setTestMode] = useState(false);
   const [autoReply, setAutoReply] = useState(false);
+  const [isSavingComms, setIsSavingComms] = useState(false);
   const [summary, setSummary] = useState<{
     sentiment: string;
     sentimentScore: number;
@@ -249,6 +250,33 @@ export function GuestInboxWired({ orgId, properties }: { orgId: string; properti
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const api = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
+
+  // Load persisted comms settings on mount
+  useEffect(() => {
+    fetch(`${api}/comms-settings?orgId=${orgId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return;
+        setTestMode(d.liveMode);
+        setAutoReply(d.autoReply);
+      })
+      .catch(() => {});
+  }, [orgId, api]);
+
+  const persistCommsMode = async (liveMode: boolean, autoReplyVal: boolean) => {
+    setIsSavingComms(true);
+    try {
+      await fetch(`${api}/comms-settings`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orgId, liveMode, autoReply: autoReplyVal }),
+      });
+    } catch {
+      toast.error("Could not save comms setting");
+    } finally {
+      setIsSavingComms(false);
+    }
+  };
 
   const startResizing = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -608,8 +636,8 @@ export function GuestInboxWired({ orgId, properties }: { orgId: string; properti
           {/* Mode toggles */}
           <div className="flex items-center gap-2 mb-2">
             <button
-              onClick={() => setTestMode((v) => !v)}
-              title={testMode ? "Switch to Normal Mode (sends real replies)" : "Switch to Test Mode (no replies sent)"}
+              onClick={() => { const next = !testMode; setTestMode(next); persistCommsMode(next, autoReply); }}
+              title={testMode ? "Switch to Live Mode (agent active)" : "Switch to Test/Paused Mode (human-only)"}
               className={cn(
                 "flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold border transition-colors",
                 testMode
@@ -621,8 +649,8 @@ export function GuestInboxWired({ orgId, properties }: { orgId: string; properti
               {testMode ? "Test" : "Live"}
             </button>
             <button
-              onClick={() => setAutoReply((v) => !v)}
-              title={autoReply ? "Auto-reply ON — AI draft is auto-staged" : "Auto-reply OFF — manual approval required"}
+              onClick={() => { const next = !autoReply; setAutoReply(next); persistCommsMode(testMode, next); }}
+              title={autoReply ? "Auto-reply ON — AI sends directly" : "Auto-reply OFF — queued for PM approval"}
               className={cn(
                 "flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold border transition-colors",
                 autoReply
