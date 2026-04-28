@@ -11,7 +11,12 @@ import { toast } from "sonner";
 import { pollJob } from "@/lib/api/poll-job";
 import { cn } from "@/lib/utils";
 import { useLyzrAgentEvents } from "@/hooks/use-lyzr-agent-events";
-import { LiveInferenceFlowGraph, type FlowStage } from "./live-inference-flow-graph";
+// import { LiveInferenceFlowGraph, type FlowStage } from "./live-inference-flow-graph";
+export interface FlowStage {
+  id: string;
+  label: string;
+  status: "pending" | "active" | "done" | "failed";
+}
 import { SUPPORT_AGENT_STREAM_EVENT, type SupportAgentStreamEventPayload } from "@/lib/chat/inference-events";
 
 const DASHBOARD_STAGES: FlowStage[] = [
@@ -229,13 +234,7 @@ export function DashboardChatPopup({ isOpen, onOpenChange }: DashboardChatPopupP
             </button>
           </div>
           <div className="relative" style={{ height: 180 }}>
-            <LiveInferenceFlowGraph
-              stages={stages}
-              streamEvents={graphEvents}
-              flowStatus={isLoading ? "active" : "done"}
-              onExpandChange={() => {}}
-              isExpandedInitial={false}
-            />
+            {/* Live graph removed */}
           </div>
         </div>
       )}

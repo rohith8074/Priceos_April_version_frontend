@@ -97,7 +97,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { LiveInferenceFlowGraph, type FlowStage } from "./live-inference-flow-graph";
+// import { LiveInferenceFlowGraph, type FlowStage } from "./live-inference-flow-graph";
+export interface FlowStage {
+  id: string;
+  label: string;
+  status: "pending" | "active" | "done" | "failed";
+}
 import type { LyzrAgentEvent } from "@/hooks/use-lyzr-agent-events";
 
 
@@ -1046,11 +1051,7 @@ export function UnifiedChatInterface({ properties: _properties, orgId }: Props) 
                         </DialogTitle>
                       </DialogHeader>
                       <div className="flex-1 relative bg-grid-black/[0.01]">
-                        <LiveInferenceFlowGraph
-                          stages={stages}
-                          streamEvents={graphEvents}
-                          flowStatus={graphFlowStatus}
-                        />
+                        {/* Live graph removed */}
                       </div>
                     </DialogContent>
                   </Dialog>
@@ -1060,11 +1061,7 @@ export function UnifiedChatInterface({ properties: _properties, orgId }: Props) 
                 </div>
               </div>
               <div className="flex-1 relative w-full h-full bg-grid-black/[0.02]">
-                <LiveInferenceFlowGraph
-                  stages={stages}
-                  streamEvents={graphEvents}
-                  flowStatus={graphFlowStatus}
-                />
+                {/* Live graph removed */}
               </div>
               {lastThinkingMessage && (
                 <div className="absolute bottom-0 left-0 right-0 bg-background/80 backdrop-blur-sm border-t border-border/50 p-2 px-3 text-[10px] text-muted-foreground truncate">

@@ -44,7 +44,12 @@ import {
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { backendFetch } from "@/lib/api/backend-client";
-import { LiveInferenceFlowGraph, FlowStage } from "@/components/chat/live-inference-flow-graph";
+// import { LiveInferenceFlowGraph, FlowStage } from "@/components/chat/live-inference-flow-graph";
+export interface FlowStage {
+  id: string;
+  label: string;
+  status: "pending" | "active" | "done" | "failed";
+}
 import { readSSEStream } from "@/lib/chat/sse-reader";
 import { SUPPORT_AGENT_STREAM_EVENT, SupportAgentStreamEventPayload } from "@/lib/chat/inference-events";
 import { useLyzrAgentEvents } from "@/hooks/use-lyzr-agent-events";
@@ -1024,13 +1029,7 @@ export function PricingClient({
 
           {/* Graph Body */}
           <div className="flex-1 relative bg-black/20">
-            <LiveInferenceFlowGraph
-              stages={graphStages}
-              streamEvents={graphEvents}
-              flowStatus={isGraphProcessing ? "active" : "done"}
-              onExpandChange={setIsGraphExpanded}
-              isExpandedInitial={isGraphExpanded}
-            />
+            {/* Live graph removed */}
           </div>
         </div>
       )}

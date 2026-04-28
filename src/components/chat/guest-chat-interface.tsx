@@ -11,7 +11,12 @@ import {
 } from "lucide-react";
 import { useContextStore } from "@/stores/context-store";
 import { toast } from "sonner";
-import { LiveInferenceFlowGraph, type FlowStage } from "./live-inference-flow-graph";
+// import { LiveInferenceFlowGraph, type FlowStage } from "./live-inference-flow-graph";
+export interface FlowStage {
+    id: string;
+    label: string;
+    status: "pending" | "active" | "done" | "failed";
+}
 import type { LyzrAgentEvent } from "@/hooks/use-lyzr-agent-events";
 import { pollJob } from "@/lib/api/poll-job";
 import { cn } from "@/lib/utils";
@@ -928,25 +933,7 @@ export function GuestChatInterface({
                 )}
 
                 <div className={`flex-1 min-w-0 flex flex-col bg-background relative ${!activeConversationId ? 'hidden md:flex' : 'flex'}`}>
-                    {/* {showLiveGraph && (
-                        <div className={cn(
-                            "fixed bottom-24 right-8 z-[100] bg-background/95 backdrop-blur-xl border border-border shadow-2xl transition-all duration-500 ease-in-out overflow-hidden flex flex-col rounded-3xl",
-                            isGraphExpanded 
-                                ? "w-[95%] h-[85vh] md:w-[850px] md:h-[700px] bottom-8 right-8" 
-                                : "w-[90vw] md:w-[520px] h-[480px]"
-                        )}>
-                            <div className="flex-1 relative overflow-hidden bg-white">
-                                <LiveInferenceFlowGraph
-                                    stages={graphStages}
-                                    streamEvents={graphEvents}
-                                    flowStatus={graphFlowStatus}
-                                    onExpandChange={setIsGraphExpanded}
-                                    isExpandedInitial={isGraphExpanded}
-                                    className="h-full w-full"
-                                />
-                            </div>
-                        </div>
-                    )} */}
+
                     {activeConversation ? (
                         <>
                             <div className="flex items-center p-4 border-b border-border/50 bg-background shadow-sm z-10">
