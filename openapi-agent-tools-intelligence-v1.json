@@ -1,0 +1,532 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "PriceOS Intelligence & Instrumentation Tools API",
+    "version": "1.0.0",
+    "description": "Audit-derived tool contract for PriceOS. These are the endpoints the FastAPI backend implements and that Lyzr agents call as tools. They hold the state/learning/determinism the audit said must live OFF the LLM: decision logging + replay (instrumentation), elasticity + regime + comps + source-market (learning), pricing/compose + backtest + exploration (determinism). All endpoints are org-scoped by backend session (Bearer JWT + x-tool-org-id). Implement these and wire each to the agent listed in docs/agent-intelligence-tools-v1.md."
+  },
+  "servers": [
+    { "url": "https://YOUR_DOMAIN/api/agent-tools/v1" }
+  ],
+  "security": [
+    { "BearerAuth": [], "ToolOrgId": [] }
+  ],
+  "paths": {
+    "/audit/log-decision": {
+      "post": {
+        "operationId": "log_decision",
+        "summary": "Instrumentation #1 — append one agent decision to the immutable audit log. Every agent invocation calls this FIRST; the returned decision_id flows down the chain.",
+        "security": [ { "BearerAuth": [], "ToolOrgId": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LogDecisionInput" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Decision logged",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "properties": { "decision_id": { "$ref": "#/components/schemas/Uuid" } },
+              "required": ["decision_id"]
+            } } }
+          }
+        }
+      }
+    },
+    "/audit/decisions": {
+      "get": {
+        "operationId": "list_decisions",
+        "summary": "Read the decision log (powers the Agent Decisions observability UI).",
+        "security": [ { "BearerAuth": [], "ToolOrgId": [] } ],
+        "parameters": [
+          { "name": "listingId", "in": "query", "required": false, "schema": { "$ref": "#/components/schemas/ObjectIdString" } },
+          { "name": "agentName", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "verdict", "in": "query", "required": false, "schema": { "type": "string", "enum": ["approved", "flag_low", "flag_high", "hold_for_review"] } },
+          { "name": "dateFrom", "in": "query", "required": false, "schema": { "$ref": "#/components/schemas/DateString" } },
+          { "name": "dateTo", "in": "query", "required": false, "schema": { "$ref": "#/components/schemas/DateString" } },
+          { "name": "limit", "in": "query", "required": false, "schema": { "type": "integer", "minimum": 1, "maximum": 500, "default": 50 } },
+          { "name": "cursor", "in": "query", "required": false, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "properties": {
+                "decisions": { "type": "array", "items": { "$ref": "#/components/schemas/AgentDecision" } },
+                "next_cursor": { "type": "string", "nullable": true }
+              },
+              "required": ["decisions"]
+            } } }
+          }
+        }
+      }
+    },
+    "/audit/decision": {
+      "get": {
+        "operationId": "get_decision",
+        "summary": "Read a single decision plus its replay history.",
+        "security": [ { "BearerAuth": [], "ToolOrgId": [] } ],
+        "parameters": [
+          { "name": "decisionId", "in": "query", "required": true, "schema": { "$ref": "#/components/schemas/Uuid" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "properties": {
+                "decision": { "$ref": "#/components/schemas/AgentDecision" },
+                "replays": { "type": "array", "items": { "$ref": "#/components/schemas/ReplayResult" } }
+              },
+              "required": ["decision"]
+            } } }
+          }
+        }
+      }
+    },
+    "/audit/replay": {
+      "post": {
+        "operationId": "replay_decision",
+        "summary": "Instrumentation #2 — reconstruct the world-state at the original decision's timestamp and re-invoke the same agent (optionally with overrides). This is how you debug agent reasoning post-hoc and answer counterfactuals.",
+        "security": [ { "BearerAuth": [], "ToolOrgId": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "decision_id": { "$ref": "#/components/schemas/Uuid" },
+              "overrides": { "type": "object", "description": "Optional inputs to change (e.g. regime=disrupted, prompt_version=v2). Anything omitted is reconstructed from the original state.", "additionalProperties": true }
+            },
+            "required": ["decision_id"]
+          } } }
+        },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReplayResult" } } } }
+        }
+      }
+    },
+    "/elasticity/predict": {
+      "post": {
+        "operationId": "elasticity_predict",
+        "summary": "Learning — P(book | price, lead_time, dow, season, comp_state, regime) per property cluster. PriceGuard optimizes over this instead of doing multiplier arithmetic: for each candidate price, return the one that maximizes expected RevPAR subject to guardrails.",
+        "security": [ { "BearerAuth": [], "ToolOrgId": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "listingId": { "$ref": "#/components/schemas/ObjectIdString" },
+              "candidates": { "type": "array", "items": { "$ref": "#/components/schemas/ElasticityCandidate" } }
+            },
+            "required": ["listingId", "candidates"]
+          } } }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": { "application/json": { "schema": {
+              "type": "object",
+              "properties": {
+                "model_version": { "type": "string" },
+                "predictions": { "type": "array", "items": {
+                  "type": "object",
+                  "properties": {
+                    "price": { "type": "number" },
+                    "p_book": { "type": "number", "description": "Probability of booking, 0-1." },
+                    "expected_revpar": { "type": "number" }
+                  },
+                  "required": ["price", "p_book", "expected_revpar"]
+                } },
+                "recommended_price": { "type": "number", "description": "argmax expected_revpar among candidates." }
+              },
+              "required": ["predictions"]
+            } } }
+          }
+        }
+      }
+    },
+    "/elasticity/update": {
+      "post": {
+        "operationId": "elasticity_update",
+        "summary": "Learning — Bayesian update of the elasticity model from realized booking outcomes. Run nightly.",
+        "security": [ { "BearerAuth": [], "ToolOrgId": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "listingId": { "$ref": "#/components/schemas/ObjectIdString" },
+              "observations": { "type": "array", "items": {
+                "type": "object",
+                "properties": {
+                  "date": { "$ref": "#/components/schemas/DateString" },
+                  "price": { "type": "number" },
+                  "lead_time_days": { "type": "integer" },
+                  "dow": { "type": "integer", "minimum": 0, "maximum": 6 },
+                  "booked": { "type": "boolean" }
+                },
+                "required": ["date", "price", "booked"]
+              } }
+            },
+            "required": ["listingId", "observations"]
+          } } }
+        },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": { "updated": { "type": "boolean" }, "model_version": { "type": "string" } },
+            "required": ["updated"]
+          } } } }
+        }
+      }
+    },
+    "/regime/classify": {
+      "post": {
+        "operationId": "regime_classify",
+        "summary": "Learning — continuous market-regime classifier replacing the 4-tier geopolitical protocol. Returns calm|watch|disrupted|recovering + score 0-1 + per-source-market demand modifiers. Feeds PriceGuard's reasoning and the elasticity model.",
+        "security": [ { "BearerAuth": [], "ToolOrgId": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "market_template": { "type": "string", "example": "dubai" },
+              "as_of": { "$ref": "#/components/schemas/DateString" },
+              "features": { "type": "object", "description": "Optional override features: news_volume, news_sentiment_by_source, dxb_flight_capacity_delta, det_hotel_occupancy, booking_pace_delta.", "additionalProperties": true }
+            },
+            "required": ["market_template"]
+          } } }
+        },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RegimeState" } } } }
+        }
+      }
+    },
+    "/comps/get-set": {
+      "post": {
+        "operationId": "comps_get_set",
+        "summary": "Learning — the curated competitor set for a property (stable identity list).",
+        "security": [ { "BearerAuth": [], "ToolOrgId": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": { "listingId": { "$ref": "#/components/schemas/ObjectIdString" } },
+            "required": ["listingId"]
+          } } }
+        },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": { "comps": { "type": "array", "items": { "$ref": "#/components/schemas/Comp" } } },
+            "required": ["comps"]
+          } } } }
+        }
+      }
+    },
+    "/comps/get-state": {
+      "post": {
+        "operationId": "comps_get_state",
+        "summary": "Learning — the comp set's current price/availability over a window.",
+        "security": [ { "BearerAuth": [], "ToolOrgId": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "listingId": { "$ref": "#/components/schemas/ObjectIdString" },
+              "dateFrom": { "$ref": "#/components/schemas/DateString" },
+              "dateTo": { "$ref": "#/components/schemas/DateString" }
+            },
+            "required": ["listingId", "dateFrom", "dateTo"]
+          } } }
+        },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": { "comps": { "type": "array", "items": {
+              "type": "object",
+              "properties": {
+                "comp_id": { "type": "string" },
+                "prices_by_date": { "type": "object", "additionalProperties": { "type": "number" } },
+                "availability_by_date": { "type": "object", "additionalProperties": { "type": "boolean" } }
+              },
+              "required": ["comp_id"]
+            } } },
+            "required": ["comps"]
+          } } } }
+        }
+      }
+    },
+    "/source-market/get-mix": {
+      "post": {
+        "operationId": "source_market_get_mix",
+        "summary": "Learning — guest-origin mix per property over a trailing window (from Hostaway guest.country). Combined with regime modifiers gives a property-specific demand modifier.",
+        "security": [ { "BearerAuth": [], "ToolOrgId": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "listingId": { "$ref": "#/components/schemas/ObjectIdString" },
+              "window_days": { "type": "integer", "default": 90 }
+            },
+            "required": ["listingId"]
+          } } }
+        },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "mix": { "type": "array", "items": {
+                "type": "object",
+                "properties": { "country": { "type": "string" }, "pct": { "type": "number" } },
+                "required": ["country", "pct"]
+              } },
+              "sample_size": { "type": "integer" }
+            },
+            "required": ["mix"]
+          } } } }
+        }
+      }
+    },
+    "/pricing/compose": {
+      "post": {
+        "operationId": "pricing_compose",
+        "summary": "Determinism — deterministic arbitration of sub-agent outputs into a final per-date price. Replaces ad-hoc LLM composition with versioned, testable code. Logs a decision and returns its id.",
+        "security": [ { "BearerAuth": [], "ToolOrgId": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "listingId": { "$ref": "#/components/schemas/ObjectIdString" },
+              "analysis_window": { "$ref": "#/components/schemas/DateRange" },
+              "sub_agent_outputs": {
+                "type": "object",
+                "description": "Outputs keyed by agent: property_analyst, booking_intelligence, market_research, price_guard, elasticity, regime.",
+                "additionalProperties": true
+              }
+            },
+            "required": ["listingId", "analysis_window", "sub_agent_outputs"]
+          } } }
+        },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "decision_id": { "$ref": "#/components/schemas/Uuid" },
+              "results": { "type": "array", "items": {
+                "type": "object",
+                "properties": {
+                  "date": { "$ref": "#/components/schemas/DateString" },
+                  "proposed_price": { "type": "number" },
+                  "executable_price": { "type": "number" },
+                  "verdict": { "type": "string", "enum": ["approved", "flag_low", "flag_high", "hold_for_review"] },
+                  "confidence": { "type": "number" },
+                  "components": { "type": "object", "additionalProperties": true }
+                },
+                "required": ["date", "proposed_price", "verdict", "confidence"]
+              } }
+            },
+            "required": ["results"]
+          } } } }
+        }
+      }
+    },
+    "/events/get-validated": {
+      "post": {
+        "operationId": "events_get_validated",
+        "summary": "Learning — events with human-approval state, so only validated events drive premiums.",
+        "security": [ { "BearerAuth": [], "ToolOrgId": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "market_template": { "type": "string" },
+              "dateFrom": { "$ref": "#/components/schemas/DateString" },
+              "dateTo": { "$ref": "#/components/schemas/DateString" }
+            },
+            "required": ["dateFrom", "dateTo"]
+          } } }
+        },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": { "events": { "type": "array", "items": {
+              "type": "object",
+              "properties": {
+                "event_id": { "type": "string" },
+                "title": { "type": "string" },
+                "start_date": { "$ref": "#/components/schemas/DateString" },
+                "end_date": { "$ref": "#/components/schemas/DateString" },
+                "impact": { "type": "string", "enum": ["low", "medium", "high", "mega"] },
+                "approval_state": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+                "suggested_premium_pct": { "type": "number" }
+              },
+              "required": ["title", "start_date", "end_date", "approval_state"]
+            } } },
+            "required": ["events"]
+          } } } }
+        }
+      }
+    },
+    "/exploration/select": {
+      "post": {
+        "operationId": "exploration_select",
+        "summary": "Determinism — bandit arm selection for still-unbooked nights (explore vs exploit on price).",
+        "security": [ { "BearerAuth": [], "ToolOrgId": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "listingId": { "$ref": "#/components/schemas/ObjectIdString" },
+              "date": { "$ref": "#/components/schemas/DateString" },
+              "arms": { "type": "array", "items": { "type": "object", "properties": { "price": { "type": "number" } }, "required": ["price"] } },
+              "context": { "type": "object", "additionalProperties": true }
+            },
+            "required": ["listingId", "date", "arms"]
+          } } }
+        },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "selected_price": { "type": "number" },
+              "strategy": { "type": "string", "example": "thompson" }
+            },
+            "required": ["selected_price"]
+          } } } }
+        }
+      }
+    },
+    "/backtest/run": {
+      "post": {
+        "operationId": "backtest_run",
+        "summary": "Determinism — replay an agent config against history (calls /audit/replay in a loop over historical decision points). Produces a per-property counterfactual RevPAR scorecard. Run nightly as a regression on every prompt change.",
+        "security": [ { "BearerAuth": [], "ToolOrgId": [] } ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "listingId": { "$ref": "#/components/schemas/ObjectIdString" },
+              "agent_config_ref": { "type": "string", "description": "Prompt/version hash or label to test." },
+              "dateFrom": { "$ref": "#/components/schemas/DateString" },
+              "dateTo": { "$ref": "#/components/schemas/DateString" },
+              "lead_times": { "type": "array", "items": { "type": "integer" }, "default": [30, 14, 7, 3] }
+            },
+            "required": ["agent_config_ref", "dateFrom", "dateTo"]
+          } } }
+        },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "scorecard": { "type": "object", "additionalProperties": true },
+              "per_property": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+              "counterfactual_revpar_delta": { "type": "number" }
+            },
+            "required": ["scorecard"]
+          } } } }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" },
+      "ToolOrgId": { "type": "apiKey", "in": "header", "name": "x-tool-org-id" }
+    },
+    "schemas": {
+      "DateString": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "example": "2026-04-15" },
+      "ObjectIdString": { "type": "string", "pattern": "^[a-fA-F0-9]{24}$", "example": "67fcbf9f0fa9d36b6f447a90" },
+      "Uuid": { "type": "string", "format": "uuid", "example": "8b2f1c9a-1d2e-4a3b-9c4d-5e6f7a8b9c0d" },
+      "DateRange": {
+        "type": "object",
+        "properties": { "from": { "$ref": "#/components/schemas/DateString" }, "to": { "$ref": "#/components/schemas/DateString" } },
+        "required": ["from", "to"]
+      },
+      "LogDecisionInput": {
+        "type": "object",
+        "description": "One agent decision. The backend assigns decision_id if omitted and stamps ts server-side.",
+        "properties": {
+          "decision_id": { "$ref": "#/components/schemas/Uuid" },
+          "parent_decision_id": { "$ref": "#/components/schemas/Uuid" },
+          "listingId": { "$ref": "#/components/schemas/ObjectIdString" },
+          "agent_name": { "type": "string", "example": "price_guard" },
+          "agent_version": { "type": "string", "example": "2026-06-03" },
+          "model": { "type": "string", "example": "gpt-4o-mini" },
+          "temperature": { "type": "number" },
+          "prompt_hash": { "type": "string" },
+          "inputs": { "type": "object", "additionalProperties": true },
+          "outputs": { "type": "object", "additionalProperties": true },
+          "tool_calls": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "verdict": { "type": "string", "enum": ["approved", "flag_low", "flag_high", "hold_for_review"] },
+          "confidence": { "type": "number" }
+        },
+        "required": ["agent_name", "inputs", "outputs"]
+      },
+      "AgentDecision": {
+        "allOf": [
+          { "$ref": "#/components/schemas/LogDecisionInput" },
+          {
+            "type": "object",
+            "properties": {
+              "ts": { "type": "string", "format": "date-time" },
+              "downstream_outcome": { "type": "object", "nullable": true, "additionalProperties": true, "description": "Filled in later when the booking outcome lands." }
+            }
+          }
+        ]
+      },
+      "ReplayResult": {
+        "type": "object",
+        "properties": {
+          "original_decision_id": { "$ref": "#/components/schemas/Uuid" },
+          "replay_id": { "$ref": "#/components/schemas/Uuid" },
+          "reconstructed_state": { "type": "object", "additionalProperties": true },
+          "original": { "type": "object", "additionalProperties": true },
+          "replayed": { "type": "object", "additionalProperties": true },
+          "diff": { "type": "object", "additionalProperties": true }
+        },
+        "required": ["original_decision_id", "replayed"]
+      },
+      "ElasticityCandidate": {
+        "type": "object",
+        "properties": {
+          "price": { "type": "number" },
+          "lead_time_days": { "type": "integer" },
+          "dow": { "type": "integer", "minimum": 0, "maximum": 6 },
+          "season": { "type": "string" },
+          "comp_state": { "type": "object", "additionalProperties": true },
+          "regime": { "type": "string", "enum": ["calm", "watch", "disrupted", "recovering"] }
+        },
+        "required": ["price"]
+      },
+      "RegimeState": {
+        "type": "object",
+        "properties": {
+          "label": { "type": "string", "enum": ["calm", "watch", "disrupted", "recovering"] },
+          "score": { "type": "number", "description": "0 (calm) to 1 (severe)." },
+          "source_market_modifiers": { "type": "object", "additionalProperties": { "type": "number" }, "description": "e.g. { russian: 0.7, gcc: 1.05, european: 0.9 }" }
+        },
+        "required": ["label", "score"]
+      },
+      "Comp": {
+        "type": "object",
+        "properties": {
+          "comp_id": { "type": "string" },
+          "name": { "type": "string" },
+          "source": { "type": "string", "example": "airbnb" },
+          "source_url": { "type": "string" },
+          "rating": { "type": "number" },
+          "reviews": { "type": "integer" }
+        },
+        "required": ["comp_id", "name", "source"]
+      }
+    }
+  }
+}
