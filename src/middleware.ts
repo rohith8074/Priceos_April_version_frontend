@@ -18,6 +18,8 @@ const PUBLIC_PATHS = [
   "/api/v1/auth",
   "/api/debug",             // dev-only reset tools
   "/api/agent-tools/v1",   // Bearer-token auth handled inside each route
+  "/api/webhook",           // Hostaway & channel webhooks carry their own HMAC auth
+  "/api/cron",              // Vercel cron routes use CRON_SECRET header, not session cookie
 ];
 
 // Extra paths allowed DURING onboarding (user is authenticated but not complete)

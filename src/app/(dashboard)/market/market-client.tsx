@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Calendar,
@@ -30,6 +30,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { BenchmarkPanel } from "@/components/market/benchmark-panel";
+import { RegimeCard } from "@/components/market/regime-card";
 
 interface MarketEvent {
   id: string;
@@ -81,6 +82,63 @@ function daysUntil(dateStr: string) {
   if (days === 0) return "Today";
   if (days === 1) return "Tomorrow";
   return `In ${days}d`;
+}
+
+function SourceMarketCard({ listingId, className }: { listingId?: string; className?: string }) {
+  const [mix, setMix] = useState<Record<string, number> | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    const params = new URLSearchParams({ days: "90" });
+    if (listingId) params.set("listingId", listingId);
+    fetch(`/api/agent-tools/source-market?${params}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setMix(d.mix ?? null))
+      .catch(() => setMix(null))
+      .finally(() => setLoading(false));
+  }, [listingId]);
+
+  const sorted = mix
+    ? Object.entries(mix)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 6)
+    : [];
+
+  return (
+    <div
+      className={cn(
+        "rounded-xl border border-border bg-card text-card-foreground p-4 space-y-3 dark:border-white/10 dark:bg-white/[0.02]",
+        className
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <Globe className="h-4 w-4 text-muted-foreground" />
+        <span className="text-xs font-semibold text-foreground/80 uppercase tracking-wide">
+          Guest Origin Mix · 90 days
+        </span>
+      </div>
+      {loading && <div className="h-10 animate-pulse rounded-lg bg-muted/40" />}
+      {!loading && sorted.length === 0 && (
+        <p className="text-[11px] text-muted-foreground italic">No source-market data yet</p>
+      )}
+      {!loading && sorted.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          {sorted.map(([country, pct]) => (
+            <div key={country} className="space-y-1">
+              <div className="flex justify-between text-[11px]">
+                <span className="font-medium">{country}</span>
+                <span className="tabular-nums text-muted-foreground">{pct}%</span>
+              </div>
+              <div className="h-1 rounded-full bg-muted/50 overflow-hidden">
+                <div className="h-full rounded-full bg-sky-500" style={{ width: `${pct}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function MarketIntelligenceClient({ orgId, events, occupancyPct, avgNightly, listings }: Props) {
@@ -223,6 +281,12 @@ export function MarketIntelligenceClient({ orgId, events, occupancyPct, avgNight
           ))}
         </div>
       </TooltipProvider>
+
+      {/* Regime + Source Market row */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <RegimeCard listingId={selectedListingId || undefined} className="sm:col-span-1" />
+        <SourceMarketCard listingId={selectedListingId || undefined} className="sm:col-span-2" />
+      </div>
 
       {/* Event Calendar — table + high-contrast filters (light + dark) */}
       <div className="rounded-xl border border-border bg-card text-card-foreground overflow-hidden shadow-sm dark:border-white/10 dark:bg-white/[0.02]">

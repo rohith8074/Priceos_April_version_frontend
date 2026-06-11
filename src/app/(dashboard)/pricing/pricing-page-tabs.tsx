@@ -6,6 +6,7 @@ import { FileText, Sliders, CalendarDays } from "lucide-react";
 import { PricingClient, ProposalData } from "./pricing-client";
 import { PricingRulesStudio } from "@/components/pricing/pricing-rules-studio";
 import { PricingCalendarHeatmap } from "@/components/pricing/pricing-calendar-heatmap";
+import { RegimeCard } from "@/components/market/regime-card";
 
 const TABS = [
   { id: "calendar", label: "Calendar", icon: CalendarDays },
@@ -61,7 +62,8 @@ export function PricingPageTabs({ initialProposals, listings, orgId }: Props) {
           </div>
         )}
         {activeTab === "proposals" && (
-          <div className="p-8 pt-6">
+          <div className="p-8 pt-6 space-y-4">
+            <RegimeCard className="max-w-sm" />
             <PricingClient initialProposals={initialProposals} allListings={listings} orgId={orgId} />
           </div>
         )}
