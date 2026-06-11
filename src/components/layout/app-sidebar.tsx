@@ -20,6 +20,7 @@ import {
   Clock3,
   X,
   BarChart2,
+  History,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -35,6 +36,7 @@ const BUSINESS_GROUP = [
   { name: "Pricing", href: "/pricing", icon: TrendingUp },
   { name: "Market", href: "/market", icon: Globe },
   { name: "Agent Chat", href: "/agent-chat", icon: MessagesSquare },
+  { name: "Agent Decisions", href: "/agent-decisions", icon: History },
   { name: "Guest Inbox", href: "/guest-chat", icon: MessageSquare, showGuestBadge: true },
   { name: "Operations", href: "/operations", icon: Clock3 },
   { name: "Properties", href: "/properties", icon: Home },
