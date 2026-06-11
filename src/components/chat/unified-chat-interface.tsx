@@ -21,6 +21,7 @@ import {
 import { Maximize2, Zap, Activity } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { verdictMeta, toConfidencePct } from "@/lib/chat/verdict";
 
 // Custom markdown renderer — handles tables, headings, lists, code without @tailwindcss/typography
 function MarkdownMessage({ content, isUser }: { content: string; isUser: boolean }) {
@@ -1083,10 +1084,11 @@ export function UnifiedChatInterface({ properties: _properties, orgId }: Props) 
                   {message.proposals && message.proposals.length > 0 && (() => {
                     // ── helpers ────────────────────────────────────────────────
                     const computeConfidence = (p: typeof message.proposals[0]): number => {
+                      // Prefer PriceGuard's own confidence (0–1 or 0–100) when present.
+                      const explicit = toConfidencePct(p.confidence);
+                      if (explicit !== null) return explicit;
                       let s = 55;
-                      if (p.guard_verdict === "APPROVED") s += 18;
-                      else if (p.guard_verdict === "FLAGGED") s -= 18;
-                      else if (p.guard_verdict === "REJECTED") s -= 35;
+                      s += verdictMeta(p.guard_verdict).scoreDelta;
                       if (p.risk_level === "low") s += 15;
                       else if (p.risk_level === "medium") s += 5;
                       else if (p.risk_level === "high") s -= 8;
@@ -1133,11 +1135,12 @@ export function UnifiedChatInterface({ properties: _properties, orgId }: Props) 
                       <div className="p-3 space-y-3 bg-background/40 backdrop-blur-sm">
                         {message.proposals.map((prop, idx) => {
                           const decision = message.proposalDecisions?.[prop.proposal_id];
+                          const vm = verdictMeta(prop.guard_verdict);
                           const isApproved = decision === "approved";
-                          const isRejected = decision === "rejected" || prop.guard_verdict === "REJECTED";
+                          const isRejected = decision === "rejected"; // only a human rejects now — PriceGuard never hard-blocks
                           const isDecided = isApproved || decision === "rejected";
-                          const isFlagged = prop.guard_verdict === "FLAGGED";
-                          const canApprove = prop.guard_verdict !== "REJECTED";
+                          const isFlagged = vm.tone === "low" || vm.tone === "high";
+                          const isHold = vm.tone === "review";
                           const confidence = computeConfidence(prop);
                           const confLabel = confidence >= 75 ? "High" : confidence >= 50 ? "Medium" : "Low";
                           const confBarCls = confidence >= 75 ? "bg-emerald-500" : confidence >= 50 ? "bg-amber-500" : "bg-red-400";
@@ -1156,6 +1159,7 @@ export function UnifiedChatInterface({ properties: _properties, orgId }: Props) 
                             <div key={idx} className={`rounded-xl border overflow-hidden transition-all ${
                               isApproved ? "border-emerald-500/30 bg-emerald-500/5" :
                               isRejected ? "border-red-400/20 bg-red-500/5 opacity-55" :
+                              isHold     ? "border-sky-500/30 bg-sky-500/5" :
                               isFlagged  ? "border-amber-500/30 bg-amber-500/5" :
                               "border-border/30 bg-background/60"
                             }`}>
@@ -1181,11 +1185,11 @@ export function UnifiedChatInterface({ properties: _properties, orgId }: Props) 
                                   )}
                                   {!isDecided && (
                                     <span className={`text-[9px] font-black px-2 py-0.5 rounded-md border ${
-                                      prop.guard_verdict === "APPROVED" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
-                                      prop.guard_verdict === "FLAGGED"  ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
-                                      "bg-red-500/10 text-red-400 border-red-400/20"
+                                      vm.tone === "ok"     ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
+                                      vm.tone === "review" ? "bg-sky-500/10 text-sky-500 border-sky-500/20" :
+                                      "bg-amber-500/10 text-amber-500 border-amber-500/20"
                                     }`}>
-                                      {prop.guard_verdict === "APPROVED" ? "✓ PriceGuard OK" : prop.guard_verdict === "FLAGGED" ? "⚠ Flagged" : "✗ Blocked"}
+                                      {vm.label}
                                     </span>
                                   )}
                                 </div>
@@ -1293,27 +1297,28 @@ export function UnifiedChatInterface({ properties: _properties, orgId }: Props) 
                                 </details>
                               )}
 
-                              {/* ── PriceGuard flagged warning ───────────── */}
-                              {isFlagged && !isDecided && (
-                                <div className="px-4 py-2.5 bg-amber-500/5 border-b border-amber-500/20 flex items-start gap-2">
-                                  <span className="text-sm mt-0.5">⚠</span>
-                                  <p className="text-[11px] text-amber-500/90 leading-snug">PriceGuard flagged this — outside normal range but not hard-blocked. Approve with caution.</p>
+                              {/* ── PriceGuard advisory (flagged / hold) ──── */}
+                              {(isFlagged || isHold) && !isDecided && (
+                                <div className={`px-4 py-2.5 border-b flex items-start gap-2 ${isHold ? "bg-sky-500/5 border-sky-500/20" : "bg-amber-500/5 border-amber-500/20"}`}>
+                                  <span className="text-sm mt-0.5">{isHold ? "⏸" : "⚠"}</span>
+                                  <p className={`text-[11px] leading-snug ${isHold ? "text-sky-500/90" : "text-amber-500/90"}`}>
+                                    {isHold
+                                      ? "PriceGuard wants a human glance — signals conflict or the move is unusually large. Still your call to approve."
+                                      : "PriceGuard flagged this — outside normal range but not hard-blocked. Approve with caution."}
+                                  </p>
                                 </div>
                               )}
 
                               {/* ── Action buttons ───────────────────────── */}
                               {!isDecided && message.proposalStatus !== "rejected" && (
                                 <div className="px-4 py-3 flex items-center gap-2.5">
-                                  {canApprove ? (
-                                    <button
-                                      onClick={() => handleProposalDecision(message.id, prop.proposal_id, "approved")}
-                                      className="flex-1 py-2 rounded-lg text-[11px] font-black bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all"
-                                    >
-                                      ✓ Approve & Save
-                                    </button>
-                                  ) : (
-                                    <span className="text-[10px] text-red-400/70 font-bold">Blocked by PriceGuard</span>
-                                  )}
+                                  {/* Every verdict is human-approvable — PriceGuard never hard-blocks (audit fix) */}
+                                  <button
+                                    onClick={() => handleProposalDecision(message.id, prop.proposal_id, "approved")}
+                                    className="flex-1 py-2 rounded-lg text-[11px] font-black bg-emerald-500/10 text-emerald-500 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all"
+                                  >
+                                    ✓ Approve & Save
+                                  </button>
                                   <button
                                     onClick={() => handleProposalDecision(message.id, prop.proposal_id, "rejected")}
                                     className="flex-1 py-2 rounded-lg text-[11px] font-black bg-red-500/10 text-red-400 border border-red-400/30 hover:bg-red-500/20 transition-all"

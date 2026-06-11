@@ -109,10 +109,12 @@ export function normalizeChatAgentOutput(agentReply: string): {
       changePct,
       reasoning,
       action_buttons: actionButtons,
-      guard_verdict: single.guard_verdict || single.guardVerdict || "APPROVED",
-      guardVerdict: single.guard_verdict || single.guardVerdict || "APPROVED",
-      risk_level: single.risk_level || riskLevel,
-      riskLevel: single.risk_level || riskLevel,
+      guard_verdict: single.verdict || single.guard_verdict || single.guardVerdict || "approved",
+      guardVerdict: single.verdict || single.guard_verdict || single.guardVerdict || "approved",
+      confidence: single.confidence,
+      risk_band: single.risk_band || single.risk_level || riskLevel,
+      risk_level: single.risk_band || single.risk_level || riskLevel,
+      riskLevel: single.risk_band || single.risk_level || riskLevel,
     };
 
     const proposals = date && proposedPrice > 0 ? [proposal] : undefined;
