@@ -72,12 +72,19 @@ const nextConfig: NextConfig = {
   // This allows the frontend to call the backend directly via /api/* without
   // needing redundant proxy files in src/app/api/*.
   async rewrites() {
-    return [
-      {
-        source: "/api/:path*",
-        destination: "http://localhost:8000/api/:path*",
-      },
-    ];
+    const backend =
+      process.env.PYTHON_BACKEND_URL ||
+      process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, "") ||
+      "http://localhost:8000";
+    // afterFiles: only proxy paths with no matching Next.js route (chat, jobs, auth stay local)
+    return {
+      afterFiles: [
+        {
+          source: "/api/:path*",
+          destination: `${backend}/api/:path*`,
+        },
+      ],
+    };
   },
 
   // ── Docker optimization ────────────────────────────────────────────────────

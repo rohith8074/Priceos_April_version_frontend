@@ -26,8 +26,18 @@ export function getJwtSecrets() {
   };
 }
 
-// Lyzr API calls are handled exclusively by the FastAPI backend.
-// The frontend never calls Lyzr directly — do not add Lyzr env vars here.
+export function getLyzrConfig() {
+  return {
+    apiKey: getEnv("LYZR_API_KEY"),
+    chatUrl: getEnv("LYZR_API_URL"),
+    streamUrl: getEnv("LYZR_STREAM_URL"),
+    baseUrl: getEnv("LYZR_BASE_URL"),
+    ragBaseUrl: getEnv("LYZR_RAG_BASE_URL"),
+    uploadUrl: getEnv("LYZR_UPLOAD_URL"),
+    crawlUrl: getEnv("LYZR_RAG_CRAWL_URL"),
+    contextId: getEnv("LYZR_CONTEXT_ID"),
+  };
+}
 
 export function requireHostawayApiBaseUrl() {
   return requireEnv("HOSTAWAY_API_BASE_URL");

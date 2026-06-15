@@ -19,12 +19,11 @@ export async function register() {
     }
   }
 
-  // Only validate vars the frontend actually uses.
-  // MONGODB_URI, JWT_REFRESH_SECRET, LYZR_API_KEY, LYZR_API_URL all belong
-  // in the FastAPI backend — the frontend never calls Lyzr or MongoDB directly.
   const required: Record<string, string> = {
-    NEXT_PUBLIC_API_URL: "FastAPI backend base URL (e.g. http://localhost:8000/api)",
-    JWT_SECRET: "JWT signing secret — must match the backend's JWT_SECRET",
+    MONGODB_URI: "MongoDB connection string for chat, properties, and agent jobs",
+    JWT_SECRET: "JWT signing secret for session cookies",
+    LYZR_API_KEY: "Lyzr Studio API key for agent chat",
+    LYZR_API_URL: "Lyzr inference chat endpoint URL",
   };
 
   const missing: string[] = [];

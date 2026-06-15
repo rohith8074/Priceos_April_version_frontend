@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/server";
 import { UnifiedChatInterface } from "@/components/chat/unified-chat-interface";
@@ -19,13 +20,17 @@ export default async function AgentChatPage() {
 
   let propertiesWithMetrics: PropertyWithMetrics[] = [];
   try {
-    const backend = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api";
-    const res = await fetch(
-      `${backend}/properties?orgId=${encodeURIComponent(orgObjectId)}`,
-      { next: { revalidate: 120 } }
-    );
+    const headersList = await headers();
+    const cookie = headersList.get("cookie") ?? "";
+    const base =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+    const res = await fetch(`${base}/api/properties`, {
+      next: { revalidate: 120 },
+      headers: cookie ? { cookie } : undefined,
+    });
     const data = await res.json().catch(() => ({} as Record<string, unknown>));
-    const properties = Array.isArray(data?.properties) ? data.properties : [];
+    const properties = Array.isArray(data?.properties) ? data.properties : Array.isArray(data) ? data : [];
     propertiesWithMetrics = properties.map((p: Record<string, unknown>) => ({
       ...p,
       id: String(p.id ?? p._id ?? ""),
